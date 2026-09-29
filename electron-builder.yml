@@ -1,7 +1,8 @@
-appId: com.electron.app
-productName: my-ai-router
+appId: com.myrouter.app
+productName: AI Router OS
 directories:
   buildResources: build
+  output: release
 files:
   - '!**/.vscode/*'
   - '!src/*'
@@ -13,7 +14,13 @@ asarUnpack:
   - resources/**
 win:
   executableName: my-ai-router
+  target:
+    - nsis
+    - portable
+  icon: build/icon.ico
 nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
   artifactName: ${name}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
