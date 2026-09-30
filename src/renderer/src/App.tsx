@@ -1,55 +1,203 @@
-import { useState } from 'react'
-import { MessageSquare, Moon, Plus, Settings as SettingsIcon, Sun } from 'lucide-react'
+import { useCallback, useEffect, useState } from 'react'
+import {
+  Bot, Cpu, FolderKanban, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
+  Sparkles, Sun, Trash2, User, Wrench, Download, Search
+} from 'lucide-react'
 import { ChatWindow } from '../../ui/ChatWindow'
+import { MCPPage } from '../../ui/MCPPage'
+import { ModelsPage } from '../../ui/ModelsPage'
+import { ProjectsPage } from '../../ui/ProjectsPage'
 import { Settings } from '../../ui/Settings'
+import { SkillsPage } from '../../ui/SkillsPage'
+import { ToolsPage } from '../../ui/ToolsPage'
 import { ThemeProvider, useTheme } from '../../ui/ThemeContext'
+import type { ConversationSummary, ProjectInfo, StoredMessage } from '../../preload/index.d'
 
-// Mock conversations for now
-const MOCK_CONVERSATIONS = ['مقارنة أسعار الموديلات', 'كتابة فانكشن بايثون', 'ملخص مقال بحثي']
+type Nav = 'chat' | 'projects' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
 
-const sidebarButton =
-  'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-[#0d0d0d] hover:bg-black/5 dark:text-[#ececec] dark:hover:bg-white/10'
+const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
+  { id: 'chat', label: 'المحادثات', icon: MessageSquare },
+  { id: 'projects', label: 'المشاريع', icon: FolderKanban },
+  { id: 'models', label: 'النماذج', icon: Cpu },
+  { id: 'skills', label: 'السكيلز', icon: Sparkles },
+  { id: 'mcp', label: 'MCP Servers', icon: Plug },
+  { id: 'tools', label: 'الأدوات', icon: Wrench },
+  { id: 'settings', label: 'الإعدادات', icon: SettingsIcon }
+]
 
 function Shell() {
   const { theme, toggleTheme } = useTheme()
-  const [showSettings, setShowSettings] = useState(false)
+  const [activeNav, setActiveNav] = useState<Nav>('chat')
+  const [convs, setConvs] = useState<ConversationSummary[]>([])
+  const [convId, setConvId] = useState<string | null>(null)
+  const [initial, setInitial] = useState<StoredMessage[]>([])
   const [chatKey, setChatKey] = useState(0)
+  const [project, setProject] = useState<ProjectInfo | null>(null)
+  const [query, setQuery] = useState('')
+  const [hits, setHits] = useState<Record<string, string> | null>(null)
+
+  useEffect(() => {
+    const q = query.trim()
+    if (!q) {
+      setHits(null)
+      return
+    }
+    const t = setTimeout(() => {
+      window.api.conversations.search(q).then((r) => setHits(Object.fromEntries(r.map((x) => [x.id, x.snippet]))))
+    }, 250)
+    return () => clearTimeout(t)
+  }, [query])
+  const shownConvs = hits ? convs.filter((c) => c.id in hits) : convs
+
+  const loadConvs = useCallback(() => window.api.conversations.list().then(setConvs), [])
+  const loadProject = useCallback(async () => {
+    const d = await window.api.projects.list()
+    setProject(d.projects.find((p) => p.id === d.activeId) ?? null)
+  }, [])
+  useEffect(() => {
+    loadConvs()
+    loadProject()
+  }, [loadConvs, loadProject])
+
+  const openConv = async (id: string): Promise<void> => {
+    const c = await window.api.conversations.get(id)
+    if (!c) return
+    setConvId(id)
+    setInitial(c.messages)
+    setChatKey((k) => k + 1)
+    setActiveNav('chat')
+  }
+  const newChat = (): void => {
+    setConvId(null)
+    setInitial([])
+    setChatKey((k) => k + 1)
+    setActiveNav('chat')
+  }
 
   return (
-    <div className="flex h-screen w-full bg-white text-[#0d0d0d] dark:bg-[#212121] dark:text-[#ececec]">
-      <aside className="flex w-[260px] shrink-0 flex-col bg-[#f9f9f9] p-2 dark:bg-[#171717]">
-        <button className={sidebarButton + ' justify-between'} onClick={() => setChatKey((k) => k + 1)}>
-          <span>محادثة جديدة</span>
-          <Plus size={18} />
-        </button>
-
-        <div className="mt-4 flex-1 space-y-1 overflow-y-auto">
-          {MOCK_CONVERSATIONS.map((title) => (
-            <button key={title} className={sidebarButton}>
-              <MessageSquare size={16} className="shrink-0 opacity-60" />
-              <span className="truncate">{title}</span>
-            </button>
-          ))}
+    <div className="flex h-screen w-full bg-bg text-fg">
+      <aside className="flex w-[280px] shrink-0 flex-col border-e border-outline bg-surface p-3">
+        <div className="mb-4 flex items-center gap-2 px-2 py-2">
+          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary text-white shadow-card">
+            <Bot size={20} />
+          </div>
+          <div className="leading-tight">
+            <div className="text-base font-semibold">AI Router OS</div>
+            <div className="text-[11px] text-muted">مايسترو النماذج</div>
+          </div>
         </div>
 
-        <div className="space-y-1 border-t border-black/10 pt-2 dark:border-white/10">
-          <button className={sidebarButton} onClick={() => setShowSettings(true)}>
-            <SettingsIcon size={18} />
-            <span>الإعدادات</span>
+        <nav className="space-y-1">
+          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveNav(id)}
+              className={`flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm ${
+                activeNav === id ? 'bg-primary/15 font-medium text-primary' : 'hover:bg-surface2'
+              }`}
+            >
+              <Icon size={18} className="shrink-0" />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
+
+        <div className="mt-3 flex min-h-0 flex-1 flex-col border-t border-outline pt-3">
+          <button onClick={newChat} className="mb-2 flex items-center justify-between rounded-full border border-outline px-4 py-2 text-sm hover:bg-surface2">
+            <span>محادثة جديدة</span>
+            <Plus size={16} />
           </button>
-          <button className={sidebarButton} onClick={toggleTheme}>
+          <div className="mb-2 flex items-center gap-2 rounded-full border border-outline px-3 py-1.5">
+            <Search size={14} className="shrink-0 text-muted" />
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="بحث بالمحادثات…"
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted"
+            />
+          </div>
+          <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
+            {shownConvs.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted">{hits ? 'لا نتائج' : 'لا محادثات بعد'}</p>}
+            {shownConvs.map((c) => (
+              <div
+                key={c.id}
+                className={`group flex items-center gap-1 rounded-xl px-2 py-1.5 text-sm hover:bg-surface2 ${c.id === convId ? 'bg-surface2' : ''}`}
+              >
+                <button onClick={() => openConv(c.id)} className="min-w-0 flex-1 text-start">
+                  <div className="truncate">{c.title}</div>
+                  <div className="text-[11px] text-muted">
+                    {hits ? hits[c.id] : `${new Date(c.updatedAt).toLocaleDateString('ar')} · ${c.count} رسالة`}
+                  </div>
+                </button>
+                <button
+                  aria-label={c.pinned ? 'إلغاء التثبيت' : 'تثبيت'}
+                  className={`rounded-full p-1 hover:bg-outline ${c.pinned ? 'text-primary' : 'text-muted opacity-0 group-hover:opacity-100'}`}
+                  onClick={async () => {
+                    await window.api.conversations.pin(c.id)
+                    loadConvs()
+                  }}
+                >
+                  {c.pinned ? <Pin size={14} /> : <PinOff size={14} />}
+                </button>
+                <button
+                  aria-label="تصدير"
+                  title="تصدير كملف Markdown"
+                  className="rounded-full p-1 text-muted opacity-0 hover:bg-outline group-hover:opacity-100"
+                  onClick={() => window.api.conversations.exportMd(c.id)}
+                >
+                  <Download size={14} />
+                </button>
+                <button
+                  aria-label="حذف"
+                  className="rounded-full p-1 text-muted opacity-0 hover:bg-outline hover:text-danger group-hover:opacity-100"
+                  onClick={async () => {
+                    if (!confirm('حذف هالمحادثة؟')) return
+                    await window.api.conversations.delete(c.id)
+                    if (c.id === convId) newChat()
+                    loadConvs()
+                  }}
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-2 space-y-1 border-t border-outline pt-2">
+          <button onClick={toggleTheme} className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             <span>{theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}</span>
           </button>
+          <div className="flex items-center gap-3 px-4 py-2 text-sm">
+            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface2">
+              <User size={16} />
+            </div>
+            <span>Tarek</span>
+          </div>
         </div>
       </aside>
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <header className="py-3 text-center text-sm font-semibold">AI Router OS</header>
-        <ChatWindow key={chatKey} />
+        {activeNav === 'chat' && (
+          <ChatWindow
+            key={chatKey}
+            conversationId={convId}
+            initialMessages={initial}
+            project={project}
+            onSaved={(id) => {
+              setConvId(id)
+              loadConvs()
+            }}
+          />
+        )}
+        {activeNav === 'projects' && <ProjectsPage onChanged={loadProject} />}
+        {activeNav === 'models' && <ModelsPage />}
+        {activeNav === 'skills' && <SkillsPage />}
+        {activeNav === 'mcp' && <MCPPage />}
+        {activeNav === 'tools' && <ToolsPage />}
+        {activeNav === 'settings' && <Settings variant="page" />}
       </main>
-
-      {showSettings && <Settings onClose={() => setShowSettings(false)} />}
     </div>
   )
 }

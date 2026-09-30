@@ -4,6 +4,8 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers, hydrateEnvFromStore } from './ipc'
+import { closeAllMcp } from '../mcp/runtime'
+import { stopOwnedOllama } from '../core/ollama'
 
 function createWindow(): void {
   // Create the browser window.
@@ -69,6 +71,11 @@ app.whenReady().then(() => {
 // Quit when all windows are closed, except on macOS. There, it's common
 // for applications and their menu bar to stay active until the user quits
 // explicitly with Cmd + Q.
+app.on('before-quit', () => {
+  closeAllMcp()
+  stopOwnedOllama()
+})
+
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit()
