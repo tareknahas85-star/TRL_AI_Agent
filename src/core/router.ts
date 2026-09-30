@@ -3,6 +3,7 @@ import type { Analysis } from './master'
 import { customModelsForTier } from './custom-models'
 import { catalogModelsForTier } from './catalog'
 import { freeOnly } from './spend'
+import { currentMode } from './progress'
 
 // Built-in tiers plus the user's enabled custom models (custom ones are tried first inside their tier).
 const tier = (t: 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'): string[] => [
@@ -12,7 +13,9 @@ const tier = (t: 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'): string[] 
 ]
 
 export function getTierForAnalysis(analysis: Analysis): string[] {
-  if (freeOnly()) return tier('TIER_1_FREE')
+  // A chat run carries its own mode (free / auto / model); outside a run the global free-only guard applies.
+  const mode = currentMode()
+  if (mode ? mode.kind === 'free' : freeOnly()) return tier('TIER_1_FREE')
   switch (analysis.complexity) {
     case 'simple':
       return [...tier('TIER_1_FREE'), ...tier('TIER_2_CHEAP')]

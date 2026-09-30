@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Modal, PageShell, inputCls } from './components/ui'
 import { MemoryPanel } from './MemoryPanel'
+import { MasterMemoryPanel } from './MasterMemoryPanel'
 import { ComputerPanel } from './ComputerPanel'
 import { SpendPanel } from './SpendPanel'
 
@@ -60,6 +61,7 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
       <PageShell title="الإعدادات" subtitle="الذاكرة والتفضيلات.">
         <SpendPanel />
         <ComputerPanel />
+        <MasterMemoryPanel />
         <MemoryPanel />
       </PageShell>
     )

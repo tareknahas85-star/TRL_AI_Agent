@@ -3,7 +3,7 @@ import { CheckCircle2, FolderOpen, Plus, Trash2 } from 'lucide-react'
 import type { ProjectInfo } from '../preload/index.d'
 import { Chip, Empty, PageShell, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
-export function ProjectsPage({ onChanged }: { onChanged: () => void }) {
+export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => void; onOpen: (p: ProjectInfo) => void; openIds: string[] }) {
   const [data, setData] = useState<{ projects: ProjectInfo[]; activeId: string | null }>({ projects: [], activeId: null })
   const [path, setPath] = useState('')
   const [error, setError] = useState('')
@@ -19,7 +19,7 @@ export function ProjectsPage({ onChanged }: { onChanged: () => void }) {
   return (
     <PageShell
       title="المشاريع"
-      subtitle="أضف مجلدات مشاريعك. المشروع الفعّال بيوصل للراوتر كسياق (working directory) بكل محادثة."
+      subtitle="أضف مجلدات مشاريعك. كبسة على 'فتح' بتفتح تبويب خاص بالمشروع: النموذج بيشوف ملفاته وبيقرأها، وباقي التبويبات مستقلة عنه."
       action={
         <button
           className={primaryBtn + ' flex items-center gap-1'}
@@ -56,25 +56,22 @@ export function ProjectsPage({ onChanged }: { onChanged: () => void }) {
       ) : (
         <div className="space-y-2">
           {data.projects.map((p) => {
-            const active = p.id === data.activeId
+            const active = openIds.includes(p.id)
             return (
               <div key={p.id} className={cardCls + ` flex items-center justify-between gap-3 ${active ? 'ring-2 ring-primary' : ''}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{p.name}</span>
-                    {active && <Chip cls="bg-primary/15 text-primary"><CheckCircle2 size={12} /> فعّال</Chip>}
+                    {active && <Chip cls="bg-primary/15 text-primary"><CheckCircle2 size={12} /> مفتوح بتبويب</Chip>}
                   </div>
                   <div dir="ltr" className="truncate text-start font-mono text-xs text-muted">{p.path}</div>
                 </div>
                 <div className="flex gap-1">
                   <button
                     className={ghostBtn}
-                    onClick={async () => {
-                      await window.api.projects.setActive(active ? null : p.id)
-                      changed()
-                    }}
+                    onClick={() => onOpen(p)}
                   >
-                    {active ? 'إلغاء التفعيل' : 'تفعيل'}
+                    {active ? 'انتقل للتبويب' : 'فتح'}
                   </button>
                   <button
                     className={ghostBtn + ' text-danger'}
