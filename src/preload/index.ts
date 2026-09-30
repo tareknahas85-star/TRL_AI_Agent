@@ -4,11 +4,101 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer. All core logic (OpenRouter calls, skills, tools, key storage)
 // runs in the main process; the UI only talks to it through these calls.
 const api = {
-  chat: (userInput: string): Promise<{ content: string; meta?: string }> =>
-    ipcRenderer.invoke('chat:send', userInput),
+  chat: (userInput: string, history?: { role: 'user' | 'assistant'; content: string }[]): Promise<{ content: string; meta?: string; cancelled?: boolean; failed?: boolean }> =>
+    ipcRenderer.invoke('chat:send', userInput, history),
+  retryChat: (): Promise<{ content: string; meta?: string; cancelled?: boolean; failed?: boolean }> =>
+    ipcRenderer.invoke('chat:retry'),
+  cancelChat: (): Promise<boolean> => ipcRenderer.invoke('chat:cancel'),
+  spend: {
+    get: (): Promise<boolean> => ipcRenderer.invoke('spend:get'),
+    set: (on: boolean): Promise<boolean> => ipcRenderer.invoke('spend:set', on)
+  },
+  computer: {
+    get: (): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:get'),
+    set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:set', on),
+    reset: (): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:reset')
+  },
+  onStream: (cb: (kind: 'chunk' | 'reset', text?: string) => void): (() => void) => {
+    const h = (_e: unknown, k: 'chunk' | 'reset', t?: string): void => cb(k, t)
+    ipcRenderer.on('chat:stream', h)
+    return () => ipcRenderer.removeListener('chat:stream', h)
+  },
+  status: (): Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number }> =>
+    ipcRenderer.invoke('status:get'),
+  onProgress: (cb: (text: string) => void): (() => void) => {
+    const h = (_e: unknown, t: string): void => cb(t)
+    ipcRenderer.on('chat:progress', h)
+    return () => ipcRenderer.removeListener('chat:progress', h)
+  },
   getKey: (key: string): Promise<string> => ipcRenderer.invoke('keys:get', key),
   setKey: (key: string, value: string): Promise<boolean> =>
-    ipcRenderer.invoke('keys:set', key, value)
+    ipcRenderer.invoke('keys:set', key, value),
+  skills: {
+    list: () => ipcRenderer.invoke('skills:list'),
+    get: (name: string) => ipcRenderer.invoke('skills:get', name),
+    create: (name: string, content: string) => ipcRenderer.invoke('skills:create', name, content),
+    delete: (name: string) => ipcRenderer.invoke('skills:delete', name),
+    toggle: (name: string) => ipcRenderer.invoke('skills:toggle', name)
+  },
+  mcp: {
+    list: () => ipcRenderer.invoke('mcp:list'),
+    get: (name: string) => ipcRenderer.invoke('mcp:get', name),
+    add: (server: unknown) => ipcRenderer.invoke('mcp:add', server),
+    remove: (name: string) => ipcRenderer.invoke('mcp:remove', name),
+    test: (name: string) => ipcRenderer.invoke('mcp:test', name),
+    toggle: (name: string) => ipcRenderer.invoke('mcp:toggle', name)
+  },
+  tools: {
+    list: () => ipcRenderer.invoke('tools:list'),
+    toggle: (name: string) => ipcRenderer.invoke('tools:toggle', name),
+    add: (tool: unknown) => ipcRenderer.invoke('tools:add', tool),
+    remove: (name: string) => ipcRenderer.invoke('tools:remove', name)
+  },
+  models: {
+    list: () => ipcRenderer.invoke('models:list'),
+    detectLocal: () => ipcRenderer.invoke('models:detectLocal'),
+    setPosition: (id: string, last: boolean) => ipcRenderer.invoke('models:setPosition', id, last),
+    setKey: (id: string, key: string) => ipcRenderer.invoke('models:setKey', id, key),
+    add: (m: unknown) => ipcRenderer.invoke('models:add', m),
+    remove: (id: string) => ipcRenderer.invoke('models:remove', id),
+    toggle: (id: string) => ipcRenderer.invoke('models:toggle', id),
+    test: (id: string) => ipcRenderer.invoke('models:test', id),
+    fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
+    importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
+  },
+  memory: {
+    list: () => ipcRenderer.invoke('memory:list'),
+    save: (e: { id?: string; title: string; content: string; enabled?: boolean }) => ipcRenderer.invoke('memory:save', e),
+    delete: (id: string) => ipcRenderer.invoke('memory:delete', id),
+    toggle: (id: string) => ipcRenderer.invoke('memory:toggle', id),
+    import: (entries: { title: string; content: string }[], source?: string) =>
+      ipcRenderer.invoke('memory:import', entries, source),
+    preview: () => ipcRenderer.invoke('memory:preview')
+  },
+  catalog: {
+    list: () => ipcRenderer.invoke('catalog:list'),
+    test: () => ipcRenderer.invoke('catalog:test'),
+    fetch: () => ipcRenderer.invoke('catalog:fetch'),
+    setEnabled: (ids: string[], on: boolean) => ipcRenderer.invoke('catalog:setEnabled', ids, on),
+    move: (id: string, dir: 'up' | 'down') => ipcRenderer.invoke('catalog:move', id, dir)
+  },
+  projects: {
+    list: () => ipcRenderer.invoke('projects:list'),
+    add: (dir: string) => ipcRenderer.invoke('projects:add', dir),
+    pick: () => ipcRenderer.invoke('projects:pick'),
+    remove: (id: string) => ipcRenderer.invoke('projects:remove', id),
+    setActive: (id: string | null) => ipcRenderer.invoke('projects:setActive', id)
+  },
+  conversations: {
+    search: (q: string): Promise<{ id: string; snippet: string }[]> => ipcRenderer.invoke('conv:search', q),
+    exportMd: (id: string): Promise<{ ok: boolean; error?: string; path?: string }> => ipcRenderer.invoke('conv:export', id),
+    list: () => ipcRenderer.invoke('conv:list'),
+    get: (id: string) => ipcRenderer.invoke('conv:get', id),
+    save: (conv: unknown) => ipcRenderer.invoke('conv:save', conv),
+    delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
+    pin: (id: string) => ipcRenderer.invoke('conv:pin', id),
+    rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title)
+  }
 }
 
 // Use `contextBridge` APIs to expose Electron APIs to

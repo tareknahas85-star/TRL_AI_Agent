@@ -1,48 +1,357 @@
-import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Bot, Loader2 } from 'lucide-react'
+﻿import { useEffect, useRef, useState } from 'react'
+import { ArrowUp, Bot, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
+import { Markdown } from './Markdown'
 import { CostDashboard } from './CostDashboard'
+import { Chip } from './components/ui'
+import type { MCPServerInfo, ProjectInfo, SkillInfo, StoredMessage } from '../preload/index.d'
 
-type ChatMessage = { role: 'user' | 'assistant'; content: string; meta?: string }
+type ChatMessage = StoredMessage
 
 function Avatar() {
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#19c37d] text-white">
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white">
       <Bot size={18} />
     </div>
   )
 }
 
-export function ChatWindow() {
+type Stats = {
+  masterMs: number
+  execMs: number
+  totalMs: number
+  master: string
+  masterModel: string
+  complexity: string
+  type: string
+  promptTokens: number
+  completionTokens: number
+  tps: number
+  est: boolean
+  memory: number
+  tools: string[]
+  failures: { model: string; reason: string }[]
+}
+
+// meta looks like: "Model: X | Memory: n | Tools: t | Skill: Y | <saved text> | Tried: a -> b | Stats: {json}"
+function parseMeta(meta: string): { model: string; skill: string; saved: string; tried: string[]; stats: Stats | null } {
+  const si = meta.indexOf(' | Stats: ')
+  let stats: Stats | null = null
+  if (si >= 0) {
+    try {
+      stats = JSON.parse(meta.slice(si + 10)) as Stats
+    } catch {
+      stats = null
+    }
+  }
+  const out = { model: '', skill: '', saved: '', tried: [] as string[], stats }
+  for (const p of (si >= 0 ? meta.slice(0, si) : meta).split(' | ')) {
+    const idx = p.indexOf(': ')
+    const k = idx > 0 ? p.slice(0, idx) : ''
+    const v = idx > 0 ? p.slice(idx + 2) : p
+    if (k === 'Model') out.model = v
+    else if (k === 'Skill') out.skill = v
+    else if (k === 'Tried') out.tried = v.split(' -> ').filter(Boolean)
+    else if (k === 'Memory' || k === 'Tools') continue
+    else out.saved = p
+  }
+  return out
+}
+
+const fmtMs = (ms: number): string => (ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms')
+
+function StatusBar({
+  loading,
+  progress,
+  elapsed,
+  messages
+}: {
+  loading: boolean
+  progress: string
+  elapsed: number
+  messages: { meta?: string }[]
+}) {
+  const [open, setOpen] = useState(false)
+  const parsed = messages.filter((m) => m.meta).map((m) => parseMeta(m.meta as string))
+  const last = parsed[parsed.length - 1]
+  const st = last?.stats
+  const withStats = parsed.filter((p) => p.stats)
+  const totalTok = withStats.reduce((a, p) => a + (p.stats?.promptTokens ?? 0) + (p.stats?.completionTokens ?? 0), 0)
+  const speeds = withStats.map((p) => p.stats?.tps ?? 0).filter((x) => x > 0)
+  const avgTps = speeds.length ? speeds.reduce((a, x) => a + x, 0) / speeds.length : 0
+  const failCount = withStats.reduce((a, p) => a + (p.stats?.failures.length ?? 0), 0)
+  const masterLabel = st?.master === 'local' ? 'ماستر محلي' : st?.master === 'openrouter' ? 'ماستر سحابي' : st ? 'ماستر احتياطي' : ''
+  return (
+    <div className="mx-auto mt-1 max-w-3xl">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex w-full flex-wrap items-center gap-x-3 gap-y-0.5 rounded-xl px-3 py-1 text-start text-[11px] text-muted hover:bg-surface2"
+      >
+        {loading ? (
+          <>
+            <Loader2 size={12} className="animate-spin" />
+            <span>{progress || 'جاري المعالجة…'}</span>
+            <span dir="ltr">{elapsed}s</span>
+          </>
+        ) : st && last ? (
+          <>
+            <span dir="ltr">{last.model}</span>
+            <span dir="ltr">⏱ {fmtMs(st.totalMs)}</span>
+            <span dir="ltr">
+              ⇅ {st.promptTokens || '—'}/{st.completionTokens}
+              {st.est ? '~' : ''} tok
+            </span>
+            {st.tps > 0 && <span dir="ltr">⚡ {st.tps} t/s</span>}
+            <span>{masterLabel}</span>
+            {st.memory > 0 && <span>ذاكرة {st.memory}</span>}
+            {st.tools.length > 0 && <span>أدوات {st.tools.length}</span>}
+            {st.failures.length > 0 && <span className="text-warning">فشل {st.failures.length}</span>}
+          </>
+        ) : (
+          <span>جاهز — أرسل طلباً لتظهر الإحصاءات هنا</span>
+        )}
+        <span className="ms-auto">{open ? '▴' : '▾'}</span>
+      </button>
+      {open && (
+        <div className="mt-1 space-y-1 rounded-card border border-outline bg-surface p-3 text-[11px] text-muted">
+          {st ? (
+            <>
+              <div dir="ltr">
+                master: {st.masterModel || st.master} · {fmtMs(st.masterMs)} → {st.complexity}/{st.type}
+              </div>
+              <div dir="ltr">
+                model: {fmtMs(st.execMs)} · in {st.promptTokens || '—'} · out {st.completionTokens}
+                {st.est ? ' (estimated)' : ''} · {st.tps || '—'} t/s
+              </div>
+              {st.tools.length > 0 && <div dir="ltr">tools: {st.tools.join(', ')}</div>}
+              {st.failures.map((f, i) => (
+                <div key={i} dir="ltr" className="text-warning">
+                  ✗ {f.model}: {f.reason}
+                </div>
+              ))}
+            </>
+          ) : (
+            <div>لا توجد إحصاءات للرد الأخير.</div>
+          )}
+          <div className="border-t border-outline pt-1">
+            الجلسة: {parsed.length} ردود · {totalTok} توكن · متوسط السرعة {avgTps ? avgTps.toFixed(1) : '—'} t/s · محاولات فاشلة {failCount}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function tierChip(saved: string): { label: string; cls: string } {
+  if (saved.includes('مجاني')) return { label: 'مجاني', cls: 'bg-success/15 text-success' }
+  if (saved.includes('رخيص')) return { label: 'رخيص', cls: 'bg-primary/15 text-primary' }
+  if (saved.includes('مخصص')) return { label: 'مخصص', cls: 'bg-surface2 text-fg' }
+  return { label: 'قوي', cls: 'bg-warning/20 text-warning' }
+}
+
+function MetaBar({ meta }: { meta: string }) {
+  const m = parseMeta(meta)
+  const t = tierChip(m.saved)
+  const failed = m.tried.length > 1 ? m.tried.slice(0, -1) : []
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+      <Chip cls={t.cls}>{t.label}</Chip>
+      <Chip>
+        <span dir="ltr">{m.model}</span>
+      </Chip>
+      {m.skill && m.skill !== 'none' && <Chip cls="bg-primary/10 text-primary">{m.skill}</Chip>}
+      {failed.length > 0 && (
+        <Chip cls="bg-warning/15 text-warning">
+          جرّب {failed.length} قبله
+        </Chip>
+      )}
+    </div>
+  )
+}
+
+function StatusChips() {
+  const [st, setSt] = useState<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number } | null>(null)
+  useEffect(() => {
+    let alive = true
+    const load = (): void => {
+      window.api.status().then((x) => alive && setSt(x)).catch(() => undefined)
+    }
+    load()
+    const id = setInterval(load, 30000)
+    return () => {
+      alive = false
+      clearInterval(id)
+    }
+  }, [])
+  if (!st) return null
+  const dot = (ok: boolean): string => (ok ? 'bg-success' : 'bg-danger')
+  const item = (ok: boolean, label: string) => (
+    <Chip>
+      <span className={`inline-block h-2 w-2 rounded-full ${dot(ok)}`} /> {label}
+    </Chip>
+  )
+  return (
+    <>
+      {item(st.key, 'OpenRouter')}
+      {item(st.ollama, 'Ollama')}
+      {item(st.localMaster, 'ماستر محلي')}
+      {item(st.mcpTotal === 0 || st.mcpOn > 0, `MCP ${st.mcpOn}/${st.mcpTotal}`)}
+    </>
+  )
+}
+
+export function ChatWindow({
+  conversationId,
+  initialMessages,
+  project,
+  onSaved
+}: {
+  conversationId: string | null
+  initialMessages: ChatMessage[]
+  project: ProjectInfo | null
+  onSaved: (id: string) => void
+}) {
   const [input, setInput] = useState('')
-  const [messages, setMessages] = useState<ChatMessage[]>([])
+  const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const convIdRef = useRef<string | null>(conversationId)
+  const [skills, setSkills] = useState<SkillInfo[]>([])
+  const [mcp, setMcp] = useState<MCPServerInfo[]>([])
+  const [progress, setProgress] = useState('')
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => window.api.onProgress(setProgress), [])
+  useEffect(() => {
+    if (!loading) return
+    const t0 = Date.now()
+    setElapsed(0)
+    const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 500)
+    return () => clearInterval(id)
+  }, [loading])
+
+  useEffect(() => {
+    window.api.skills.list().then(setSkills)
+    window.api.mcp.list().then(setMcp)
+  }, [])
+  const activeSkills = skills.filter((s) => s.enabled).map((s) => s.name)
+  const activeMcp = mcp.filter((m) => m.enabled !== false).map((m) => m.name)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
 
-  const handleSend = async () => {
+  const persist = async (msgs: ChatMessage[]): Promise<void> => {
+    try {
+      const saved = await window.api.conversations.save({
+        id: convIdRef.current ?? undefined,
+        messages: msgs,
+        projectId: project?.id ?? null
+      })
+      convIdRef.current = saved.id
+      onSaved(saved.id)
+    } catch (e) {
+      console.warn('save conversation failed', e)
+    }
+  }
+
+  const lastUserRef = useRef('')
+  const streamRef = useRef('')
+  const [streamText, setStreamText] = useState('')
+  const [retrying, setRetrying] = useState(false)
+  const [retryNote, setRetryNote] = useState('')
+
+  useEffect(
+    () =>
+      window.api.onStream((kind, t) => {
+        if (kind === 'reset') {
+          streamRef.current = ''
+          setStreamText('')
+        } else if (t) {
+          streamRef.current += t
+          setStreamText(streamRef.current)
+        }
+      }),
+    []
+  )
+
+  const runRequest = async (retry: boolean, base: ChatMessage[]): Promise<void> => {
+    setProgress('')
+    setStreamText('')
+    streamRef.current = ''
+    setRetryNote('')
+    setLoading(true)
+    let next: ChatMessage[] = base
+    try {
+      const r = retry ? await window.api.retryChat() : await window.api.chat(
+            lastUserRef.current,
+            base.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
+          )
+      if (r.cancelled) {
+        const partial = streamRef.current
+        if (partial.trim()) {
+          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ تم الإيقاف_' }]
+        } else if (retry) {
+          next = base
+        } else {
+          setInput(lastUserRef.current)
+          next = base.slice(0, -1)
+        }
+      } else if (retry && r.failed) {
+        setRetryNote(r.content)
+        next = base
+      } else if (retry) {
+        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta }]
+      } else {
+        next = [...base, { role: 'assistant', content: r.content, meta: r.meta }]
+      }
+    } catch (e) {
+      next = [...base, { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)) }]
+    }
+    setStreamText('')
+    streamRef.current = ''
+    setMessages(next)
+    setLoading(false)
+    if (next.length && next !== base) persist(next)
+  }
+
+  const handleSend = async (): Promise<void> => {
     if (!input.trim() || loading) return
     const userMsg = input
-    setMessages((m) => [...m, { role: 'user', content: userMsg }])
+    lastUserRef.current = userMsg
+    const withUser = [...messages, { role: 'user' as const, content: userMsg }]
+    setMessages(withUser)
     setInput('')
-    setLoading(true)
-    try {
-      // analyzeRequest -> executeWithSkill -> executeWithFallback all run in the main process.
-      const { content, meta } = await window.api.chat(userMsg)
-      setMessages((m) => [...m, { role: 'assistant', content, meta }])
-    } catch (e) {
-      setMessages((m) => [
-        ...m,
-        { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)) }
-      ])
-    }
-    setLoading(false)
+    await runRequest(false, withUser)
+  }
+
+  const handleRetry = async (): Promise<void> => {
+    if (loading) return
+    setRetrying(true)
+    await runRequest(true, messages)
+    setRetrying(false)
+  }
+
+  const handleStop = (): void => {
+    void window.api.cancelChat()
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-white text-[#0d0d0d] dark:bg-[#212121] dark:text-[#ececec]">
+    <div className="flex min-h-0 flex-1 flex-col bg-bg text-fg">
+      <header className="flex flex-wrap items-center justify-between gap-2 border-b border-outline bg-surface px-4 py-3 text-xs">
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-semibold">المحادثات</span>
+          {project && (
+            <Chip cls="bg-primary/15 text-primary">
+              <FolderOpen size={12} /> {project.name}
+            </Chip>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <StatusChips />
+          <Chip>Skills: {activeSkills.length ? activeSkills.join(', ') : 'none'}</Chip>
+          <Chip>MCP: {activeMcp.length ? activeMcp.join(', ') : 'none'}</Chip>
+        </div>
+      </header>
       <div className="pt-3">
         <CostDashboard messages={messages} />
       </div>
@@ -50,46 +359,53 @@ export function ChatWindow() {
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
           {messages.length === 0 && !loading && (
-            <p className="pt-16 text-center text-sm text-zinc-500 dark:text-zinc-400">
-              جرب: مرحبا كيفك (بسيط -&gt; مجاني) | اكتبلي فانكشن بايثون ترتب مصفوفة (معقد -&gt; غالي + سكيل)
+            <p className="pt-16 text-center text-sm text-muted">
+              جرب: مرحبا كيفك (بسيط ← مجاني) | اكتبلي فانكشن بايثون ترتب مصفوفة (معقد ← غالي + سكيل)
             </p>
           )}
 
           {messages.map((msg, i) =>
-            msg.role === 'user' ? (
-              <div
-                key={i}
-                className="ml-auto w-fit max-w-[80%] whitespace-pre-wrap rounded-2xl bg-[#f4f4f4] px-4 py-3 dark:bg-[#2f2f2f]"
-              >
+            retrying && i === messages.length - 1 ? null : msg.role === 'user' ? (
+              <div key={i} className="ms-auto w-fit max-w-[80%] whitespace-pre-wrap rounded-3xl rounded-te-md bg-bubble px-4 py-3">
                 {msg.content}
               </div>
             ) : (
-              <div key={i} className="flex gap-3 border-t border-[#e5e5e5] pt-4 dark:border-[#2f2f2f]">
+              <div key={i} className="flex gap-3">
                 <Avatar />
-                <div className="min-w-0 flex-1">
-                  <div className="whitespace-pre-wrap leading-7">{msg.content}</div>
-                  {msg.meta && (
-                    <span className="mt-2 inline-block rounded-full bg-[#e5e5e5] px-2.5 py-1 text-xs text-zinc-600 dark:bg-[#424242] dark:text-zinc-300">
-                      {msg.meta}
-                    </span>
+                <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
+                  <Markdown text={msg.content} />
+                  {msg.meta && <MetaBar meta={msg.meta} />}
+                  {msg.meta && i === messages.length - 1 && !loading && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <button onClick={handleRetry} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">
+                        <RotateCcw size={12} /> أعد بنموذج آخر
+                      </button>
+                      {retryNote && <span className="text-[11px] text-warning">{retryNote}</span>}
+                    </div>
                   )}
                 </div>
               </div>
             )
           )}
 
-          {loading && (
-            <div className="flex items-center gap-3 border-t border-[#e5e5e5] pt-4 dark:border-[#2f2f2f]">
+          {loading && streamText && (
+            <div className="flex gap-3">
               <Avatar />
-              <div className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
+              <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
+                <Markdown text={streamText} />
+                <span className="inline-block h-4 w-1.5 animate-pulse bg-primary align-middle" />
+              </div>
+            </div>
+          )}
+
+          {loading && !streamText && (
+            <div className="flex items-center gap-3">
+              <Avatar />
+              <div className="flex items-center gap-2 text-sm text-muted">
                 <span>الماستر يختار أرخص موديل</span>
                 <span className="flex gap-1">
                   {[0, 1, 2].map((i) => (
-                    <span
-                      key={i}
-                      className="h-1.5 w-1.5 animate-bounce rounded-full bg-current"
-                      style={{ animationDelay: `${i * 150}ms` }}
-                    />
+                    <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" style={{ animationDelay: `${i * 150}ms` }} />
                   ))}
                 </span>
               </div>
@@ -99,24 +415,36 @@ export function ChatWindow() {
         </div>
       </div>
 
-      <div className="sticky bottom-0 bg-white px-4 pb-4 pt-2 dark:bg-[#212121]">
-        <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-[#d9d9d9] bg-[#f4f4f4] px-4 py-2 dark:border-[#424242] dark:bg-[#2f2f2f]">
+      <div className="bg-bg px-4 pb-4 pt-2">
+        <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-outline bg-surface px-4 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
             placeholder="اكتب طلبك هنا..."
-            className="flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-zinc-500"
+            className="flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-muted"
           />
-          <button
-            onClick={handleSend}
-            disabled={loading || !input.trim()}
-            aria-label="إرسال"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-black text-white transition-opacity disabled:opacity-40 dark:bg-white dark:text-black"
-          >
-            {loading ? <Loader2 size={18} className="animate-spin" /> : <ArrowUp size={18} />}
-          </button>
+          {loading ? (
+            <button
+              onClick={handleStop}
+              aria-label="إيقاف"
+              title="إيقاف الطلب"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-danger text-white"
+            >
+              <Square size={14} fill="currentColor" />
+            </button>
+          ) : (
+            <button
+              onClick={handleSend}
+              disabled={!input.trim()}
+              aria-label="إرسال"
+              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-40"
+            >
+              <ArrowUp size={18} />
+            </button>
+          )}
         </div>
+        <StatusBar loading={loading} progress={progress} elapsed={elapsed} messages={messages} />
       </div>
     </div>
   )

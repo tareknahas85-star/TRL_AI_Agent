@@ -10,8 +10,11 @@ type StoreSchema = {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 let store: any
 try {
-  store = new (Store as any)({ name: 'secure-keys', encryptionKey: 'my-router-key' })
-} catch {
+  // electron-store v11 is ESM-only; when bundled as CJS the constructor is on `.default`.
+  const Ctor = (Store as any).default ?? Store
+  store = new Ctor({ name: 'secure-keys', encryptionKey: 'my-router-key' })
+} catch (e) {
+  console.error('[secure-store] falling back to in-memory keys:', e)
   store = { get: (k: string) => process.env[k], set: () => {}, has: () => false }
 }
 
@@ -36,5 +39,23 @@ export function hasApiKey(key: keyof StoreSchema): boolean {
     return !!store.get(key) || !!process.env[key]
   } catch {
     return !!process.env[key]
+  }
+}
+
+// Generic named secrets (e.g. API keys of user-added custom models).
+export function getSecret(name: string): string {
+  try {
+    return store.get(`secret:${name}`) || ''
+  } catch {
+    return ''
+  }
+}
+
+export function setSecret(name: string, value: string): void {
+  try {
+    if (value) store.set(`secret:${name}`, value)
+    else store.delete(`secret:${name}`)
+  } catch {
+    // ignore: store unavailable
   }
 }

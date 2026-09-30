@@ -1,21 +1,32 @@
 import { MODEL_TIERS, OPENROUTER_MODELS_API } from './config'
 import type { Analysis } from './master'
+import { customModelsForTier } from './custom-models'
+import { catalogModelsForTier } from './catalog'
+import { freeOnly } from './spend'
+
+// Built-in tiers plus the user's enabled custom models (custom ones are tried first inside their tier).
+const tier = (t: 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'): string[] => [
+  ...customModelsForTier(t, false),
+  ...(catalogModelsForTier(t) ?? MODEL_TIERS[t]),
+  ...customModelsForTier(t, true)
+]
 
 export function getTierForAnalysis(analysis: Analysis): string[] {
+  if (freeOnly()) return tier('TIER_1_FREE')
   switch (analysis.complexity) {
     case 'simple':
-      return [...MODEL_TIERS.TIER_1_FREE, ...MODEL_TIERS.TIER_2_CHEAP]
+      return [...tier('TIER_1_FREE'), ...tier('TIER_2_CHEAP')]
     case 'medium':
       return [
-        ...MODEL_TIERS.TIER_1_FREE,
-        ...MODEL_TIERS.TIER_2_CHEAP,
-        ...MODEL_TIERS.TIER_3_EXPENSIVE
+        ...tier('TIER_1_FREE'),
+        ...tier('TIER_2_CHEAP'),
+        ...tier('TIER_3_EXPENSIVE')
       ]
     case 'complex':
       return [
-        ...MODEL_TIERS.TIER_3_EXPENSIVE,
-        ...MODEL_TIERS.TIER_2_CHEAP,
-        ...MODEL_TIERS.TIER_1_FREE
+        ...tier('TIER_3_EXPENSIVE'),
+        ...tier('TIER_2_CHEAP'),
+        ...tier('TIER_1_FREE')
       ]
   }
 }

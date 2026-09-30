@@ -2,6 +2,34 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Hybrid theme: Material-style tokens (Nasaq) + router accents. RGB triplets for alpha support. */
+:root {
+  --bg: 246 248 252;
+  --surface: 255 255 255;
+  --surface2: 238 241 248;
+  --outline: 221 226 234;
+  --fg: 31 31 31;
+  --muted: 95 99 104;
+  --primary: 26 115 232;
+  --success: 30 142 62;
+  --warning: 249 171 0;
+  --danger: 217 48 37;
+  --bubble: 211 227 253;
+}
+:root.dark {
+  --bg: 11 15 20;
+  --surface: 18 24 33;
+  --surface2: 23 31 43;
+  --outline: 35 45 61;
+  --fg: 230 237 243;
+  --muted: 139 152 169;
+  --primary: 68 147 248;
+  --success: 63 185 80;
+  --warning: 210 153 34;
+  --danger: 248 81 73;
+  --bubble: 27 50 88;
+}
+
 @layer base {
   html,
   body,
@@ -9,14 +37,24 @@
     height: 100%;
     margin: 0;
   }
-
   body {
     overflow: hidden;
-    font-family:
-      system-ui,
-      -apple-system,
-      'Segoe UI',
-      Tahoma,
-      sans-serif;
+    background: rgb(var(--bg));
+    color: rgb(var(--fg));
+    font-family: Roboto, 'Noto Sans Arabic', 'Segoe UI', Tahoma, system-ui, sans-serif;
+    font-size: 14.5px;
+  }
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgb(var(--outline));
+    border-radius: 8px;
+    border: 2px solid rgb(var(--bg));
+  }
+  :focus-visible {
+    outline: 2px solid rgb(var(--primary));
+    outline-offset: 2px;
   }
 }
