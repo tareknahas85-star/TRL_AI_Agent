@@ -59,7 +59,7 @@ function createWindow(): void {
     mainWindow.show()
   })
   mainWindow.on('close', (e) => {
-    if (!quitting) {
+    if (!quitting && process.platform !== 'linux') {
       e.preventDefault()
       mainWindow.hide()
     }
@@ -121,7 +121,8 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  // Stay alive in the tray; quitting happens from the tray menu.
+  // Stay alive in the tray; quitting happens from the tray menu (Linux has no tray: quit).
+  if (process.platform === 'linux') app.quit()
 })
 
 // A second launch just brings the existing window forward.

@@ -6,6 +6,7 @@ import path from 'path'
 import { getAccounts, setConnected, setWriteServer } from '../core/accounts'
 import { loadMCPConfig, saveMCPConfig, testMCPServer, type MCPServer } from '../mcp/client'
 import { callMcpTool, listMcpTools, mcpStatus, resetMcp } from '../mcp/runtime'
+import { findOnPath } from '../core/platform'
 
 // Connector registry. Every card in Settings > Connectors comes from here.
 //  remote  : official hosted MCP through mcp-remote (OAuth sign-in happens in the browser, no app registration)
@@ -29,17 +30,34 @@ type Def = {
 const npx = (id: string, args: string[]): MCPServer => ({ name: id, command: 'npx', args: ['-y', ...args], env: {}, enabled: true })
 const remote = (id: string, url: string): MCPServer => npx(id, ['mcp-remote', url])
 const home = os.homedir()
-const gcloudBundle = path.join(process.env.APPDATA ?? '', 'npm', 'node_modules', '@google-cloud', 'gcloud-mcp', 'dist', 'bundle.js')
-const terraformExe = path.join(home, 'Documents', 'mcp-servers', 'terraform-mcp-server', 'terraform-mcp-server.exe')
+const gcloudBundle = process.platform !== 'win32' ? '' : path.join(process.env.APPDATA ?? '', 'npm', 'node_modules', '@google-cloud', 'gcloud-mcp', 'dist', 'bundle.js')
+const terraformExe = process.platform === 'win32'
+  ? path.join(home, 'Documents', 'mcp-servers', 'terraform-mcp-server', 'terraform-mcp-server.exe')
+  : (findOnPath('terraform-mcp-server') ?? path.join(home, '.local', 'bin', 'terraform-mcp-server'))
+
+// Windows keeps the original fixed folders; elsewhere use the OS-localized ones that actually exist (fallback: home).
+function fsRoots(): string[] {
+  if (process.platform === 'win32') return [path.join(home, 'Documents'), path.join(home, 'Desktop'), path.join(home, 'Downloads')]
+  const out: string[] = []
+  for (const n of ['documents', 'desktop', 'downloads'] as const) {
+    try {
+      const p = app.getPath(n)
+      if (fs.existsSync(p) && !out.includes(p)) out.push(p)
+    } catch {
+      /* ignore */
+    }
+  }
+  return out.length ? out : [home]
+}
 
 const DEFS: Def[] = [
   { id: 'github', title: 'GitHub', subtitle: 'مستودعات • Issues • Pull requests • ملفات', group: 'device', kind: 'special',
     hint: 'بيستعمل حساب GitHub المسجّل بالجهاز (gh). إذا ما كنت مسجّل، رح يطلع كود وبتنفتح صفحة GitHub.', server: () => npx('github', ['@modelcontextprotocol/server-github']) },
   { id: 'gcloud', title: 'Google Cloud', subtitle: 'مشاريع • موارد • IAM • logs (عبر gcloud المسجّل بالجهاز)', group: 'device', kind: 'local', requires: 'gcloud',
     hint: 'بيستعمل تسجيل دخول gcloud الموجود بجهازك، بدون خطوات إضافية.',
-    server: () => (fs.existsSync(gcloudBundle) ? { name: 'gcloud', command: 'node', args: [gcloudBundle], env: {}, enabled: true } : npx('gcloud', ['@google-cloud/gcloud-mcp'])) },
+    server: () => (gcloudBundle && fs.existsSync(gcloudBundle) ? { name: 'gcloud', command: 'node', args: [gcloudBundle], env: {}, enabled: true } : npx('gcloud', ['@google-cloud/gcloud-mcp'])) },
   { id: 'terraform', title: 'Terraform', subtitle: 'بحث وثائق ومزودين ووحدات Registry', group: 'device', kind: 'local',
-    requiresFile: () => (fs.existsSync(terraformExe) ? null : 'ما لقيت terraform-mcp-server.exe بمجلد mcp-servers.'),
+    requiresFile: () => (fs.existsSync(terraformExe) ? null : 'ما لقيت terraform-mcp-server (حطو بمجلد mcp-servers أو على PATH).'),
     hint: 'أداة محلية، بدون تسجيل دخول.', server: () => ({ name: 'terraform', command: terraformExe, args: ['stdio'], env: {}, enabled: true }) },
   { id: 'kubernetes', title: 'Kubernetes', subtitle: 'clusters • pods • logs (عبر kubeconfig الموجود)', group: 'device', kind: 'local', requires: 'kubectl',
     hint: 'بيستعمل kubectl والـ kubeconfig الموجود بجهازك.', server: () => npx('kubernetes', ['mcp-server-kubernetes']) },
@@ -61,7 +79,7 @@ const DEFS: Def[] = [
     fields: [ { env: 'BOX_CLIENT_ID', label: 'Client ID' }, { env: 'BOX_CLIENT_SECRET', label: 'Client Secret' } ],
     hint: 'مرة وحدة: Box Admin Console ثم Integrations ثم Platform Apps ثم Create Custom App (OAuth 2.0). حط Redirect URI = http://localhost:3334/oauth/callback وفعّل scopes: root_readwrite و ai.readwrite، وانسخ الـ Client ID والـ Secret هون. بعدها بتنفتح صفحة Box للموافقة.',
     build: (v) => {
-      const dir = path.join(process.env.APPDATA ?? home, 'my-ai-router')
+      const dir = app.getPath('userData')
       fs.mkdirSync(dir, { recursive: true })
       const file = path.join(dir, 'box-oauth-client.json')
       fs.writeFileSync(file, JSON.stringify({ client_id: v[0], client_secret: v[1] }))
@@ -84,7 +102,7 @@ const DEFS: Def[] = [
     server: () => npx('desktopcommander', ['@wonderwhy-er/desktop-commander@latest']) },
   { id: 'filesystem', title: 'Filesystem', subtitle: 'قراءة وكتابة ملفات بمجلدات Documents وDesktop وDownloads', group: 'device', kind: 'local',
     hint: 'محصور بالمجلدات: Documents وDesktop وDownloads. الحذف ممنوع دائماً.',
-    server: () => npx('filesystem', ['@modelcontextprotocol/server-filesystem', path.join(home, 'Documents'), path.join(home, 'Desktop'), path.join(home, 'Downloads')]) },
+    server: () => npx('filesystem', ['@modelcontextprotocol/server-filesystem', ...fsRoots()]) },
 ]
 const byId = (id: unknown): Def | undefined => (typeof id === 'string' ? DEFS.find((d) => d.id === id) : undefined)
 
