@@ -4,6 +4,7 @@ import { ensureOllama } from '../core/ollama'
 import { calculateSavedCost } from '../core/fallback'
 import { executeWithSkill } from '../skills/executor'
 import { runCouncil, type CouncilInfo } from '../core/council'
+import { CLAUDE_CLI, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { registerManagementHandlers } from './management'
 import { listProjects } from '../core/workspace'
 import { buildProjectContext } from '../core/project-context'
@@ -71,7 +72,9 @@ export function registerIpcHandlers(): void {
       .map((m) => ({ value: CUSTOM_PREFIX + m.id, label: m.name, tier: m.tier })),
     ...listCatalog()
       .models.filter((m) => m.enabled)
-      .map((m) => ({ value: m.id, label: m.name || m.id, tier: m.tier }))
+      .map((m) => ({ value: m.id, label: m.name || m.id, tier: m.tier })),
+    // Subscription accounts through their official CLI (only offered when the tool is installed).
+    ...(claudeCliPath() ? [{ value: CLAUDE_CLI, label: cliModelName(CLAUDE_CLI), tier: 'SUBSCRIPTION' }] : [])
   ]
   const parseMode = (raw: unknown): RunMode => {
     const r = raw as { kind?: unknown; id?: unknown } | null
@@ -166,10 +169,13 @@ export function registerIpcHandlers(): void {
           if (result.modelUsed === 'none' && retry) return { content: result.content, failed: true, needsChoice: true }
           lastRuns.set(o.tabId, { userMsg, analysis, tried: [...exclude, ...result.triedModels], masterMs, history, projectId })
           const isCustom = result.modelUsed.startsWith(CUSTOM_PREFIX)
-          const shownModel = isCustom
-            ? (getCustomModel(result.modelUsed.slice(CUSTOM_PREFIX.length))?.name ?? result.modelUsed)
-            : result.modelUsed
-          const saved = isCustom ? 'استخدمت موديلك المخصص' : calculateSavedCost(result.modelUsed, analysis)
+          const isCli = isCliModel(result.modelUsed)
+          const shownModel = isCli
+            ? cliModelName(result.modelUsed)
+            : isCustom
+              ? (getCustomModel(result.modelUsed.slice(CUSTOM_PREFIX.length))?.name ?? result.modelUsed)
+              : result.modelUsed
+          const saved = isCli ? 'استخدمت اشتراكك (بدون رصيد API)' : isCustom ? 'استخدمت موديلك المخصص' : calculateSavedCost(result.modelUsed, analysis)
           const u = result.usage
           const stats = {
             masterMs,
@@ -188,7 +194,7 @@ export function registerIpcHandlers(): void {
             failures: result.failures ?? [],
             retried: retry
           }
-          const nm = (id?: string): string | undefined => (id?.startsWith(CUSTOM_PREFIX) ? (getCustomModel(id.slice(CUSTOM_PREFIX.length))?.name ?? id) : id)
+          const nm = (id?: string): string | undefined => (id && isCliModel(id) ? cliModelName(id) : id?.startsWith(CUSTOM_PREFIX) ? (getCustomModel(id.slice(CUSTOM_PREFIX.length))?.name ?? id) : id)
           const meta = `Model: ${shownModel} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${council ? 'Council: ' + (council.revised ? 'صُحّح بعد مراجعة ' + nm(council.critic) + ' (' + council.issues + ' ملاحظات)' : council.ran ? 'راجعه ' + nm(council.critic) + ' — ' + (council.skipped ?? 'بدون تعديل') : (council.skipped ?? '')) + ' | ' : ''}${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
           if (result.modelUsed !== 'none') recordTurn(projectId, userMsg, result.content)
           // needsChoice: nothing answered (free chain exhausted or the picked model failed) -> the UI asks the user what to do.

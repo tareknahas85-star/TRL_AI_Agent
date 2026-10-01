@@ -3,6 +3,7 @@ import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, currentSignal } from './progress'
 import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel } from './custom-models'
+import { buildCliPrompt, isCliModel, runClaudeCli } from './cli-models'
 
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -109,6 +110,21 @@ export async function executeWithFallback(
     try {
       console.log(`[Fallback] Trying model: ${model}`)
       emitProgress('يجرّب: ' + model)
+      if (isCliModel(model)) {
+        // Signed-in account via the official CLI: plain chat answer, no API key and no extra tools.
+        const t0 = Date.now()
+        const text = await runClaudeCli(buildCliPrompt(systemPrompt, history, userInput), signal)
+        emitStream('chunk', text)
+        return {
+          content: text,
+          modelUsed: model,
+          success: true,
+          triedModels,
+          toolsUsed,
+          failures,
+          usage: { promptTokens: 0, completionTokens: Math.ceil(text.length / 3.5), genMs: Date.now() - t0, estimated: true }
+        }
+      }
       let pt = 0
       let ct = 0
       let gen = 0

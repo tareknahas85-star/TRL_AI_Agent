@@ -188,6 +188,7 @@ function StatusBar({
 }
 
 function tierChip(saved: string): { label: string; cls: string } {
+  if (saved.includes('اشتراكك')) return { label: 'اشتراكك', cls: 'bg-primary/15 text-primary' }
   if (saved.includes('مجاني')) return { label: 'مجاني', cls: 'bg-success/15 text-success' }
   if (saved.includes('رخيص')) return { label: 'رخيص', cls: 'bg-primary/15 text-primary' }
   if (saved.includes('مخصص')) return { label: 'مخصص', cls: 'bg-surface2 text-fg' }
@@ -518,7 +519,7 @@ export function ChatWindow({
                 <option value="">🎯 اختار نموذج…</option>
                 {picker.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                    {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                   </option>
                 ))}
               </select>
@@ -551,7 +552,7 @@ export function ChatWindow({
             <optgroup label="🎯 نموذج محدد">
               {picker.map((p) => (
                 <option key={p.value} value={p.value}>
-                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                 </option>
               ))}
             </optgroup>
@@ -562,7 +563,7 @@ export function ChatWindow({
               <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={mode.author ?? ''} onChange={(e) => onModeChange({ ...mode, author: e.target.value })}>
                 {picker.map((p) => (
                 <option key={p.value} value={p.value}>
-                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                 </option>
               ))}
               </select>
@@ -570,7 +571,7 @@ export function ChatWindow({
               <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={mode.critic ?? ''} onChange={(e) => onModeChange({ ...mode, critic: e.target.value })}>
                 {picker.map((p) => (
                 <option key={p.value} value={p.value}>
-                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                 </option>
               ))}
               </select>
