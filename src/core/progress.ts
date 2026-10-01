@@ -4,7 +4,7 @@ type Sink = (text: string) => void
 type StreamSink = (kind: 'chunk' | 'reset', text?: string) => void
 
 // How the user wants this run to pick models: free chain only, free+paid chain, or one explicit model.
-export type RunMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council' } | { kind: 'model'; id: string }
+export type RunMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
 
 type Ctx = { progress: Sink; stream: StreamSink; ctl: AbortController; mode: RunMode; muted?: boolean }
 
