@@ -3,12 +3,16 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer. All core logic (OpenRouter calls, skills, tools, key storage)
 // runs in the main process; the UI only talks to it through these calls.
+type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'model'; id: string }
+type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
+type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
+
 const api = {
-  chat: (userInput: string, history?: { role: 'user' | 'assistant'; content: string }[]): Promise<{ content: string; meta?: string; cancelled?: boolean; failed?: boolean }> =>
-    ipcRenderer.invoke('chat:send', userInput, history),
-  retryChat: (): Promise<{ content: string; meta?: string; cancelled?: boolean; failed?: boolean }> =>
-    ipcRenderer.invoke('chat:retry'),
-  cancelChat: (): Promise<boolean> => ipcRenderer.invoke('chat:cancel'),
+  chat: (userInput: string, history: { role: 'user' | 'assistant'; content: string }[] | undefined, opts: ChatOpts): Promise<ChatResult> =>
+    ipcRenderer.invoke('chat:send', userInput, history, opts),
+  retryChat: (opts: ChatOpts): Promise<ChatResult> => ipcRenderer.invoke('chat:retry', opts),
+  cancelChat: (tabId: string): Promise<boolean> => ipcRenderer.invoke('chat:cancel', tabId),
+  modelPicker: (): Promise<{ value: string; label: string; tier: string }[]> => ipcRenderer.invoke('models:picker'),
   spend: {
     get: (): Promise<boolean> => ipcRenderer.invoke('spend:get'),
     set: (on: boolean): Promise<boolean> => ipcRenderer.invoke('spend:set', on)
@@ -18,15 +22,15 @@ const api = {
     set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:set', on),
     reset: (): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:reset')
   },
-  onStream: (cb: (kind: 'chunk' | 'reset', text?: string) => void): (() => void) => {
-    const h = (_e: unknown, k: 'chunk' | 'reset', t?: string): void => cb(k, t)
+  onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void): (() => void) => {
+    const h = (_e: unknown, tabId: string, k: 'chunk' | 'reset', t?: string): void => cb(tabId, k, t)
     ipcRenderer.on('chat:stream', h)
     return () => ipcRenderer.removeListener('chat:stream', h)
   },
   status: (): Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number }> =>
     ipcRenderer.invoke('status:get'),
-  onProgress: (cb: (text: string) => void): (() => void) => {
-    const h = (_e: unknown, t: string): void => cb(t)
+  onProgress: (cb: (tabId: string, text: string) => void): (() => void) => {
+    const h = (_e: unknown, tabId: string, t: string): void => cb(tabId, t)
     ipcRenderer.on('chat:progress', h)
     return () => ipcRenderer.removeListener('chat:progress', h)
   },
@@ -65,6 +69,36 @@ const api = {
     test: (id: string) => ipcRenderer.invoke('models:test', id),
     fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
     importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
+  },
+  connectors: {
+    list: () => ipcRenderer.invoke('connectors:list'),
+    active: (load?: boolean) => ipcRenderer.invoke('connectors:active', load),
+    connect: (id: string) => ipcRenderer.invoke('connectors:connect', id),
+    setup: (id: string, values: string[]) => ipcRenderer.invoke('connectors:setup', id, values),
+    test: (id: string) => ipcRenderer.invoke('connectors:test', id),
+    disconnect: (id: string) => ipcRenderer.invoke('connectors:disconnect', id),
+    onCode: (cb: (id: string, code: string, url: string) => void) => {
+      const h = (_e: unknown, id: string, code: string, url: string): void => cb(id, code, url)
+      ipcRenderer.on('connectors:code', h)
+      return () => ipcRenderer.removeListener('connectors:code', h)
+    }
+  },
+  app: {
+    about: () => ipcRenderer.invoke('app:about')
+  },
+  accounts: {
+    get: () => ipcRenderer.invoke('accounts:get'),
+    setEmail: (v: string) => ipcRenderer.invoke('accounts:setEmail', v),
+    setWrite: (server: string, on: boolean) => ipcRenderer.invoke('accounts:setWrite', server, on),
+    google: (action: 'connect' | 'test') => ipcRenderer.invoke('accounts:google', action),
+    googleDisconnect: () => ipcRenderer.invoke('accounts:googleDisconnect'),
+    googleCreds: () => ipcRenderer.invoke('accounts:googleCreds'),
+    googleSetup: (idOrJson: string, secret: string) => ipcRenderer.invoke('accounts:googleSetup', idOrJson, secret)
+  },
+  masterMemory: {
+    get: () => ipcRenderer.invoke('mm:get'),
+    update: (id: string, patch: unknown) => ipcRenderer.invoke('mm:update', id, patch),
+    clearGeneral: () => ipcRenderer.invoke('mm:clearGeneral')
   },
   memory: {
     list: () => ipcRenderer.invoke('memory:list'),

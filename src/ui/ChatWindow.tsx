@@ -1,9 +1,9 @@
-﻿import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Bot, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
 import { Markdown } from './Markdown'
 import { CostDashboard } from './CostDashboard'
 import { Chip } from './components/ui'
-import type { MCPServerInfo, ProjectInfo, SkillInfo, StoredMessage } from '../preload/index.d'
+import type { ChatMode, ProjectInfo, StoredMessage } from '../preload/index.d'
 
 type ChatMessage = StoredMessage
 
@@ -71,6 +71,21 @@ function StatusBar({
   messages: { meta?: string }[]
 }) {
   const [open, setOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [act, setAct] = useState<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>([])
+  useEffect(() => {
+    if (!open) return
+    let on = true
+    const tick = (): void => {
+      window.api.connectors.active().then((r) => on && setAct(r)).catch(() => undefined)
+    }
+    tick()
+    const t = setInterval(tick, 3000)
+    return () => {
+      on = false
+      clearInterval(t)
+    }
+  }, [open])
   const parsed = messages.filter((m) => m.meta).map((m) => parseMeta(m.meta as string))
   const last = parsed[parsed.length - 1]
   const st = last?.stats
@@ -132,6 +147,36 @@ function StatusBar({
           ) : (
             <div>لا توجد إحصاءات للرد الأخير.</div>
           )}
+          <div className="border-t border-outline pt-1">
+            <div className="mb-1 flex items-center gap-2">
+              <span>الأدوات الشغّالة:</span>
+              <button
+                disabled={scanning}
+                onClick={() => {
+                  setScanning(true)
+                  window.api.connectors.active(true).then(setAct).catch(() => undefined).finally(() => setScanning(false))
+                }}
+                className="rounded-full border border-outline px-2 py-0.5 text-primary hover:bg-surface2 disabled:opacity-50"
+              >
+                {scanning ? 'عم أفحص…' : 'فحص / تحديث'}
+              </button>
+            </div>
+            {act.length === 0 ? (
+              <div>لا يوجد موصلات مفعّلة.</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {act.map((a) => {
+                  const used = !!st?.tools.some((t) => t.startsWith(a.prefix))
+                  return (
+                    <span key={a.id} title={a.names.join(', ')} className={`rounded-full border px-2 py-0.5 ${used ? 'border-primary text-primary' : 'border-outline'}`}>
+                      <span className={a.running ? 'text-success' : 'text-muted'}>●</span> {a.title} · {a.tools || '—'}
+                      {used ? ' · استُعمل بآخر رد' : ''}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <div className="border-t border-outline pt-1">
             الجلسة: {parsed.length} ردود · {totalTok} توكن · متوسط السرعة {avgTps ? avgTps.toFixed(1) : '—'} t/s · محاولات فاشلة {failCount}
           </div>
@@ -200,27 +245,43 @@ function StatusChips() {
 }
 
 export function ChatWindow({
+  tabId,
+  active,
   conversationId,
   initialMessages,
   project,
+  mode,
+  onModeChange,
+  onBusy,
   onSaved
 }: {
+  tabId: string
+  active: boolean
   conversationId: string | null
   initialMessages: ChatMessage[]
   project: ProjectInfo | null
-  onSaved: (id: string) => void
+  mode: ChatMode
+  onModeChange: (m: ChatMode) => void
+  onBusy: (b: boolean) => void
+  onSaved: (id: string, title?: string) => void
 }) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
   const convIdRef = useRef<string | null>(conversationId)
-  const [skills, setSkills] = useState<SkillInfo[]>([])
-  const [mcp, setMcp] = useState<MCPServerInfo[]>([])
   const [progress, setProgress] = useState('')
   const [elapsed, setElapsed] = useState(0)
 
-  useEffect(() => window.api.onProgress(setProgress), [])
+  useEffect(() => window.api.onProgress((id, t) => id === tabId && setProgress(t)), [tabId])
+  useEffect(() => {
+    onBusy(loading)
+  }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
+  const [picker, setPicker] = useState<{ value: string; label: string; tier: string }[]>([])
+  const [needsChoice, setNeedsChoice] = useState(false)
+  useEffect(() => {
+    window.api.modelPicker().then(setPicker).catch(() => undefined)
+  }, [active])
   useEffect(() => {
     if (!loading) return
     const t0 = Date.now()
@@ -228,13 +289,6 @@ export function ChatWindow({
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 500)
     return () => clearInterval(id)
   }, [loading])
-
-  useEffect(() => {
-    window.api.skills.list().then(setSkills)
-    window.api.mcp.list().then(setMcp)
-  }, [])
-  const activeSkills = skills.filter((s) => s.enabled).map((s) => s.name)
-  const activeMcp = mcp.filter((m) => m.enabled !== false).map((m) => m.name)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -248,7 +302,7 @@ export function ChatWindow({
         projectId: project?.id ?? null
       })
       convIdRef.current = saved.id
-      onSaved(saved.id)
+      onSaved(saved.id, saved.title)
     } catch (e) {
       console.warn('save conversation failed', e)
     }
@@ -262,7 +316,8 @@ export function ChatWindow({
 
   useEffect(
     () =>
-      window.api.onStream((kind, t) => {
+      window.api.onStream((id, kind, t) => {
+        if (id !== tabId) return
         if (kind === 'reset') {
           streamRef.current = ''
           setStreamText('')
@@ -271,21 +326,23 @@ export function ChatWindow({
           setStreamText(streamRef.current)
         }
       }),
-    []
+    [tabId]
   )
 
-  const runRequest = async (retry: boolean, base: ChatMessage[]): Promise<void> => {
+  const runRequest = async (retry: boolean, base: ChatMessage[], retryMode?: ChatMode): Promise<void> => {
     setProgress('')
     setStreamText('')
     streamRef.current = ''
     setRetryNote('')
+    setNeedsChoice(false)
     setLoading(true)
     let next: ChatMessage[] = base
     try {
-      const r = retry ? await window.api.retryChat() : await window.api.chat(
-            lastUserRef.current,
-            base.slice(0, -1).map((m) => ({ role: m.role, content: m.content }))
-          )
+      const opts = { tabId, projectId: project?.id ?? null, mode: retryMode ?? mode }
+      const r = retry
+        ? await window.api.retryChat(opts)
+        : await window.api.chat(lastUserRef.current, base.slice(0, -1).map((m) => ({ role: m.role, content: m.content })), opts)
+      if (r.needsChoice) setNeedsChoice(true)
       if (r.cancelled) {
         const partial = streamRef.current
         if (partial.trim()) {
@@ -324,22 +381,22 @@ export function ChatWindow({
     await runRequest(false, withUser)
   }
 
-  const handleRetry = async (): Promise<void> => {
+  const handleRetry = async (retryMode?: ChatMode): Promise<void> => {
     if (loading) return
     setRetrying(true)
-    await runRequest(true, messages)
+    await runRequest(true, messages, retryMode)
     setRetrying(false)
   }
 
   const handleStop = (): void => {
-    void window.api.cancelChat()
+    void window.api.cancelChat(tabId)
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col bg-bg text-fg">
+    <div className={`${active ? 'flex' : 'hidden'} min-h-0 flex-1 flex-col bg-bg text-fg`}>
       <header className="flex flex-wrap items-center justify-between gap-2 border-b border-outline bg-surface px-4 py-3 text-xs">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-semibold">المحادثات</span>
+          <span className="text-sm font-semibold">{project ? 'ملف المشروع' : 'محادثة'}</span>
           {project && (
             <Chip cls="bg-primary/15 text-primary">
               <FolderOpen size={12} /> {project.name}
@@ -348,8 +405,6 @@ export function ChatWindow({
         </div>
         <div className="flex flex-wrap gap-2">
           <StatusChips />
-          <Chip>Skills: {activeSkills.length ? activeSkills.join(', ') : 'none'}</Chip>
-          <Chip>MCP: {activeMcp.length ? activeMcp.join(', ') : 'none'}</Chip>
         </div>
       </header>
       <div className="pt-3">
@@ -377,7 +432,7 @@ export function ChatWindow({
                   {msg.meta && <MetaBar meta={msg.meta} />}
                   {msg.meta && i === messages.length - 1 && !loading && (
                     <div className="mt-2 flex items-center gap-2">
-                      <button onClick={handleRetry} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">
+                      <button onClick={() => handleRetry()} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">
                         <RotateCcw size={12} /> أعد بنموذج آخر
                       </button>
                       {retryNote && <span className="text-[11px] text-warning">{retryNote}</span>}
@@ -416,6 +471,60 @@ export function ChatWindow({
       </div>
 
       <div className="bg-bg px-4 pb-4 pt-2">
+        {needsChoice && !loading && (
+          <div className="mx-auto mb-2 max-w-3xl rounded-card border border-warning/50 bg-warning/10 p-3 text-xs">
+            <div className="mb-2 font-medium">
+              {mode.kind === 'model' ? 'النموذج المحدد ما رد.' : 'النماذج المجانية خلصت أو ما ردت.'} شو بتحب نعمل؟
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <button className="rounded-full bg-primary px-3 py-1 text-white" onClick={() => handleRetry({ kind: 'auto' })}>
+                ⚡ موافق، كمّل بالمدفوع (تلقائي) — مرة وحدة
+              </button>
+              <select
+                className="rounded-full border border-outline bg-surface px-2 py-1"
+                value=""
+                onChange={(e) => e.target.value && handleRetry({ kind: 'model', id: e.target.value })}
+              >
+                <option value="">🎯 اختار نموذج…</option>
+                {picker.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                  </option>
+                ))}
+              </select>
+              {mode.kind !== 'free' && (
+                <button className="rounded-full border border-outline px-3 py-1" onClick={() => handleRetry({ kind: 'free' })}>
+                  🆓 جرّب المجاني
+                </button>
+              )}
+              <button className="rounded-full px-3 py-1 text-muted hover:bg-surface2" onClick={() => setNeedsChoice(false)}>
+                لا، خلص
+              </button>
+            </div>
+          </div>
+        )}
+        <div className="mx-auto mb-1 flex max-w-3xl items-center gap-2 text-[11px] text-muted">
+          <span>النموذج:</span>
+          <select
+            className={`rounded-full border border-outline bg-surface px-2 py-0.5 ${mode.kind === 'free' ? '' : 'text-warning'}`}
+            value={mode.kind === 'model' ? mode.id : mode.kind}
+            onChange={(e) => {
+              const v = e.target.value
+              onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : { kind: 'model', id: v })
+            }}
+          >
+            <option value="free">🆓 تلقائي — مجاني فقط</option>
+            <option value="auto">⚡ تلقائي — مع المدفوع</option>
+            <optgroup label="🎯 نموذج محدد">
+              {picker.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                </option>
+              ))}
+            </optgroup>
+          </select>
+          {mode.kind !== 'free' && <span className="text-warning">قد يستهلك رصيدك</span>}
+        </div>
         <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-outline bg-surface px-4 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow">
           <input
             value={input}

@@ -131,7 +131,7 @@ function parseAnalysis(text: string, skillNames: string[] = []): Analysis | null
 const CODEISH =
   /\b(sql|select|function|code|bug|script|python|javascript|typescript|powershell|regex|query|api|docker|kubernetes|terraform|yaml|debug|refactor|compile)\b|كود|دالة|سكربت|سكريبت|استعلام|برمجة/i
 const TOOLISH =
-  /\b(cpu|ram|memory|disk|process|processes|file|files|folder|directory|search|web|url|github|gcloud|kubectl|terraform|database|table|tables|email|gmail|drive|calendar)\b|ملف|مجلد|ابحث|بحث|معالج|رام|قرص|جدول|قاعدة بيانات|افتح|شغّل|شغل|اضغط|كبس|اكتب لي على|لقطة شاشة|سكرين|الشاشة|نافذة|برنامج|جهازي|الكمبيوتر|open|click|screenshot|notepad|calc/i
+  /\b(cpu|ram|memory|disk|process|processes|file|files|folder|directory|search|web|url|github|gcloud|kubectl|terraform|database|table|tables|email|gmail|drive|calendar|canva|outlook|onedrive|onenote|design|miro|notion|box|deepgram|assemblyai|browser-use|filesystem|jira|confluence|gcloud|kubernetes|k8s|terraform|cluster|pod|pods)\b|ميرو|نوشن|جيرا|كلاستر|بورد|خريطة ذهنية|كانفا|تصميم|اوتلوك|ون درايف|مايكروسوفت|ملف|مجلد|ايميل|إيميل|بريد|تقويم|كلندر|موعد|مواعيد|اجتماع|مهام|مهمة|ملاحظ|درايف|جهات الاتصال|مستند|عرض تقديمي|ابحث|بحث|معالج|رام|قرص|جدول|قاعدة بيانات|افتح|شغّل|شغل|اضغط|كبس|اكتب لي على|لقطة شاشة|سكرين|الشاشة|نافذة|برنامج|جهازي|الكمبيوتر|open|click|screenshot|notepad|calc/i
 
 // The small local maestro is lenient-parsed and corrected with a few deterministic rules,
 // because a 1.7B model often mislabels the type or puts a skill name in the wrong field.

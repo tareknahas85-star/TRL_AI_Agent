@@ -1,13 +1,38 @@
 import { useState, useEffect } from 'react'
 import { Modal, PageShell, inputCls } from './components/ui'
 import { MemoryPanel } from './MemoryPanel'
+import { MasterMemoryPanel } from './MasterMemoryPanel'
+import { AccountsPanel } from './AccountsPanel'
 import { ComputerPanel } from './ComputerPanel'
 import { SpendPanel } from './SpendPanel'
 
 const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
 
+const TABS = [
+  { id: 'general', label: 'عام' },
+  { id: 'connectors', label: 'الموصلات' },
+  { id: 'memory', label: 'الذاكرة' }
+] as const
+type TabId = (typeof TABS)[number]['id']
+
 export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void; variant?: 'modal' | 'page' | 'inline' }) {
+  const [tab, setTab] = useState<TabId>(() => {
+    try {
+      const v = localStorage.getItem('air.settings.tab')
+      return TABS.some((t) => t.id === v) ? (v as TabId) : 'general'
+    } catch {
+      return 'general'
+    }
+  })
+  const pickTab = (id: TabId): void => {
+    setTab(id)
+    try {
+      localStorage.setItem('air.settings.tab', id)
+    } catch {
+      /* storage unavailable */
+    }
+  }
   const [keys, setKeys] = useState<Record<KeyName, string>>({
     OPENROUTER_API_KEY: '',
     GEMINI_API_KEY: '',
@@ -57,10 +82,31 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
   if (variant === 'page') {
     // Keys now live in the Models page; this page is intentionally empty until we decide what goes here.
     return (
-      <PageShell title="الإعدادات" subtitle="الذاكرة والتفضيلات.">
-        <SpendPanel />
-        <ComputerPanel />
-        <MemoryPanel />
+      <PageShell title="الإعدادات" subtitle="عام • الموصلات • الذاكرة">
+        <div className="mb-4 flex gap-2">
+          {TABS.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => pickTab(t.id)}
+              className={'rounded-full px-4 py-1.5 text-sm ' + (tab === t.id ? 'bg-primary text-white' : 'border border-outline hover:bg-surface2')}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        {tab === 'general' && (
+          <>
+            <SpendPanel />
+            <ComputerPanel />
+          </>
+        )}
+        {tab === 'connectors' && <AccountsPanel />}
+        {tab === 'memory' && (
+          <>
+            <MasterMemoryPanel />
+            <MemoryPanel />
+          </>
+        )}
       </PageShell>
     )
   }

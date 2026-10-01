@@ -3,9 +3,10 @@ import { getTierForAnalysis } from '../core/router'
 import { executeWithFallback } from '../core/fallback'
 import { loadSkill } from './loader'
 import { buildToolset } from '../mcp/runtime'
-import { activeProject } from '../core/workspace'
+import type { Project } from '../core/workspace'
+import { currentMode } from '../core/progress'
 
-export async function executeWithSkill(userInput: string, analysis: Analysis, extraSystem?: string, exclude: string[] = [], history: { role: 'user' | 'assistant'; content: string }[] = []) {
+export async function executeWithSkill(userInput: string, analysis: Analysis, extraSystem?: string, exclude: string[] = [], history: { role: 'user' | 'assistant'; content: string }[] = [], project: Project | null = null) {
   let systemPrompt = 'You are a helpful assistant.'
 
   let picked = false
@@ -34,14 +35,17 @@ export async function executeWithSkill(userInput: string, analysis: Analysis, ex
 
   if (extraSystem) systemPrompt += '\n\n' + extraSystem
 
-  const modelsToTry = getTierForAnalysis(analysis).filter((m) => !exclude.includes(m))
+  const mode = currentMode()
+  const modelsToTry = (mode?.kind === 'model' ? [mode.id] : getTierForAnalysis(analysis)).filter((m) => !exclude.includes(m))
   if (exclude.length && !modelsToTry.length) {
     return { content: 'لا يوجد نموذج آخر بهالفئة لتجربته.', modelUsed: 'none', success: false, triedModels: [] as string[] }
   }
   let toolset: Awaited<ReturnType<typeof buildToolset>> = null
-  if (analysis.need_tools) {
+  // With an active project, file tools are offered whenever the request looks project/file related, even if the master did not flag tools.
+  const PROJECT_TOOLISH = /ملف|ملفات|مجلد|مشروع|افتح|اقرأ|راجع|حلل|شوف|file|folder|project|readme|open|read|review|analy[sz]e|\.[a-z0-9]{1,5}\b/i
+  if (analysis.need_tools || (project && PROJECT_TOOLISH.test(userInput))) {
     try {
-      toolset = await buildToolset(userInput, activeProject()?.path)
+      toolset = await buildToolset(userInput, project?.path)
     } catch (err) {
       console.warn('[Tools] toolset failed:', err)
     }

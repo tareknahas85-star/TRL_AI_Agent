@@ -1,35 +1,41 @@
+import { AsyncLocalStorage } from 'async_hooks'
+
 type Sink = (text: string) => void
 type StreamSink = (kind: 'chunk' | 'reset', text?: string) => void
-let sink: Sink | null = null
-let streamSink: StreamSink | null = null
-let ctl: AbortController | null = null
 
-// Live status line for the UI (set by the chat handler for the duration of one request).
-export const setProgressSink = (s: Sink | null): void => {
-  sink = s
+// How the user wants this run to pick models: free chain only, free+paid chain, or one explicit model.
+export type RunMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'model'; id: string }
+
+type Ctx = { progress: Sink; stream: StreamSink; ctl: AbortController; mode: RunMode }
+
+// Every chat request runs inside its own async context, so several tabs can work in parallel
+// without sharing progress/stream sinks, cancel signals or the model mode.
+const als = new AsyncLocalStorage<Ctx>()
+const runs = new Map<string, AbortController>()
+
+export function runInContext<T>(tabId: string, mode: RunMode, progress: Sink, stream: StreamSink, fn: (signal: AbortSignal) => Promise<T>): Promise<T> {
+  runs.get(tabId)?.abort()
+  const ctl = new AbortController()
+  runs.set(tabId, ctl)
+  return als.run({ progress, stream, ctl, mode }, () => fn(ctl.signal)).finally(() => {
+    if (runs.get(tabId) === ctl) runs.delete(tabId)
+  })
 }
+
 export const emitProgress = (text: string): void => {
   try {
-    sink?.(text)
+    als.getStore()?.progress(text)
   } catch {
     /* renderer gone */
   }
-}
-export const setStreamSink = (s: StreamSink | null): void => {
-  streamSink = s
 }
 export const emitStream = (kind: 'chunk' | 'reset', text?: string): void => {
   try {
-    streamSink?.(kind, text)
+    als.getStore()?.stream(kind, text)
   } catch {
     /* renderer gone */
   }
 }
-
-// One cancellable run at a time.
-export const beginRun = (): AbortSignal => {
-  ctl = new AbortController()
-  return ctl.signal
-}
-export const cancelRun = (): void => ctl?.abort()
-export const currentSignal = (): AbortSignal | undefined => ctl?.signal
+export const cancelRun = (tabId: string): void => runs.get(tabId)?.abort()
+export const currentSignal = (): AbortSignal | undefined => als.getStore()?.ctl.signal
+export const currentMode = (): RunMode | undefined => als.getStore()?.mode

@@ -31,6 +31,7 @@ import {
   testCustomModel,
   toggleCustomModel
 } from '../core/custom-models'
+import { clearGeneral, getMasterMemory, updateProjectMemory } from '../core/master-memory'
 import {
   addCustomTool,
   addProject,
@@ -161,6 +162,16 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('models:test', (_e, id: unknown) =>
     typeof id === 'string' ? testCustomModel(id) : { ok: false, message: 'id غير صالح' }
   )
+
+  // ---- Master memory (overview of all projects)
+  ipcMain.handle('mm:get', () => getMasterMemory())
+  ipcMain.handle('mm:update', (_e, id: unknown, patch: unknown) =>
+    typeof id === 'string' && patch && typeof patch === 'object' ? updateProjectMemory(id, patch as never) : false
+  )
+  ipcMain.handle('mm:clearGeneral', () => {
+    clearGeneral()
+    return true
+  })
 
   // ---- Memory
   ipcMain.handle('memory:list', () => listMemory())

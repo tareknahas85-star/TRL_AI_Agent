@@ -20,6 +20,11 @@ export type CustomModelInfo = {
   hasKey: boolean
   last?: boolean
 }
+export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'model'; id: string }
+export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
+export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
+export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
+export type MasterMemoryView = { projects: ProjectMemoryInfo[]; general: { text: string; at: number }[]; conflicts: { kind: string; detail: string }[] }
 export type ProjectInfo = { id: string; name: string; path: string }
 export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string }
 export type ConversationSummary = {
@@ -37,9 +42,10 @@ declare global {
   interface Window {
     electron: ElectronAPI
     api: {
-      chat: (userInput: string, history?: { role: 'user' | 'assistant'; content: string }[]) => Promise<{ content: string; meta?: string; cancelled?: boolean; failed?: boolean }>
-      retryChat: () => Promise<{ content: string; meta?: string; cancelled?: boolean; failed?: boolean }>
-      cancelChat: () => Promise<boolean>
+      chat: (userInput: string, history: { role: 'user' | 'assistant'; content: string }[] | undefined, opts: ChatOpts) => Promise<ChatResult>
+      retryChat: (opts: ChatOpts) => Promise<ChatResult>
+      cancelChat: (tabId: string) => Promise<boolean>
+      modelPicker: () => Promise<{ value: string; label: string; tier: string }[]>
       spend: {
         get: () => Promise<boolean>
         set: (on: boolean) => Promise<boolean>
@@ -49,9 +55,9 @@ declare global {
         set: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean }>
         reset: () => Promise<{ enabled: boolean; sessionAllowed: boolean }>
       }
-      onStream: (cb: (kind: 'chunk' | 'reset', text?: string) => void) => () => void
+      onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void) => () => void
       status: () => Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number }>
-      onProgress: (cb: (text: string) => void) => () => void
+      onProgress: (cb: (tabId: string, text: string) => void) => () => void
       getKey: (key: string) => Promise<string>
       setKey: (key: string, value: string) => Promise<boolean>
       skills: {
@@ -92,6 +98,34 @@ declare global {
         remove: (id: string) => Promise<boolean>
         toggle: (id: string) => Promise<boolean | null>
         test: (id: string) => Promise<{ ok: boolean; message: string }>
+      }
+      connectors: {
+        active: (load?: boolean) => Promise<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>
+        list: () => Promise<
+          { id: string; title: string; subtitle: string; group: 'accounts' | 'device'; kind: 'remote' | 'local' | 'special' | 'token'; hint: string; fields?: string[]; connected: boolean; write: boolean; unavailable: string | null }[]
+        >
+        connect: (id: string) => Promise<{ ok: boolean; message: string }>
+        setup: (id: string, values: string[]) => Promise<{ ok: boolean; message: string }>
+        test: (id: string) => Promise<{ ok: boolean; message: string }>
+        disconnect: (id: string) => Promise<{ ok: boolean; message: string }>
+        onCode: (cb: (id: string, code: string, url: string) => void) => () => void
+      }
+      app: {
+        about: () => Promise<{ version: string; electron: string; chrome: string; node: string; platform: string }>
+      }
+      accounts: {
+        get: () => Promise<{ googleEmail: string; writeServers: string[]; connected: string[] }>
+        setEmail: (v: string) => Promise<{ ok: boolean; error?: string }>
+        setWrite: (server: string, on: boolean) => Promise<string[]>
+        google: (action: 'connect' | 'test') => Promise<{ ok: boolean; message: string }>
+        googleDisconnect: () => Promise<{ ok: boolean }>
+        googleCreds: () => Promise<{ hasCreds: boolean; clientTail: string }>
+        googleSetup: (idOrJson: string, secret: string) => Promise<{ ok: boolean; error?: string }>
+      }
+      masterMemory: {
+        get: () => Promise<MasterMemoryView>
+        update: (id: string, patch: Partial<Pick<ProjectMemoryInfo, 'summary' | 'tech' | 'ports' | 'decisions'>>) => Promise<boolean>
+        clearGeneral: () => Promise<boolean>
       }
       memory: {
         list: () => Promise<{ id: string; title: string; content: string; enabled: boolean; source?: string }[]>
