@@ -13,6 +13,7 @@ TRL_AI_Agent is a desktop app (Electron + React) with a chat window in Arabic fi
 - Routes every request to the best model (free first, then cheap, then expensive) and shows the speed, tokens, and tools used for each reply
 - Works with OpenRouter, Gemini, OpenAI, Anthropic, and your own OpenAI-compatible models; a local Ollama model can act as the maestro
 - Has tabs, projects, saved conversations, and a long-term memory it reads before every task
+- Delegates to specialist skills: the maestro classifies each request and hands it to a Coding, Research, or File skill (plain `SKILL.md` instructions you can edit or disable, in the skills folder) and turns on the right tools for it
 - Lets you connect your apps from one Connectors page, each with a Connect, Test, and Disconnect button: Google (Gmail, Drive, Calendar, Docs, Sheets), GitHub, Microsoft 365, Canva, Miro, Notion, Linear, Cloudflare, Dropbox, Box, Google Cloud, Terraform, Kubernetes, Browser Use, Deepgram, AssemblyAI docs, Desktop Commander, and Filesystem
 - Keeps write access off by default for every service. You turn it on per service, and it asks you before each risky action. Deleting is never allowed
 - Has a spending guard with a "free models only" switch
@@ -47,6 +48,7 @@ TRL_AI_Agent تطبيق سطح مكتب (Electron + React) بواجهة محاد
 - يوجّه كل طلب لأنسب نموذج (المجاني أولاً ثم الرخيص ثم الغالي) ويعرض لك سرعة الرد والتوكنات والأدوات المستخدمة
 - يعمل مع OpenRouter وGemini وOpenAI وAnthropic ونماذجك المتوافقة مع OpenAI؛ ويمكن لنموذج Ollama محلي أن يكون هو المايسترو
 - فيه تبويبات ومشاريع ومحادثات محفوظة وذاكرة طويلة المدى يقرؤها قبل كل مهمة
+- تفويض لمهارات متخصصة: المايسترو يصنّف كل طلب ويحوّله لمهارة البرمجة أو البحث أو الملفات (تعليمات `SKILL.md` بسيطة تقدر تعدلها أو تعطلها من مجلد المهارات) ويفعّل الأدوات المناسبة له
 - صفحة موصلات واحدة لربط تطبيقاتك، لكل تطبيق أزرار اتصال واختبار وفصل: Google (Gmail وDrive وCalendar وDocs وSheets) وGitHub وMicrosoft 365 وCanva وMiro وNotion وLinear وCloudflare وDropbox وBox وGoogle Cloud وTerraform وKubernetes وBrowser Use وDeepgram ووثائق AssemblyAI وDesktop Commander وFilesystem
 - صلاحية الكتابة مغلقة افتراضياً لكل خدمة، وتفتحها أنت لكل خدمة على حدة، ويسألك قبل كل عملية حساسة. والحذف ممنوع دائماً
 - حارس إنفاق مع مفتاح "النماذج المجانية فقط"
