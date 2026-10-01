@@ -8,9 +8,16 @@ import { findOnPath, isWin } from './platform'
 // (an account/subscription, not an API key). The app never reads or stores their tokens.
 export const CLI_PREFIX = 'cli:'
 export const CLAUDE_CLI = 'cli:claude'
+// Claude models offered through the signed-in account. 'cli:claude' alone = the account's default model.
+export const CLAUDE_CLI_MODELS: { id: string; alias: string; label: string }[] = [
+  { id: 'cli:claude:sonnet', alias: 'sonnet', label: 'Claude Sonnet (حسابك)' },
+  { id: 'cli:claude:opus', alias: 'opus', label: 'Claude Opus (حسابك)' },
+  { id: 'cli:claude:haiku', alias: 'haiku', label: 'Claude Haiku (حسابك)' }
+]
+export const cliModelAlias = (m: string): string | undefined => CLAUDE_CLI_MODELS.find((x) => x.id === m)?.alias
 
 export const isCliModel = (m: string): boolean => m.startsWith(CLI_PREFIX)
-export const cliModelName = (m: string): string => (m === CLAUDE_CLI ? 'Claude (حسابك عبر Claude Code)' : m)
+export const cliModelName = (m: string): string => (m === CLAUDE_CLI ? 'Claude (حسابك عبر Claude Code)' : (CLAUDE_CLI_MODELS.find((x) => x.id === m)?.label ?? m))
 
 export function claudeCliPath(): string | null {
   const onPath = findOnPath('claude')
@@ -55,11 +62,11 @@ export function buildCliPrompt(system: string | undefined, history: { role: stri
 
 // One non-interactive answer from the signed-in Claude account. All tools are disabled and the
 // working folder is a temp dir, so it behaves like a plain chat model and cannot touch files.
-export function runClaudeCli(prompt: string, signal?: AbortSignal, timeoutMs = 180000): Promise<string> {
+export function runClaudeCli(prompt: string, signal?: AbortSignal, model?: string, timeoutMs = 180000): Promise<string> {
   return new Promise((resolve, reject) => {
     const exe = claudeCliPath()
     if (!exe) return reject(new Error('أداة claude غير مثبّتة'))
-    const child = spawn(exe, ['-p', '--tools', '', '--no-session-persistence', '--output-format', 'text', '--disable-slash-commands'], {
+    const child = spawn(exe, ['-p', ...(model ? ['--model', model] : []), '--tools', '', '--no-session-persistence', '--output-format', 'text', '--disable-slash-commands'], {
       cwd: os.tmpdir(),
       env: cleanEnv(),
       windowsHide: true

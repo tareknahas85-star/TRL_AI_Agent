@@ -4,7 +4,7 @@ import { ensureOllama } from '../core/ollama'
 import { calculateSavedCost } from '../core/fallback'
 import { executeWithSkill } from '../skills/executor'
 import { runCouncil, type CouncilInfo } from '../core/council'
-import { CLAUDE_CLI, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
+import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { registerManagementHandlers } from './management'
 import { listProjects } from '../core/workspace'
 import { buildProjectContext } from '../core/project-context'
@@ -74,7 +74,7 @@ export function registerIpcHandlers(): void {
       .models.filter((m) => m.enabled)
       .map((m) => ({ value: m.id, label: m.name || m.id, tier: m.tier })),
     // Subscription accounts through their official CLI (only offered when the tool is installed).
-    ...(claudeCliPath() ? [{ value: CLAUDE_CLI, label: cliModelName(CLAUDE_CLI), tier: 'SUBSCRIPTION' }] : [])
+    ...(claudeCliPath() ? [CLAUDE_CLI, ...CLAUDE_CLI_MODELS.map((x) => x.id)].map((id) => ({ value: id, label: cliModelName(id), tier: 'SUBSCRIPTION' })) : [])
   ]
   const parseMode = (raw: unknown): RunMode => {
     const r = raw as { kind?: unknown; id?: unknown } | null

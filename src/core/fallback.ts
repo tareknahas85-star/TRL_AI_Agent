@@ -3,7 +3,7 @@ import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, currentSignal } from './progress'
 import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel } from './custom-models'
-import { buildCliPrompt, isCliModel, runClaudeCli } from './cli-models'
+import { buildCliPrompt, cliModelAlias, isCliModel, runClaudeCli } from './cli-models'
 
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -113,7 +113,7 @@ export async function executeWithFallback(
       if (isCliModel(model)) {
         // Signed-in account via the official CLI: plain chat answer, no API key and no extra tools.
         const t0 = Date.now()
-        const text = await runClaudeCli(buildCliPrompt(systemPrompt, history, userInput), signal)
+        const text = await runClaudeCli(buildCliPrompt(systemPrompt, history, userInput), signal, cliModelAlias(model))
         emitStream('chunk', text)
         return {
           content: text,
