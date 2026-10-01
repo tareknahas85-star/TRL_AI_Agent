@@ -6,6 +6,7 @@ import type OpenAI from 'openai'
 import { loadMCPConfig, type MCPServer } from './client'
 import { readFile, listFiles } from '../tools/file-tools'
 import { readState } from '../core/state'
+import { approveWrite, getAccounts } from '../core/accounts'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Pending = { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
@@ -178,7 +179,21 @@ export type Toolset = {
   call: (name: string, args: Record<string, unknown>) => Promise<string>
 }
 
-const MAX_MCP = 10
+const MAX_MCP = 12
+// Permanent deletion is never offered to the model, even when write access is on.
+const HARD_BLOCK = /(delete|purge|empty[_-]?trash)/i
+// Arabic request words -> English tool keywords, so Arabic requests can find English tool names.
+const SYN: [RegExp, string[]][] = [
+  [/ايميل|إيميل|بريد|رسال|ايميلاتي/, ['gmail', 'email', 'message', 'thread', 'draft', 'send']],
+  [/تقويم|كلندر|موعد|مواعيد|اجتماع|حدث/, ['calendar', 'event', 'events']],
+  [/مهام|مهمة|ملاحظ|تذكير/, ['task', 'tasks']],
+  [/درايف|ملفات|مجلد/, ['drive', 'file', 'files', 'folder']],
+  [/جدول بيانات|شيت|اكسل|إكسل/, ['sheet', 'spreadsheet', 'values']],
+  [/مستند|دوك|وثيقة/, ['doc', 'docs', 'document']],
+  [/عرض تقديمي|سلايد|بوربوينت/, ['presentation', 'slides']],
+  [/جهات اتصال|جهة اتصال|كونتاكت/, ['contact', 'contacts']],
+  [/استبيان|فورم/, ['form', 'forms']]
+]
 // Safety: tools that look like they change state (send/delete/write/run...) are never offered to the model automatically.
 const RISKY = /(send|delete|remove|create|write|update|modify|manage|set[_-]|push|merge|apply|execut|exec[_-]|run[_-]|kubectl|terminate|drop|insert|upload|post[_-]|reply|draft|import|copy|move|install|uninstall|spawn|start|stop|kill|reset|patch|scale|rollout|cleanup|shutdown|store|save|add[_-]|register|train|deploy|claim|assign|handoff|steal|cancel|retry|complete)/i
 const MAX_RESULT = 6000
@@ -236,6 +251,9 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
     mcp = []
   }
   const words = new Set(userInput.toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])
+  for (const [re, ex] of SYN) if (re.test(userInput)) ex.forEach((w) => words.add(w))
+  const acc = getAccounts()
+  const writeOn = new Set(acc.writeServers)
   const scored = mcp
     .map((t) => {
       const hay = `${t.server} ${t.name.replace(/[-_]/g, ' ')} ${t.description}`.toLowerCase()
@@ -243,15 +261,22 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
       for (const w of words) if (hay.includes(w)) sc += t.name.toLowerCase().includes(w) || t.server.toLowerCase().includes(w) ? 3 : 1
       return { t, sc }
     })
-    .filter((x) => x.sc > 0 && !disabled.includes(x.t.fullName) && !RISKY.test(x.t.name))
+    .filter((x) => x.sc > 0 && !disabled.includes(x.t.fullName) && !HARD_BLOCK.test(x.t.name) && (!RISKY.test(x.t.name) || writeOn.has(x.t.server)))
     .sort((a, b) => b.sc - a.sc)
     .slice(0, MAX_MCP)
   const byName = new Map<string, McpToolInfo>()
   for (const { t } of scored) {
     byName.set(t.fullName, t)
+    // The Google account email is filled in automatically, so the model is not asked for it.
+    let schema = t.schema
+    if (t.server === 'google-workspace' && acc.googleEmail && schema?.properties?.user_google_email) {
+      schema = JSON.parse(JSON.stringify(schema))
+      delete schema.properties.user_google_email
+      schema.required = (schema.required ?? []).filter((r: string) => r !== 'user_google_email')
+    }
     defs.push({
       type: 'function',
-      function: { name: t.fullName, description: `[${t.server}] ${t.description}`.slice(0, 500), parameters: t.schema }
+      function: { name: t.fullName, description: `[${t.server}] ${t.description}`.slice(0, 500), parameters: schema }
     })
   }
   if (!defs.length) return null
@@ -263,7 +288,16 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
       if (h) out = await h(args)
       else {
         const info = byName.get(name)
-        out = info ? await callMcpTool(info, args) : 'Error: unknown tool ' + name
+        if (!info) out = 'Error: unknown tool ' + name
+        else {
+          let a = args
+          if (info.server === 'google-workspace' && acc.googleEmail && info.schema?.properties?.user_google_email && !a.user_google_email) {
+            a = { ...a, user_google_email: acc.googleEmail }
+          }
+          if (RISKY.test(info.name) && writeOn.has(info.server) && !(await approveWrite(info.server, info.name, a))) {
+            out = 'Error: المستخدم رفض هذا الإجراء. لا تعيد المحاولة، وأخبره أن الإجراء لم يُنفَّذ.'
+          } else out = await callMcpTool(info, a)
+        }
       }
       return out.length > MAX_RESULT ? out.slice(0, MAX_RESULT) + '\n…[truncated]' : out
     }

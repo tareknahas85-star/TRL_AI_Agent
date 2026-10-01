@@ -70,6 +70,12 @@ const api = {
     fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
     importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
   },
+  accounts: {
+    get: () => ipcRenderer.invoke('accounts:get'),
+    setEmail: (v: string) => ipcRenderer.invoke('accounts:setEmail', v),
+    setWrite: (server: string, on: boolean) => ipcRenderer.invoke('accounts:setWrite', server, on),
+    google: (action: 'connect' | 'test') => ipcRenderer.invoke('accounts:google', action)
+  },
   masterMemory: {
     get: () => ipcRenderer.invoke('mm:get'),
     update: (id: string, patch: unknown) => ipcRenderer.invoke('mm:update', id, patch),

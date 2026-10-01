@@ -99,6 +99,12 @@ declare global {
         toggle: (id: string) => Promise<boolean | null>
         test: (id: string) => Promise<{ ok: boolean; message: string }>
       }
+      accounts: {
+        get: () => Promise<{ googleEmail: string; writeServers: string[] }>
+        setEmail: (v: string) => Promise<{ ok: boolean; error?: string }>
+        setWrite: (server: string, on: boolean) => Promise<string[]>
+        google: (action: 'connect' | 'test') => Promise<{ ok: boolean; message: string }>
+      }
       masterMemory: {
         get: () => Promise<MasterMemoryView>
         update: (id: string, patch: Partial<Pick<ProjectMemoryInfo, 'summary' | 'tech' | 'ports' | 'decisions'>>) => Promise<boolean>

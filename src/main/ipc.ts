@@ -7,6 +7,7 @@ import { registerManagementHandlers } from './management'
 import { listProjects } from '../core/workspace'
 import { buildProjectContext } from '../core/project-context'
 import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
+import { registerAccountsHandlers } from './accounts-ipc'
 import { memoryPrompt } from '../core/memory'
 import { runInContext, cancelRun, type RunMode } from '../core/progress'
 import { listCatalog } from '../core/catalog'
@@ -30,6 +31,7 @@ export function hydrateEnvFromStore(): void {
 
 export function registerIpcHandlers(): void {
   registerManagementHandlers()
+  registerAccountsHandlers()
   void ensureOllama().then(() => setTimeout(() => void warmLocalMaster(), 500))
 
   type Hist = { role: 'user' | 'assistant'; content: string }[]
