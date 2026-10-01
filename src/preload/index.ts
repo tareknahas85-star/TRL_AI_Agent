@@ -3,7 +3,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer. All core logic (OpenRouter calls, skills, tools, key storage)
 // runs in the main process; the UI only talks to it through these calls.
-type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'model'; id: string }
+type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council' } | { kind: 'model'; id: string }
 type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
 type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
 

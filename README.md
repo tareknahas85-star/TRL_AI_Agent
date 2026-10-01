@@ -16,6 +16,7 @@ TRL_AI_Agent is a desktop app (Electron + React) with a chat window in Arabic fi
 - Delegates to specialist skills: the maestro classifies each request and hands it to a Coding, Research, or File skill (plain `SKILL.md` instructions you can edit or disable, in the skills folder) and turns on the right tools for it
 - Lets you connect your apps from one Connectors page, each with a Connect, Test, and Disconnect button: Google (Gmail, Drive, Calendar, Docs, Sheets), GitHub, Microsoft 365, Canva, Miro, Notion, Linear, Cloudflare, Dropbox, Box, Google Cloud, Terraform, Kubernetes, Browser Use, Deepgram, AssemblyAI docs, Desktop Commander, and Filesystem
 - Keeps write access off by default for every service. You turn it on per service, and it asks you before each risky action. Deleting is never allowed
+- Has an optional council mode where a second model reviews and fixes the first model's answer
 - Has a spending guard with a "free models only" switch
 - Runs in the system tray
 
@@ -46,6 +47,21 @@ your message
 - **Right tools at the right time:** connectors are attached only when the request needs them (files, web, calendar, GitHub, ...). Write actions stay hidden until you enable them and still ask for approval.
 - **Easy to extend:** add a skill by dropping a `SKILL.md` in the skills folder or from the Skills page. No code changes, and you can switch any skill on or off.
 - **Resilient:** if the local maestro is missing the app falls back to OpenRouter, then to a safe default. If a model fails, the next one in the tier answers.
+
+### Council mode (models review each other)
+
+Pick **🏛️ Model council** in the model selector under the chat box. The answer then goes through one review round:
+
+```text
+1. draft    a model answers normally (tools, skills and memory work as usual)
+2. critique a different model (preferably another provider) hunts for real errors and missing parts, or says LGTM
+3. revise   the author fixes the valid points and returns the final answer
+```
+
+- It only runs for medium and complex requests that did not use tools. Simple chats and tool-based answers skip it, and the chip under the answer says why.
+- The draft streams first; the final text replaces it when the revision is ready. If the critic or the revision fails, you keep the draft.
+- It follows the same tiers and the "free models only" switch. Expect roughly 2 to 3 times the usual time and tokens, and more with slow free models.
+- The chip shows who reviewed the answer and how many issues were fixed.
 
 ### What you need
 
@@ -82,6 +98,7 @@ TRL_AI_Agent تطبيق سطح مكتب (Electron + React) بواجهة محاد
 - تفويض لمهارات متخصصة: المايسترو يصنّف كل طلب ويحوّله لمهارة البرمجة أو البحث أو الملفات (تعليمات `SKILL.md` بسيطة تقدر تعدلها أو تعطلها من مجلد المهارات) ويفعّل الأدوات المناسبة له
 - صفحة موصلات واحدة لربط تطبيقاتك، لكل تطبيق أزرار اتصال واختبار وفصل: Google (Gmail وDrive وCalendar وDocs وSheets) وGitHub وMicrosoft 365 وCanva وMiro وNotion وLinear وCloudflare وDropbox وBox وGoogle Cloud وTerraform وKubernetes وBrowser Use وDeepgram ووثائق AssemblyAI وDesktop Commander وFilesystem
 - صلاحية الكتابة مغلقة افتراضياً لكل خدمة، وتفتحها أنت لكل خدمة على حدة، ويسألك قبل كل عملية حساسة. والحذف ممنوع دائماً
+- وضع مجلس اختياري: نموذج تاني بيراجع جواب النموذج الأول ويصلّحه
 - حارس إنفاق مع مفتاح "النماذج المجانية فقط"
 - يعمل من أيقونة شريط النظام
 
@@ -112,6 +129,21 @@ TRL_AI_Agent تطبيق سطح مكتب (Electron + React) بواجهة محاد
 - **الأدوات المناسبة بالوقت المناسب:** الموصلات بتنربط بس لما الطلب يحتاجها (ملفات، ويب، تقويم، GitHub...). أدوات الكتابة مخفية لحد ما تفعّلها وبتطلب موافقتك.
 - **سهل التوسعة:** ضيف مهارة بوضع ملف `SKILL.md` بمجلد المهارات أو من صفحة السكيلز، بدون أي تعديل كود، وبتقدر تشغّل أو تطفّي أي مهارة.
 - **متين:** إذا المايسترو المحلي مو موجود بيرجع لـ OpenRouter ثم لوضع افتراضي آمن. وإذا فشل نموذج بياخد الدور اللي بعده.
+
+### وضع المجلس (النماذج بتراجع بعضها)
+
+اختر **🏛️ مجلس النماذج** من قائمة النموذج تحت مربع الكتابة. عندها الجواب بيمر بجولة مراجعة وحدة:
+
+```text
+1. مسودة   نموذج بيجاوب عادي (الأدوات والمهارات والذاكرة بتشتغل متل العادة)
+2. نقد      نموذج تاني (يفضّل من شركة غير الأولى) بيدوّر على أخطاء حقيقية ونواقص، أو بيقول LGTM
+3. تصحيح   الكاتب بيصلّح النقاط الصحيحة وبيرجّع الجواب النهائي
+```
+
+- بيشتغل بس للطلبات المتوسطة والمعقّدة اللي ما استعملت أدوات. المحادثات البسيطة والأجوبة المبنية على أدوات بتتخطاه، والشارة تحت الجواب بتقول السبب.
+- المسودة بتظهر أولاً وبتنستبدل بالنص النهائي لما يخلص التصحيح. وإذا فشل الناقد أو التصحيح بتضل المسودة معك.
+- بيلتزم بنفس الفئات وبمفتاح "النماذج المجانية فقط". توقّع وقت وتوكنات ضعفين لتلات أضعاف المعتاد، وأكتر مع النماذج المجانية البطيئة.
+- الشارة بتعرض مين راجع الجواب وكم ملاحظة انصلحت.
 
 ### ما تحتاجه
 

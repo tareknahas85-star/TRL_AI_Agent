@@ -3,6 +3,7 @@ import { analyzeRequest, warmLocalMaster, type Analysis } from '../core/master'
 import { ensureOllama } from '../core/ollama'
 import { calculateSavedCost } from '../core/fallback'
 import { executeWithSkill } from '../skills/executor'
+import { runCouncil, type CouncilInfo } from '../core/council'
 import { registerManagementHandlers } from './management'
 import { listProjects } from '../core/workspace'
 import { buildProjectContext } from '../core/project-context'
@@ -75,6 +76,7 @@ export function registerIpcHandlers(): void {
   const parseMode = (raw: unknown): RunMode => {
     const r = raw as { kind?: unknown; id?: unknown } | null
     if (r && r.kind === 'auto') return { kind: 'auto' }
+    if (r && r.kind === 'council') return { kind: 'council' }
     if (r && r.kind === 'model' && typeof r.id === 'string' && pickerModels().some((m) => m.value === r.id)) {
       return { kind: 'model', id: r.id }
     }
@@ -148,7 +150,13 @@ export function registerIpcHandlers(): void {
           const mm = masterMemoryPrompt(projectId, userMsg)
           const extra = [projectCtx, mm?.text, mem?.text].filter(Boolean).join('\n\n') || undefined
           const execStart = Date.now()
-          const result = await executeWithSkill(userMsg, analysis, extra, exclude, history, project)
+          let result = await executeWithSkill(userMsg, analysis, extra, exclude, history, project)
+          let council: CouncilInfo | null = null
+          if (o.mode.kind === 'council' && result.modelUsed !== 'none' && result.content && !signal.aborted) {
+            const c = await runCouncil(userMsg, analysis, result as never, history)
+            result = c.result as typeof result
+            council = c.info
+          }
           const execMs = Date.now() - execStart
           if (signal.aborted) return { content: '', cancelled: true }
           if (result.modelUsed === 'none' && retry) return { content: result.content, failed: true, needsChoice: true }
@@ -176,7 +184,7 @@ export function registerIpcHandlers(): void {
             failures: result.failures ?? [],
             retried: retry
           }
-          const meta = `Model: ${shownModel} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
+          const meta = `Model: ${shownModel} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${council ? 'Council: ' + (council.revised ? 'صُحّح بعد مراجعة ' + council.critic + ' (' + council.issues + ' ملاحظات)' : council.ran ? 'راجعه ' + council.critic + ' — ' + (council.skipped ?? 'بدون تعديل') : (council.skipped ?? '')) + ' | ' : ''}${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
           if (result.modelUsed !== 'none') recordTurn(projectId, userMsg, result.content)
           // needsChoice: nothing answered (free chain exhausted or the picked model failed) -> the UI asks the user what to do.
           return { content: result.content, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none' }

@@ -33,7 +33,7 @@ type Stats = {
 }
 
 // meta looks like: "Model: X | Memory: n | Tools: t | Skill: Y | <saved text> | Tried: a -> b | Stats: {json}"
-function parseMeta(meta: string): { model: string; skill: string; saved: string; tried: string[]; stats: Stats | null } {
+function parseMeta(meta: string): { model: string; skill: string; saved: string; tried: string[]; council: string; stats: Stats | null } {
   const si = meta.indexOf(' | Stats: ')
   let stats: Stats | null = null
   if (si >= 0) {
@@ -43,13 +43,14 @@ function parseMeta(meta: string): { model: string; skill: string; saved: string;
       stats = null
     }
   }
-  const out = { model: '', skill: '', saved: '', tried: [] as string[], stats }
+  const out = { model: '', skill: '', saved: '', tried: [] as string[], council: '', stats }
   for (const p of (si >= 0 ? meta.slice(0, si) : meta).split(' | ')) {
     const idx = p.indexOf(': ')
     const k = idx > 0 ? p.slice(0, idx) : ''
     const v = idx > 0 ? p.slice(idx + 2) : p
     if (k === 'Model') out.model = v
     else if (k === 'Skill') out.skill = v
+    else if (k === 'Council') out.council = v
     else if (k === 'Tried') out.tried = v.split(' -> ').filter(Boolean)
     else if (k === 'Memory' || k === 'Tools') continue
     else out.saved = p
@@ -204,6 +205,7 @@ function MetaBar({ meta }: { meta: string }) {
         <span dir="ltr">{m.model}</span>
       </Chip>
       {m.skill && m.skill !== 'none' && <Chip cls="bg-primary/10 text-primary">{m.skill}</Chip>}
+      {m.council && <Chip cls="bg-primary/10 text-primary">🏛️ {m.council}</Chip>}
       {failed.length > 0 && (
         <Chip cls="bg-warning/15 text-warning">
           جرّب {failed.length} قبله
@@ -510,11 +512,12 @@ export function ChatWindow({
             value={mode.kind === 'model' ? mode.id : mode.kind}
             onChange={(e) => {
               const v = e.target.value
-              onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : { kind: 'model', id: v })
+              onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : v === 'council' ? { kind: 'council' } : { kind: 'model', id: v })
             }}
           >
             <option value="free">🆓 تلقائي — مجاني فقط</option>
             <option value="auto">⚡ تلقائي — مع المدفوع</option>
+            <option value="council">🏛️ مجلس النماذج — مسودة ثم نقد ثم تصحيح</option>
             <optgroup label="🎯 نموذج محدد">
               {picker.map((p) => (
                 <option key={p.value} value={p.value}>
