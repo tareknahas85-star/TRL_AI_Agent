@@ -93,7 +93,7 @@ const DEFS: Def[] = [
   { id: 'deepgram', title: 'Deepgram', subtitle: 'تفريغ صوت وتحليله (Speech-to-Text)', group: 'accounts', kind: 'token',
     fields: [ { env: 'DEEPGRAM_API_KEY', label: 'API key' } ],
     hint: 'من console.deepgram.com أنشئ API key والصقه هون. بيشتغل عبر uvx (deepgram-mcp).',
-    server: () => ({ name: 'deepgram', command: 'uvx', args: ['deepgram-mcp'], env: {}, enabled: true }) },
+    server: () => ({ name: 'deepgram', command: 'uvx', args: ['--with', 'mcp<2', 'deepgram-mcp'], env: {}, enabled: true }) },
   { id: 'assemblyai', title: 'AssemblyAI', subtitle: 'بحث بوثائق AssemblyAI (بدون تسجيل دخول)', group: 'accounts', kind: 'remote',
     hint: 'سيرفر الوثائق الرسمي: بدون تسجيل دخول. للتفريغ الفعلي بتستعمل Deepgram أو API مباشر.',
     server: () => remote('assemblyai', 'https://mcp.assemblyai.com/docs') },
