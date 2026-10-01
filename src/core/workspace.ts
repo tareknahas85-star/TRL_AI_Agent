@@ -79,7 +79,7 @@ export function activeProject(): Project | null {
 }
 
 // ---------- Conversations ----------
-export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string }
+export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number }
 export type Conversation = {
   id: string
   title: string
@@ -110,7 +110,7 @@ export function saveConversation(input: {
   const all = readConvs()
   const msgs = (Array.isArray(input.messages) ? input.messages : [])
     .filter((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-    .map((m) => ({ role: m.role, content: m.content, meta: typeof m.meta === 'string' ? m.meta : undefined }))
+    .map((m) => ({ role: m.role, content: m.content, meta: typeof m.meta === 'string' ? m.meta : undefined, at: typeof m.at === 'number' ? m.at : undefined }))
   const now = Date.now()
   let conv = input.id ? all.find((c) => c.id === input.id) : undefined
   if (!conv) {
