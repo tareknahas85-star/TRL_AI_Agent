@@ -505,19 +505,21 @@ export function ChatWindow({
             </div>
           </div>
         )}
-        <div className="mx-auto mb-1 flex max-w-3xl items-center gap-2 text-[11px] text-muted">
+        <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
           <span>النموذج:</span>
           <select
             className={`rounded-full border border-outline bg-surface px-2 py-0.5 ${mode.kind === 'free' ? '' : 'text-warning'}`}
-            value={mode.kind === 'model' ? mode.id : mode.kind}
+            value={mode.kind === 'model' ? mode.id : mode.kind === 'council' && (mode.author || mode.critic) ? 'council-manual' : mode.kind}
             onChange={(e) => {
               const v = e.target.value
+              if (v === 'council-manual') return onModeChange({ kind: 'council', author: picker[0]?.value, critic: (picker[1] ?? picker[0])?.value })
               onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : v === 'council' ? { kind: 'council' } : { kind: 'model', id: v })
             }}
           >
             <option value="free">🆓 تلقائي — مجاني فقط</option>
             <option value="auto">⚡ تلقائي — مع المدفوع</option>
             <option value="council">🏛️ مجلس النماذج — مسودة ثم نقد ثم تصحيح</option>
+            <option value="council-manual" disabled={!picker.length}>🏛️ مجلس — أنا بختار الكاتب والناقد</option>
             <optgroup label="🎯 نموذج محدد">
               {picker.map((p) => (
                 <option key={p.value} value={p.value}>
@@ -526,6 +528,26 @@ export function ChatWindow({
               ))}
             </optgroup>
           </select>
+          {mode.kind === 'council' && (mode.author || mode.critic) && (
+            <>
+              <span>الكاتب:</span>
+              <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={mode.author ?? ''} onChange={(e) => onModeChange({ ...mode, author: e.target.value })}>
+                {picker.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                </option>
+              ))}
+              </select>
+              <span>الناقد:</span>
+              <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={mode.critic ?? ''} onChange={(e) => onModeChange({ ...mode, critic: e.target.value })}>
+                {picker.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                </option>
+              ))}
+              </select>
+            </>
+          )}
           {mode.kind !== 'free' && <span className="text-warning">قد يستهلك رصيدك</span>}
         </div>
         <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-outline bg-surface px-4 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow">

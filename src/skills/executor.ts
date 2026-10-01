@@ -36,7 +36,7 @@ export async function executeWithSkill(userInput: string, analysis: Analysis, ex
   if (extraSystem) systemPrompt += '\n\n' + extraSystem
 
   const mode = currentMode()
-  const modelsToTry = (mode?.kind === 'model' ? [mode.id] : getTierForAnalysis(analysis)).filter((m) => !exclude.includes(m))
+  const modelsToTry = (mode?.kind === 'model' ? [mode.id] : mode?.kind === 'council' && mode.author ? [mode.author] : getTierForAnalysis(analysis)).filter((m) => !exclude.includes(m))
   if (exclude.length && !modelsToTry.length) {
     return { content: 'لا يوجد نموذج آخر بهالفئة لتجربته.', modelUsed: 'none', success: false, triedModels: [] as string[] }
   }

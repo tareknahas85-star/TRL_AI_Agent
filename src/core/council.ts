@@ -42,14 +42,16 @@ const provider = (m: string): string => (m.includes('/') ? m.split('/')[0] : m.s
 
 // Round 1 of a "council": a second model critiques the draft, then the author revises it.
 // Never throws and never makes the answer worse: any failure returns the original draft.
-export async function runCouncil(userInput: string, analysis: Analysis, draft: FallbackResult, history: Hist): Promise<{ result: FallbackResult; info: CouncilInfo }> {
+export async function runCouncil(userInput: string, analysis: Analysis, draft: FallbackResult, history: Hist, pick?: { critic?: string; manual?: boolean }): Promise<{ result: FallbackResult; info: CouncilInfo }> {
   const keep = (info: CouncilInfo): { result: FallbackResult; info: CouncilInfo } => ({ result: draft, info })
-  if (analysis.complexity === 'simple') return keep({ ran: false, skipped: 'طلب بسيط' })
+  if (!pick?.manual && analysis.complexity === 'simple') return keep({ ran: false, skipped: 'طلب بسيط' })
   if (draft.toolsUsed?.length) return keep({ ran: false, skipped: 'الجواب مبني على أدوات' })
   const t0 = Date.now()
   const pool = getTierForAnalysis(analysis).filter((m) => m !== draft.modelUsed)
   // Prefer a critic from a different provider than the author (less correlated mistakes).
-  const candidates = [...pool.filter((m) => provider(m) !== provider(draft.modelUsed)), ...pool.filter((m) => provider(m) === provider(draft.modelUsed))].slice(0, 4)
+  const auto = [...pool.filter((m) => provider(m) !== provider(draft.modelUsed)), ...pool.filter((m) => provider(m) === provider(draft.modelUsed))]
+  // A critic picked by the user goes first (even if it is the same model as the author); the automatic ones stay as fallback.
+  const candidates = [...(pick?.critic ? [pick.critic] : []), ...auto.filter((m) => m !== pick?.critic)].slice(0, 4)
   if (!candidates.length) return keep({ ran: false, skipped: 'ما في نموذج ثاني' })
 
   try {
