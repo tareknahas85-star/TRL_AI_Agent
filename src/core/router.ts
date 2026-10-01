@@ -15,7 +15,7 @@ const tier = (t: 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'): string[] 
 export function getTierForAnalysis(analysis: Analysis): string[] {
   // A chat run carries its own mode (free / auto / model); outside a run the global free-only guard applies.
   const mode = currentMode()
-  if (mode ? mode.kind === 'free' : freeOnly()) return tier('TIER_1_FREE')
+  if (mode ? mode.kind === 'free' || (mode.kind === 'council' && freeOnly()) : freeOnly()) return tier('TIER_1_FREE')
   switch (analysis.complexity) {
     case 'simple':
       return [...tier('TIER_1_FREE'), ...tier('TIER_2_CHEAP')]

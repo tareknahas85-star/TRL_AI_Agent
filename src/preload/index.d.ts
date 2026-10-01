@@ -20,7 +20,7 @@ export type CustomModelInfo = {
   hasKey: boolean
   last?: boolean
 }
-export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'model'; id: string }
+export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council' } | { kind: 'model'; id: string }
 export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
 export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
 export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
