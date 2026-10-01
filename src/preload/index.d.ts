@@ -99,11 +99,28 @@ declare global {
         toggle: (id: string) => Promise<boolean | null>
         test: (id: string) => Promise<{ ok: boolean; message: string }>
       }
+      connectors: {
+        active: (load?: boolean) => Promise<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>
+        list: () => Promise<
+          { id: string; title: string; subtitle: string; group: 'accounts' | 'device'; kind: 'remote' | 'local' | 'special' | 'token'; hint: string; fields?: string[]; connected: boolean; write: boolean; unavailable: string | null }[]
+        >
+        connect: (id: string) => Promise<{ ok: boolean; message: string }>
+        setup: (id: string, values: string[]) => Promise<{ ok: boolean; message: string }>
+        test: (id: string) => Promise<{ ok: boolean; message: string }>
+        disconnect: (id: string) => Promise<{ ok: boolean; message: string }>
+        onCode: (cb: (id: string, code: string, url: string) => void) => () => void
+      }
+      app: {
+        about: () => Promise<{ version: string; electron: string; chrome: string; node: string; platform: string }>
+      }
       accounts: {
-        get: () => Promise<{ googleEmail: string; writeServers: string[] }>
+        get: () => Promise<{ googleEmail: string; writeServers: string[]; connected: string[] }>
         setEmail: (v: string) => Promise<{ ok: boolean; error?: string }>
         setWrite: (server: string, on: boolean) => Promise<string[]>
         google: (action: 'connect' | 'test') => Promise<{ ok: boolean; message: string }>
+        googleDisconnect: () => Promise<{ ok: boolean }>
+        googleCreds: () => Promise<{ hasCreds: boolean; clientTail: string }>
+        googleSetup: (idOrJson: string, secret: string) => Promise<{ ok: boolean; error?: string }>
       }
       masterMemory: {
         get: () => Promise<MasterMemoryView>

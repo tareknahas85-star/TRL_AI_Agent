@@ -70,11 +70,30 @@ const api = {
     fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
     importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
   },
+  connectors: {
+    list: () => ipcRenderer.invoke('connectors:list'),
+    active: (load?: boolean) => ipcRenderer.invoke('connectors:active', load),
+    connect: (id: string) => ipcRenderer.invoke('connectors:connect', id),
+    setup: (id: string, values: string[]) => ipcRenderer.invoke('connectors:setup', id, values),
+    test: (id: string) => ipcRenderer.invoke('connectors:test', id),
+    disconnect: (id: string) => ipcRenderer.invoke('connectors:disconnect', id),
+    onCode: (cb: (id: string, code: string, url: string) => void) => {
+      const h = (_e: unknown, id: string, code: string, url: string): void => cb(id, code, url)
+      ipcRenderer.on('connectors:code', h)
+      return () => ipcRenderer.removeListener('connectors:code', h)
+    }
+  },
+  app: {
+    about: () => ipcRenderer.invoke('app:about')
+  },
   accounts: {
     get: () => ipcRenderer.invoke('accounts:get'),
     setEmail: (v: string) => ipcRenderer.invoke('accounts:setEmail', v),
     setWrite: (server: string, on: boolean) => ipcRenderer.invoke('accounts:setWrite', server, on),
-    google: (action: 'connect' | 'test') => ipcRenderer.invoke('accounts:google', action)
+    google: (action: 'connect' | 'test') => ipcRenderer.invoke('accounts:google', action),
+    googleDisconnect: () => ipcRenderer.invoke('accounts:googleDisconnect'),
+    googleCreds: () => ipcRenderer.invoke('accounts:googleCreds'),
+    googleSetup: (idOrJson: string, secret: string) => ipcRenderer.invoke('accounts:googleSetup', idOrJson, secret)
   },
   masterMemory: {
     get: () => ipcRenderer.invoke('mm:get'),

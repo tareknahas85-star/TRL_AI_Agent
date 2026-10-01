@@ -7,6 +7,7 @@ import { loadMCPConfig, type MCPServer } from './client'
 import { readFile, listFiles } from '../tools/file-tools'
 import { readState } from '../core/state'
 import { approveWrite, getAccounts } from '../core/accounts'
+import { shell } from 'electron'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Pending = { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
@@ -102,7 +103,7 @@ function getConn(server: MCPServer): Promise<Conn> {
       await c.request(
         'initialize',
         { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'ai-router-os', version: '1.0.0' } },
-        25000
+        60000
       )
       c.notify('notifications/initialized')
       return c
@@ -118,7 +119,8 @@ function getConn(server: MCPServer): Promise<Conn> {
 }
 
 export type McpToolInfo = { fullName: string; server: string; name: string; description: string; schema: any }
-let toolCache: { at: number; tools: McpToolInfo[] } | null = null
+// Per-server cache: a server that failed to answer (cold start under load) is NOT cached, so the next call retries it.
+const toolCache = new Map<string, { at: number; tools: McpToolInfo[] }>()
 const TTL = 10 * 60 * 1000
 
 const safe = (s: string): string => s.replace(/[^a-zA-Z0-9_-]/g, '_')
@@ -126,13 +128,17 @@ const safe = (s: string): string => s.replace(/[^a-zA-Z0-9_-]/g, '_')
 export async function listMcpTools(): Promise<McpToolInfo[]> {
   const cfg = await loadMCPConfig()
   const active = cfg.servers.filter((s) => s.enabled !== false)
-  if (!toolCache || Date.now() - toolCache.at > TTL) {
-    const lists = await Promise.all(
-      active.map(async (s) => {
+  const stale = active.filter((s) => {
+    const hit = toolCache.get(s.name)
+    return !hit || Date.now() - hit.at > TTL
+  })
+  if (stale.length) {
+    await Promise.all(
+      stale.map(async (s) => {
         try {
           const c = await getConn(s)
-          const r = await c.request('tools/list', {}, 20000)
-          return ((r?.tools ?? []) as any[]).map(
+          const r = await c.request('tools/list', {}, 60000)
+          const mapped = ((r?.tools ?? []) as any[]).map(
             (t): McpToolInfo => ({
               fullName: `${safe(s.name)}__${safe(String(t.name))}`.slice(0, 64),
               server: s.name,
@@ -141,19 +147,20 @@ export async function listMcpTools(): Promise<McpToolInfo[]> {
               schema: t.inputSchema && typeof t.inputSchema === 'object' ? t.inputSchema : { type: 'object', properties: {} }
             })
           )
+          toolCache.set(s.name, { at: Date.now(), tools: mapped })
         } catch (e) {
           console.warn('[MCP] tools/list failed for', s.name, e instanceof Error ? e.message : e)
-          return []
         }
       })
     )
-    toolCache = { at: Date.now(), tools: lists.flat() }
   }
-  const names = new Set(active.map((s) => s.name))
-  return toolCache.tools.filter((t) => names.has(t.server))
+  return active.flatMap((s) => toolCache.get(s.name)?.tools ?? [])
 }
 
-export async function callMcpTool(info: McpToolInfo, args: Record<string, unknown>): Promise<string> {
+const GOOGLE_AUTH = /https:\/\/accounts\.google\.com\/o\/oauth2[^\s)>\]"']+/
+let lastReauth = 0
+
+export async function callMcpTool(info: McpToolInfo, args: Record<string, unknown>, opts?: { noReauth?: boolean }): Promise<string> {
   const cfg = await loadMCPConfig()
   const server = cfg.servers.find((s) => s.name === info.server && s.enabled !== false)
   if (!server) return 'Error: MCP server is disabled or removed'
@@ -163,10 +170,36 @@ export async function callMcpTool(info: McpToolInfo, args: Record<string, unknow
     const text = ((r?.content ?? []) as any[])
       .map((x) => (x?.type === 'text' ? String(x.text) : `[${x?.type ?? 'content'}]`))
       .join('\n')
+    // Expired Google sign-in: open the login page for the user instead of failing silently (at most once per 3 minutes).
+    if (!opts?.noReauth && info.server === 'google-workspace') {
+      const url = text.match(GOOGLE_AUTH)?.[0]
+      if (url) {
+        if (Date.now() - lastReauth > 3 * 60 * 1000) {
+          lastReauth = Date.now()
+          void shell.openExternal(url)
+        }
+        return 'Error: Google sign-in has expired. A login page was opened in the user\'s browser. Tell the user to sign in there, then ask again. Do not retry now.'
+      }
+    }
     return (r?.isError ? 'Error: ' : '') + text
   } catch (e) {
     return 'Error: ' + (e instanceof Error ? e.message : String(e))
   }
+}
+
+export function resetMcp(): void {
+  closeAllMcp()
+  toolCache.clear()
+}
+
+export async function mcpStatus(): Promise<{ id: string; prefix: string; running: boolean; tools: number; names: string[] }[]> {
+  const cfg = await loadMCPConfig()
+  return cfg.servers
+    .filter((s) => s.enabled !== false)
+    .map((s) => {
+      const hit = toolCache.get(s.name)
+      return { id: s.name, prefix: safe(s.name) + '__', running: pool.has(s.name), tools: hit?.tools.length ?? 0, names: (hit?.tools ?? []).map((t) => t.name) }
+    })
 }
 
 export function closeAllMcp(): void {
@@ -195,7 +228,7 @@ const SYN: [RegExp, string[]][] = [
   [/استبيان|فورم/, ['form', 'forms']]
 ]
 // Safety: tools that look like they change state (send/delete/write/run...) are never offered to the model automatically.
-const RISKY = /(send|delete|remove|create|write|update|modify|manage|set[_-]|push|merge|apply|execut|exec[_-]|run[_-]|kubectl|terminate|drop|insert|upload|post[_-]|reply|draft|import|copy|move|install|uninstall|spawn|start|stop|kill|reset|patch|scale|rollout|cleanup|shutdown|store|save|add[_-]|register|train|deploy|claim|assign|handoff|steal|cancel|retry|complete)/i
+const RISKY = /(edit|interact|send|delete|remove|create|write|update|modify|manage|set[_-]|push|merge|apply|execut|exec[_-]|run[_-]|kubectl|terminate|drop|insert|upload|post[_-]|reply|draft|import|copy|move|install|uninstall|spawn|start|stop|kill|reset|patch|scale|rollout|cleanup|shutdown|store|save|add[_-]|register|train|deploy|claim|assign|handoff|steal|cancel|retry|complete)/i
 const MAX_RESULT = 6000
 
 // Builds the tool list for one request: a keyword-shortlisted slice of the MCP tools, plus read-only file tools

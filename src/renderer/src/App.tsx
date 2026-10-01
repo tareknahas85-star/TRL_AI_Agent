@@ -3,6 +3,7 @@ import {
   Bot, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
   Sparkles, Sun, Trash2, User, Wrench, Download, Search, X
 } from 'lucide-react'
+import appIcon from './assets/icon.png'
 import { ChatWindow } from '../../ui/ChatWindow'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
@@ -12,6 +13,95 @@ import { SkillsPage } from '../../ui/SkillsPage'
 import { ToolsPage } from '../../ui/ToolsPage'
 import { ThemeProvider, useTheme } from '../../ui/ThemeContext'
 import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '../../preload/index.d'
+
+const OWNER = { name: 'Tarek Nahhas', email: 'tareknahas@live.com', github: 'https://github.com/tareknahas85-star' }
+
+function AboutBadge() {
+  const [open, setOpen] = useState(false)
+  const [info, setInfo] = useState<{ version: string; electron: string; chrome: string; node: string; platform: string } | null>(null)
+  const [copied, setCopied] = useState('')
+  useEffect(() => {
+    if (open && !info) window.api.app.about().then(setInfo).catch(() => undefined)
+  }, [open, info])
+  const copy = (text: string, key: string): void => {
+    navigator.clipboard
+      .writeText(text)
+      .then(() => {
+        setCopied(key)
+        setTimeout(() => setCopied(''), 1500)
+      })
+      .catch(() => undefined)
+  }
+  const sys = info ? `TRL_AI_Agent v${info.version} | Electron ${info.electron} | Chromium ${info.chrome} | Node ${info.node} | ${info.platform}` : ''
+  return (
+    <>
+      <button
+        onClick={() => setOpen(true)}
+        title="عن البرنامج"
+        className="mb-4 flex w-full items-center gap-2 rounded-2xl px-2 py-2 text-start hover:bg-surface2"
+      >
+        <img src={appIcon} alt="" className="h-9 w-9 rounded-2xl shadow-card" />
+        <div className="leading-tight">
+          <div className="text-base font-semibold">TRL_AI_Agent</div>
+          <div className="text-[11px] text-muted">مايسترو النماذج</div>
+        </div>
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setOpen(false)}>
+          <div className="w-[380px] max-w-[92vw] rounded-card border border-outline bg-surface p-5 shadow-card" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start gap-3">
+              <img src={appIcon} alt="" className="h-14 w-14 rounded-2xl shadow-card" />
+              <div className="flex-1">
+                <div className="text-lg font-semibold">TRL_AI_Agent</div>
+                <div className="text-xs text-muted" dir="ltr">
+                  {info ? 'v' + info.version : '…'}
+                </div>
+              </div>
+              <button onClick={() => setOpen(false)} className="rounded-full p-1 text-muted hover:bg-surface2">
+                <X size={16} />
+              </button>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted">المطوّر</span>
+                <span dir="ltr">{OWNER.name}</span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted">البريد</span>
+                <span className="flex items-center gap-2" dir="ltr">
+                  <a href={'mailto:' + OWNER.email} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                    {OWNER.email}
+                  </a>
+                  <button onClick={() => copy(OWNER.email, 'mail')} className="text-[11px] text-muted hover:text-fg">
+                    {copied === 'mail' ? 'تم النسخ' : 'نسخ'}
+                  </button>
+                </span>
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-muted">GitHub</span>
+                <a href={OWNER.github} target="_blank" rel="noreferrer" className="text-primary hover:underline" dir="ltr">
+                  github.com/tareknahas85-star
+                </a>
+              </div>
+              {info && (
+                <div className="rounded-xl bg-surface2 p-2 text-[11px] text-muted" dir="ltr">
+                  Electron {info.electron} · Chromium {info.chrome} · Node {info.node} · {info.platform}
+                </div>
+              )}
+            </div>
+            <button
+              disabled={!info}
+              onClick={() => copy(sys, 'sys')}
+              className="mt-4 w-full rounded-full border border-outline px-4 py-2 text-sm hover:bg-surface2 disabled:opacity-50"
+            >
+              {copied === 'sys' ? 'تم النسخ' : 'نسخ معلومات النظام (للدعم)'}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
 
 type Nav = 'chat' | 'projects' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
 
@@ -164,15 +254,7 @@ function Shell() {
   return (
     <div className="flex h-screen w-full bg-bg text-fg">
       <aside className="flex w-[280px] shrink-0 flex-col border-e border-outline bg-surface p-3">
-        <div className="mb-4 flex items-center gap-2 px-2 py-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-primary text-white shadow-card">
-            <Bot size={20} />
-          </div>
-          <div className="leading-tight">
-            <div className="text-base font-semibold">AI Router OS</div>
-            <div className="text-[11px] text-muted">مايسترو النماذج</div>
-          </div>
-        </div>
+        <AboutBadge />
 
         <nav className="space-y-1">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (

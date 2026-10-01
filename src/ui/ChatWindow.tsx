@@ -71,6 +71,21 @@ function StatusBar({
   messages: { meta?: string }[]
 }) {
   const [open, setOpen] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [act, setAct] = useState<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>([])
+  useEffect(() => {
+    if (!open) return
+    let on = true
+    const tick = (): void => {
+      window.api.connectors.active().then((r) => on && setAct(r)).catch(() => undefined)
+    }
+    tick()
+    const t = setInterval(tick, 3000)
+    return () => {
+      on = false
+      clearInterval(t)
+    }
+  }, [open])
   const parsed = messages.filter((m) => m.meta).map((m) => parseMeta(m.meta as string))
   const last = parsed[parsed.length - 1]
   const st = last?.stats
@@ -132,6 +147,36 @@ function StatusBar({
           ) : (
             <div>لا توجد إحصاءات للرد الأخير.</div>
           )}
+          <div className="border-t border-outline pt-1">
+            <div className="mb-1 flex items-center gap-2">
+              <span>الأدوات الشغّالة:</span>
+              <button
+                disabled={scanning}
+                onClick={() => {
+                  setScanning(true)
+                  window.api.connectors.active(true).then(setAct).catch(() => undefined).finally(() => setScanning(false))
+                }}
+                className="rounded-full border border-outline px-2 py-0.5 text-primary hover:bg-surface2 disabled:opacity-50"
+              >
+                {scanning ? 'عم أفحص…' : 'فحص / تحديث'}
+              </button>
+            </div>
+            {act.length === 0 ? (
+              <div>لا يوجد موصلات مفعّلة.</div>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {act.map((a) => {
+                  const used = !!st?.tools.some((t) => t.startsWith(a.prefix))
+                  return (
+                    <span key={a.id} title={a.names.join(', ')} className={`rounded-full border px-2 py-0.5 ${used ? 'border-primary text-primary' : 'border-outline'}`}>
+                      <span className={a.running ? 'text-success' : 'text-muted'}>●</span> {a.title} · {a.tools || '—'}
+                      {used ? ' · استُعمل بآخر رد' : ''}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
+          </div>
           <div className="border-t border-outline pt-1">
             الجلسة: {parsed.length} ردود · {totalTok} توكن · متوسط السرعة {avgTps ? avgTps.toFixed(1) : '—'} t/s · محاولات فاشلة {failCount}
           </div>

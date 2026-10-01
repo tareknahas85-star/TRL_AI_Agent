@@ -23,10 +23,10 @@ function createTray(): void {
   if (tray) return
   const img = nativeImage.createFromPath(icon).resize({ width: 16, height: 16 })
   tray = new Tray(img)
-  tray.setToolTip('AI Router OS')
+  tray.setToolTip('TRL_AI_Agent')
   tray.setContextMenu(
     Menu.buildFromTemplate([
-      { label: 'فتح AI Router OS', click: showMain },
+      { label: 'فتح TRL_AI_Agent', click: showMain },
       { type: 'separator' },
       {
         label: 'خروج',

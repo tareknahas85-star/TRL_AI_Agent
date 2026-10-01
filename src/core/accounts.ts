@@ -2,7 +2,7 @@ import { BrowserWindow, dialog } from 'electron'
 import { readJson, writeJson } from './json-store'
 
 // Connected accounts (Google first). Write access is OFF by default and every write action asks the user first.
-export type Accounts = { googleEmail: string; writeServers: string[] }
+export type Accounts = { googleEmail: string; writeServers: string[]; connected: string[] }
 const FILE = 'accounts.json'
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -10,7 +10,8 @@ export function getAccounts(): Accounts {
   const a = readJson<Partial<Accounts>>(FILE, {})
   return {
     googleEmail: typeof a.googleEmail === 'string' ? a.googleEmail : '',
-    writeServers: Array.isArray(a.writeServers) ? a.writeServers.filter((x): x is string => typeof x === 'string') : []
+    writeServers: Array.isArray(a.writeServers) ? a.writeServers.filter((x): x is string => typeof x === 'string') : [],
+    connected: Array.isArray(a.connected) ? a.connected.filter((x): x is string => typeof x === 'string') : []
   }
 }
 
@@ -27,6 +28,11 @@ export function setWriteServer(server: string, on: boolean): string[] {
   writeJson(FILE, { ...a, writeServers: next })
   if (!on) sessionAllowed.delete(server)
   return next
+}
+
+export function setConnected(id: string, on: boolean): void {
+  const a = getAccounts()
+  writeJson(FILE, { ...a, connected: on ? [...new Set([...a.connected, id])] : a.connected.filter((s) => s !== id) })
 }
 
 export const writeAllowed = (server: string): boolean => getAccounts().writeServers.includes(server)
