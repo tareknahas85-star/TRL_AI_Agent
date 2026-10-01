@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Bot, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
+import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
 import { Markdown } from './Markdown'
 import { CostDashboard } from './CostDashboard'
 import { Chip } from './components/ui'
@@ -194,6 +194,32 @@ function tierChip(saved: string): { label: string; cls: string } {
   return { label: 'قوي', cls: 'bg-warning/20 text-warning' }
 }
 
+function MsgFooter({ text, at }: { text: string; at?: number }) {
+  const [ok, setOk] = useState(false)
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      ta.remove()
+    }
+    setOk(true)
+    setTimeout(() => setOk(false), 1500)
+  }
+  return (
+    <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted">
+      <button onClick={copy} title="نسخ الرسالة كاملة" aria-label="نسخ الرسالة كاملة" className="rounded-full p-1 hover:bg-surface2">
+        {ok ? <Check size={13} /> : <Copy size={13} />}
+      </button>
+      {at ? <span>{new Date(at).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })}</span> : null}
+    </div>
+  )
+}
+
 function MetaBar({ meta }: { meta: string }) {
   const m = parseMeta(meta)
   const t = tierChip(m.saved)
@@ -348,7 +374,7 @@ export function ChatWindow({
       if (r.cancelled) {
         const partial = streamRef.current
         if (partial.trim()) {
-          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ تم الإيقاف_' }]
+          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ تم الإيقاف_', at: Date.now() }]
         } else if (retry) {
           next = base
         } else {
@@ -359,12 +385,12 @@ export function ChatWindow({
         setRetryNote(r.content)
         next = base
       } else if (retry) {
-        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta }]
+        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta, at: Date.now() }]
       } else {
-        next = [...base, { role: 'assistant', content: r.content, meta: r.meta }]
+        next = [...base, { role: 'assistant', content: r.content, meta: r.meta, at: Date.now() }]
       }
     } catch (e) {
-      next = [...base, { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)) }]
+      next = [...base, { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)), at: Date.now() }]
     }
     setStreamText('')
     streamRef.current = ''
@@ -377,7 +403,7 @@ export function ChatWindow({
     if (!input.trim() || loading) return
     const userMsg = input
     lastUserRef.current = userMsg
-    const withUser = [...messages, { role: 'user' as const, content: userMsg }]
+    const withUser = [...messages, { role: 'user' as const, content: userMsg, at: Date.now() }]
     setMessages(withUser)
     setInput('')
     await runRequest(false, withUser)
@@ -423,8 +449,9 @@ export function ChatWindow({
 
           {messages.map((msg, i) =>
             retrying && i === messages.length - 1 ? null : msg.role === 'user' ? (
-              <div key={i} className="ms-auto w-fit max-w-[80%] whitespace-pre-wrap rounded-3xl rounded-te-md bg-bubble px-4 py-3">
-                {msg.content}
+              <div key={i} className="ms-auto w-fit max-w-[80%]">
+                <div className="whitespace-pre-wrap rounded-3xl rounded-te-md bg-bubble px-4 py-3">{msg.content}</div>
+                <MsgFooter text={msg.content} at={msg.at} />
               </div>
             ) : (
               <div key={i} className="flex gap-3">
@@ -432,6 +459,7 @@ export function ChatWindow({
                 <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
                   <Markdown text={msg.content} />
                   {msg.meta && <MetaBar meta={msg.meta} />}
+                  <MsgFooter text={msg.content} at={msg.at} />
                   {msg.meta && i === messages.length - 1 && !loading && (
                     <div className="mt-2 flex items-center gap-2">
                       <button onClick={() => handleRetry()} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">

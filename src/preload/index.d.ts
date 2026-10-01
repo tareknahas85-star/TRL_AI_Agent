@@ -26,7 +26,7 @@ export type ChatResult = { content: string; meta?: string; cancelled?: boolean; 
 export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
 export type MasterMemoryView = { projects: ProjectMemoryInfo[]; general: { text: string; at: number }[]; conflicts: { kind: string; detail: string }[] }
 export type ProjectInfo = { id: string; name: string; path: string }
-export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string }
+export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number }
 export type ConversationSummary = {
   id: string
   title: string

@@ -191,6 +191,12 @@ export async function executeWithFallback(
         emitProgress('رفض ' + model + ' — ينتقل للتالي')
         continue
       }
+      // Some models print a tool call as plain text (e.g. <tool_call>Bash …) instead of using function calling. That is not an answer.
+      if (content && /<tool_call>|<arg_key>|<function_calls>|<invoke name=/i.test(content)) {
+        failures.push({ model, reason: 'كتب استدعاء أداة كنص بدل ما ينفّذه' })
+        emitProgress(model + ' كتب أداة كنص — ينتقل للتالي')
+        continue
+      }
       if (content) {
         console.log(`[Fallback] Success with: ${model}`)
         return {

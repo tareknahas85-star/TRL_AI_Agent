@@ -321,7 +321,7 @@ function Shell() {
                 <button onClick={() => openConv(c.id)} className="min-w-0 flex-1 text-start">
                   <div className="truncate">{c.title}</div>
                   <div className="text-[11px] text-muted">
-                    {hits ? hits[c.id] : `${new Date(c.updatedAt).toLocaleDateString('ar')} · ${c.count} رسالة`}
+                    {hits ? hits[c.id] : `${new Date(c.updatedAt).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })} · ${c.count} رسالة`}
                   </div>
                 </button>
                 <button
