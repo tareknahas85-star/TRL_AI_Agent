@@ -21,8 +21,11 @@ function findOllama(): string | null {
     'C:\\Program Files\\Ollama\\ollama.exe'
   ].filter(Boolean)
   for (const c of candidates) if (fs.existsSync(c)) return c
+  if (process.platform !== 'win32') {
+    for (const c of ['/usr/local/bin/ollama', '/usr/bin/ollama', '/opt/ollama/bin/ollama']) if (fs.existsSync(c)) return c
+  }
   for (const dir of (process.env.PATH ?? '').split(path.delimiter)) {
-    const p = path.join(dir, 'ollama.exe')
+    const p = path.join(dir, process.platform === 'win32' ? 'ollama.exe' : 'ollama')
     if (dir && fs.existsSync(p)) return p
   }
   return null

@@ -7,6 +7,7 @@ export function ComputerPanel() {
     void window.api.computer.get().then(setSt)
   }, [])
 
+  const unsupported = !navigator.userAgent.includes('Windows') // PowerShell-based: Windows only for now
   const toggle = async (): Promise<void> => setSt(await window.api.computer.set(!st.enabled))
   const reset = async (): Promise<void> => setSt(await window.api.computer.reset())
 
@@ -22,11 +23,16 @@ export function ComputerPanel() {
         </div>
         <button
           onClick={toggle}
-          className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white ${st.enabled ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-500 hover:bg-gray-600'}`}
+          disabled={unsupported}
+          title={unsupported ? 'غير مدعوم على هالنظام حالياً (ويندوز فقط)' : undefined}
+          className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 ${st.enabled ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-500 hover:bg-gray-600'}`}
         >
           {st.enabled ? 'مفعّل' : 'معطّل'}
         </button>
       </div>
+      {unsupported && (
+        <p className="mt-2 text-xs text-amber-600">التحكم بالجهاز خاص بويندوز حالياً، ما هو متاح على لينكس بهالنسخة.</p>
+      )}
       {st.enabled && (
         <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
           <span>{st.sessionAllowed ? 'الموافقة لكل الجلسة مفعّلة (ما رح يسألك مرة تانية).' : 'كل إجراء بيطلب موافقتك.'}</span>

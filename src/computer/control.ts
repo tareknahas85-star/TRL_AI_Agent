@@ -10,6 +10,7 @@ const cfgFile = (): string => path.join(app.getPath('userData'), 'computer.json'
 let sessionAllowAll = false
 
 export function computerEnabled(): boolean {
+  if (process.platform !== 'win32') return false // PowerShell-based: Windows only for now
   try {
     return JSON.parse(fs.readFileSync(cfgFile(), 'utf-8')).enabled === true
   } catch {
@@ -17,6 +18,7 @@ export function computerEnabled(): boolean {
   }
 }
 export function setComputerEnabled(on: boolean): void {
+  if (process.platform !== 'win32') return
   fs.writeFileSync(cfgFile(), JSON.stringify({ enabled: !!on }))
   if (!on) sessionAllowAll = false
 }

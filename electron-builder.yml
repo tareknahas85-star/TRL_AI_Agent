@@ -41,14 +41,23 @@ mac:
 dmg:
   artifactName: ${name}-${version}.${ext}
 linux:
+  executableName: my-ai-router
   target:
     - AppImage
-    - snap
     - deb
-  maintainer: electronjs.org
+  maintainer: Tarek Nahhas <tareknahas@live.com>
   category: Utility
+  icon: build/icon.png
+  executableArgs:
+    - --no-sandbox
+  desktop:
+    entry:
+      Name: TRL_AI_Agent
+      Comment: Multi-model AI agent router with MCP connectors
+      Categories: Utility;Development;
+  artifactName: ${name}-${version}-linux.${ext}
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${name}-${version}-linux.${ext}
 npmRebuild: false
 publish:
   provider: generic

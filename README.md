@@ -31,7 +31,10 @@ TRL_AI_Agent is a desktop app (Electron + React) with a chat window in Arabic fi
 npm install
 npm run dev        # run in development
 npm run build:win  # build the Windows installer into release/
+npm run build:linux  # build AppImage + deb on Ubuntu/Debian
 ```
+
+On Linux, computer control (PowerShell-based) is Windows-only for now; everything else works. The AppImage runs with `--no-sandbox` on Ubuntu 24.04.
 
 ### Your data
 
@@ -66,7 +69,10 @@ TRL_AI_Agent تطبيق سطح مكتب (Electron + React) بواجهة محاد
 npm install
 npm run dev        # تشغيل للتطوير
 npm run build:win  # بناء مثبّت ويندوز داخل release/
+npm run build:linux  # بناء AppImage وdeb على أوبونتو/ديبيان
 ```
+
+على لينكس، التحكم بالجهاز (المبني على PowerShell) خاص بويندوز حالياً، وباقي الميزات تشتغل. الـ AppImage بيشتغل مع `--no-sandbox` على أوبونتو 24.04.
 
 ### بياناتك
 
