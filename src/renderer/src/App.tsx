@@ -5,6 +5,7 @@ import {
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
 import { ChatWindow } from '../../ui/ChatWindow'
+import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
 import { ProjectsPage } from '../../ui/ProjectsPage'
@@ -16,7 +17,7 @@ import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '
 
 const OWNER = { name: 'Tarek Nahhas', email: 'tareknahas@live.com', github: 'https://github.com/tareknahas85-star' }
 
-function AboutBadge() {
+function AboutBadge({ onSetup }: { onSetup: () => void }) {
   const [open, setOpen] = useState(false)
   const [info, setInfo] = useState<{ version: string; electron: string; chrome: string; node: string; platform: string } | null>(null)
   const [copied, setCopied] = useState('')
@@ -90,6 +91,15 @@ function AboutBadge() {
               )}
             </div>
             <button
+              onClick={() => {
+                setOpen(false)
+                onSetup()
+              }}
+              className="mt-4 w-full rounded-full border border-outline px-4 py-2 text-sm hover:bg-surface2"
+            >
+              معالج الإعداد (إعادة تشغيله)
+            </button>
+            <button
               disabled={!info}
               onClick={() => copy(sys, 'sys')}
               className="mt-4 w-full rounded-full border border-outline px-4 py-2 text-sm hover:bg-surface2 disabled:opacity-50"
@@ -144,6 +154,22 @@ function Shell() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const [busy, setBusy] = useState<Record<string, boolean>>({})
   const [ready, setReady] = useState(false)
+  const [wizard, setWizard] = useState(false)
+  const [uname, setUname] = useState(readName)
+  useEffect(() => {
+    window.api
+      .status()
+      .then((s) => {
+        let done = false
+        try {
+          done = localStorage.getItem(DONE_KEY) === '1'
+        } catch {
+          /* ignore */
+        }
+        if (!s.key && !done) setWizard(true)
+      })
+      .catch(() => undefined)
+  }, [])
   const defaultMode = useRef<ChatMode>({ kind: 'free' })
   const [query, setQuery] = useState('')
   const [hits, setHits] = useState<Record<string, string> | null>(null)
@@ -254,7 +280,7 @@ function Shell() {
   return (
     <div className="flex h-screen w-full bg-bg text-fg">
       <aside className="flex w-[280px] shrink-0 flex-col border-e border-outline bg-surface p-3">
-        <AboutBadge />
+        <AboutBadge onSetup={() => setWizard(true)} />
 
         <nav className="space-y-1">
           {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
@@ -343,7 +369,7 @@ function Shell() {
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface2">
               <User size={16} />
             </div>
-            <span>Tarek</span>
+            <span>{uname}</span>
           </div>
         </div>
       </aside>
@@ -404,6 +430,14 @@ function Shell() {
         {activeNav === 'tools' && <ToolsPage />}
         {activeNav === 'settings' && <Settings variant="page" />}
       </main>
+      {wizard && (
+        <Onboarding
+          onClose={() => {
+            setUname(readName())
+            setWizard(false)
+          }}
+        />
+      )}
     </div>
   )
 }

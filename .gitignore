@@ -10,3 +10,6 @@ out
 release
 .vite
 build
+
+# internal handoff notes (personal paths)
+HANDOFF.md
