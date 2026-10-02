@@ -17,7 +17,7 @@ export function getAccounts(): Accounts {
 
 export function setGoogleEmail(email: string): { ok: boolean; error?: string } {
   const v = email.trim()
-  if (v && !EMAIL_RE.test(v)) return { ok: false, error: 'صيغة الإيميل غير صحيحة' }
+  if (v && !EMAIL_RE.test(v)) return { ok: false, error: 'صيغة الإيميل مو صحيحة' }
   writeJson(FILE, { ...getAccounts(), googleEmail: v })
   return { ok: true }
 }
@@ -53,7 +53,7 @@ export async function approveWrite(server: string, tool: string, args: Record<st
   const opts = {
     type: 'warning' as const,
     title: 'الحسابات - طلب موافقة',
-    message: `النموذج بدو ينفّذ: ${server} ← ${tool}`,
+    message: `الموديل بدو ينفّذ: ${server} ← ${tool}`,
     detail: detail.slice(0, 1500),
     buttons: ['سماح مرة واحدة', 'سماح لهالسيرفر بهالجلسة', 'رفض'],
     defaultId: 2,

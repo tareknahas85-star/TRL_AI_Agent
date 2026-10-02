@@ -105,7 +105,7 @@ function StatusBar({
         {loading ? (
           <>
             <Loader2 size={12} className="animate-spin" />
-            <span>{progress || 'جاري المعالجة…'}</span>
+            <span>{progress || 'عم يشتغل…'}</span>
             <span dir="ltr">{elapsed}s</span>
           </>
         ) : st && last ? (
@@ -123,7 +123,7 @@ function StatusBar({
             {st.failures.length > 0 && <span className="text-warning">فشل {st.failures.length}</span>}
           </>
         ) : (
-          <span>جاهز — أرسل طلباً لتظهر الإحصاءات هنا</span>
+          <span>جاهز — ابعت طلب لتطلع الإحصاءات هون</span>
         )}
         <span className="ms-auto">{open ? '▴' : '▾'}</span>
       </button>
@@ -146,7 +146,7 @@ function StatusBar({
               ))}
             </>
           ) : (
-            <div>لا توجد إحصاءات للرد الأخير.</div>
+            <div>ما في إحصاءات للرد الأخير.</div>
           )}
           <div className="border-t border-outline pt-1">
             <div className="mb-1 flex items-center gap-2">
@@ -163,7 +163,7 @@ function StatusBar({
               </button>
             </div>
             {act.length === 0 ? (
-              <div>لا يوجد موصلات مفعّلة.</div>
+              <div>ما في موصلات مفعّلة.</div>
             ) : (
               <div className="flex flex-wrap gap-1.5">
                 {act.map((a) => {
@@ -213,7 +213,7 @@ function MsgFooter({ text, at }: { text: string; at?: number }) {
   }
   return (
     <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted">
-      <button onClick={copy} title="نسخ الرسالة كاملة" aria-label="نسخ الرسالة كاملة" className="rounded-full p-1 hover:bg-surface2">
+      <button onClick={copy} title="انسخ الرسالة كاملة" aria-label="انسخ الرسالة كاملة" className="rounded-full p-1 hover:bg-surface2">
         {ok ? <Check size={13} /> : <Copy size={13} />}
       </button>
       {at ? <span>{new Date(at).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })}</span> : null}
@@ -375,7 +375,7 @@ export function ChatWindow({
       if (r.cancelled) {
         const partial = streamRef.current
         if (partial.trim()) {
-          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ تم الإيقاف_', at: Date.now() }]
+          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ انوقف_', at: Date.now() }]
         } else if (retry) {
           next = base
         } else {
@@ -464,7 +464,7 @@ export function ChatWindow({
                   {msg.meta && i === messages.length - 1 && !loading && (
                     <div className="mt-2 flex items-center gap-2">
                       <button onClick={() => handleRetry()} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">
-                        <RotateCcw size={12} /> أعد بنموذج آخر
+                        <RotateCcw size={12} /> جرّب بموديل تاني
                       </button>
                       {retryNote && <span className="text-[11px] text-warning">{retryNote}</span>}
                     </div>
@@ -488,7 +488,7 @@ export function ChatWindow({
             <div className="flex items-center gap-3">
               <Avatar />
               <div className="flex items-center gap-2 text-sm text-muted">
-                <span>الماستر يختار أرخص موديل</span>
+                <span>الماستر بيختار أرخص موديل</span>
                 <span className="flex gap-1">
                   {[0, 1, 2].map((i) => (
                     <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" style={{ animationDelay: `${i * 150}ms` }} />
@@ -505,7 +505,7 @@ export function ChatWindow({
         {needsChoice && !loading && (
           <div className="mx-auto mb-2 max-w-3xl rounded-card border border-warning/50 bg-warning/10 p-3 text-xs">
             <div className="mb-2 font-medium">
-              {mode.kind === 'model' ? 'النموذج المحدد ما رد.' : 'النماذج المجانية خلصت أو ما ردت.'} شو بتحب نعمل؟
+              {mode.kind === 'model' ? 'الموديل المحدد ما رد.' : 'الموديلات المجانية خلصت أو ما ردت.'} شو بتحب نعمل؟
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button className="rounded-full bg-primary px-3 py-1 text-white" onClick={() => handleRetry({ kind: 'auto' })}>
@@ -516,7 +516,7 @@ export function ChatWindow({
                 value=""
                 onChange={(e) => e.target.value && handleRetry({ kind: 'model', id: e.target.value })}
               >
-                <option value="">🎯 اختار نموذج…</option>
+                <option value="">🎯 اختار موديل…</option>
                 {picker.map((p) => (
                   <option key={p.value} value={p.value}>
                     {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
@@ -535,7 +535,7 @@ export function ChatWindow({
           </div>
         )}
         <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
-          <span>النموذج:</span>
+          <span>الموديل:</span>
           <select
             className={`rounded-full border border-outline bg-surface px-2 py-0.5 ${mode.kind === 'free' ? '' : 'text-warning'}`}
             value={mode.kind === 'model' ? mode.id : mode.kind === 'council' && (mode.author || mode.critic) ? 'council-manual' : mode.kind}
@@ -545,11 +545,11 @@ export function ChatWindow({
               onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : v === 'council' ? { kind: 'council' } : { kind: 'model', id: v })
             }}
           >
-            <option value="free">🆓 تلقائي — مجاني فقط</option>
+            <option value="free">🆓 تلقائي — مجاني بس</option>
             <option value="auto">⚡ تلقائي — مع المدفوع</option>
-            <option value="council">🏛️ مجلس النماذج — مسودة ثم نقد ثم تصحيح</option>
+            <option value="council">🏛️ مجلس الموديلات — مسودة وبعدين نقد وبعدين تصحيح</option>
             <option value="council-manual" disabled={!picker.length}>🏛️ مجلس — أنا بختار الكاتب والناقد</option>
-            <optgroup label="🎯 نموذج محدد">
+            <optgroup label="🎯 موديل محدد">
               {picker.map((p) => (
                 <option key={p.value} value={p.value}>
                   {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
@@ -577,21 +577,21 @@ export function ChatWindow({
               </select>
             </>
           )}
-          {mode.kind !== 'free' && <span className="text-warning">قد يستهلك رصيدك</span>}
+          {mode.kind !== 'free' && <span className="text-warning">ممكن يستهلك رصيدك</span>}
         </div>
         <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-outline bg-surface px-4 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow">
           <input
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="اكتب طلبك هنا..."
+            placeholder="اكتب طلبك هون..."
             className="flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-muted"
           />
           {loading ? (
             <button
               onClick={handleStop}
-              aria-label="إيقاف"
-              title="إيقاف الطلب"
+              aria-label="وقّف"
+              title="وقّف الطلب"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-danger text-white"
             >
               <Square size={14} fill="currentColor" />
@@ -600,7 +600,7 @@ export function ChatWindow({
             <button
               onClick={handleSend}
               disabled={!input.trim()}
-              aria-label="إرسال"
+              aria-label="ابعت"
               className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-40"
             >
               <ArrowUp size={18} />

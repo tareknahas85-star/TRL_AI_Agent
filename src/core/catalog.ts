@@ -83,7 +83,7 @@ export async function testOpenRouterKey(): Promise<{ ok: boolean; message: strin
     if (d.is_free_tier) parts.push('حساب مجاني (بدون رصيد)')
     return { ok: true, message: parts.join(' · ') }
   } catch (e) {
-    return { ok: false, message: 'تعذّر الاتصال: ' + (e instanceof Error ? e.message : String(e)) }
+    return { ok: false, message: 'ما قدرت اتصل: ' + (e instanceof Error ? e.message : String(e)) }
   }
 }
 
@@ -129,8 +129,8 @@ export async function fetchOpenRouterModels(): Promise<{ ok: boolean; message: s
       })
     }
     writeJson(FILE, { fetchedAt: Date.now(), models: out } satisfies CatalogFile)
-    return { ok: true, message: `تم سحب ${out.length} نموذج (${added} جديد)`, added, total: out.length }
+    return { ok: true, message: `سحبت ${out.length} موديل (${added} جديد)`, added, total: out.length }
   } catch (e) {
-    return { ok: false, message: 'تعذّر الاتصال: ' + (e instanceof Error ? e.message : String(e)), added: 0, total: 0 }
+    return { ok: false, message: 'ما قدرت اتصل: ' + (e instanceof Error ? e.message : String(e)), added: 0, total: 0 }
   }
 }

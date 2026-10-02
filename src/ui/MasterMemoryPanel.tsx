@@ -75,7 +75,7 @@ export function MasterMemoryPanel() {
     <section className="mb-6">
       <h3 className="mb-1 text-base font-semibold">الذاكرة الرئيسية (كل المشاريع)</h3>
       <p className="mb-3 text-xs text-muted">
-        نظرة شاملة عن كل مشاريعك بتنحقن بكل محادثة، فالنموذج بيعرف باقي المشاريع وبينبهك لأي تعارض (منفذ مكرر، قرار متناقض…). بتتحدث تلقائياً من محادثاتك وبتقدر تعدّلها.
+        نظرة شاملة عن كل مشاريعك بتنحقن بكل محادثة، فالموديل بيعرف باقي المشاريع وبينبهك لأي تعارض (منفذ مكرر، قرار متناقض…). بتتحدث تلقائي من محادثاتك وبتقدر تعدّلها.
       </p>
       {data.conflicts.length > 0 && (
         <div className="mb-3 rounded-card border border-warning/50 bg-warning/10 p-3 text-xs">
@@ -85,7 +85,7 @@ export function MasterMemoryPanel() {
         </div>
       )}
       {data.projects.length === 0 ? (
-        <Empty text="ما في مشاريع بعد — أضف مشروع من صفحة المشاريع" />
+        <Empty text="ما في مشاريع بعد — ضيف مشروع من صفحة المشاريع" />
       ) : (
         <div className="space-y-2">
           {data.projects.map((p) => (

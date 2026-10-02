@@ -65,16 +65,16 @@ export function CatalogPanel() {
   return (
     <div className={cardCls + ' mb-6'}>
       <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold">نماذج مفتاح OpenRouter</h3>
+        <h3 className="text-sm font-semibold">موديلات مفتاح OpenRouter</h3>
         <span className="text-xs text-muted">
-          {models.length ? `${enabledCount} مفعّل من ${models.length}` : 'ما انسحبت نماذج بعد — حالياً بيستخدم القائمة الافتراضية'}
+          {models.length ? `${enabledCount} مفعّل من ${models.length}` : 'ما انسحبت موديلات بعد — هلق بيستخدم القائمة الافتراضية'}
         </span>
         <div className="flex-1" />
         <button className={ghostBtn} onClick={test} disabled={busy !== null}>
           {busy === 'test' ? <Loader2 size={14} className="inline animate-spin" /> : <PlugZap size={14} className="inline" />} اختبار المفتاح
         </button>
         <button className={ghostBtn} onClick={pull} disabled={busy !== null}>
-          {busy === 'fetch' ? <Loader2 size={14} className="inline animate-spin" /> : <DownloadCloud size={14} className="inline" />} سحب النماذج
+          {busy === 'fetch' ? <Loader2 size={14} className="inline animate-spin" /> : <DownloadCloud size={14} className="inline" />} سحب الموديلات
         </button>
       </div>
 
@@ -89,7 +89,7 @@ export function CatalogPanel() {
                 {t === 'ALL' ? 'الكل' : TIER_LABEL[t].label}
               </button>
             ))}
-            <button className={ghostBtn + (onlyEnabled ? ' bg-surface2' : '')} onClick={() => setOnlyEnabled(!onlyEnabled)}>المفعّل فقط</button>
+            <button className={ghostBtn + (onlyEnabled ? ' bg-surface2' : '')} onClick={() => setOnlyEnabled(!onlyEnabled)}>المفعّل بس</button>
           </div>
           <div className="mb-3 flex flex-wrap gap-2 text-xs">
             <button className={ghostBtn} onClick={() => setMany(shown.map((m) => m.id), true)}>تفعيل المعروض ({shown.length})</button>
@@ -121,7 +121,7 @@ export function CatalogPanel() {
               </li>
             ))}
           </ul>
-          {shown.length > 300 && <p className="mt-2 text-xs text-muted">عم يعرض أول 300 — استخدم البحث للتضييق.</p>}
+          {shown.length > 300 && <p className="mt-2 text-xs text-muted">عم يعرض أول 300 — استعمل البحث للتضييق.</p>}
         </>
       )}
     </div>

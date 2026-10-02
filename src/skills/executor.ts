@@ -38,7 +38,7 @@ export async function executeWithSkill(userInput: string, analysis: Analysis, ex
   const mode = currentMode()
   const modelsToTry = (mode?.kind === 'model' ? [mode.id] : mode?.kind === 'council' && mode.author ? [mode.author] : getTierForAnalysis(analysis)).filter((m) => !exclude.includes(m))
   if (exclude.length && !modelsToTry.length) {
-    return { content: 'لا يوجد نموذج آخر بهالفئة لتجربته.', modelUsed: 'none', success: false, triedModels: [] as string[] }
+    return { content: 'ما في موديل تاني بهالفئة لنجرّبه.', modelUsed: 'none', success: false, triedModels: [] as string[] }
   }
   let toolset: Awaited<ReturnType<typeof buildToolset>> = null
   // With an active project, file tools are offered whenever the request looks project/file related, even if the master did not flag tools.

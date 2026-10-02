@@ -14,7 +14,7 @@ export function readName(): string {
 
 type Msg = { ok: boolean; text: string } | null
 
-const STEPS = ['أهلاً', 'مفتاح OpenRouter', 'النماذج', 'جاهز']
+const STEPS = ['أهلاً', 'مفتاح OpenRouter', 'الموديلات', 'جاهز']
 
 // First-run wizard: name, OpenRouter key (free tier is enough), pull + enable models, then done.
 export function Onboarding({ onClose }: { onClose: () => void }) {
@@ -52,7 +52,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
   const saveKey = async (): Promise<void> => {
     const v = key.trim()
     if (v.length < 10) {
-      setMsg({ ok: false, text: 'الصق المفتاح كامل (يبدأ بـ sk-or-).' })
+      setMsg({ ok: false, text: 'الصق المفتاح كامل (بيبدأ بـ sk-or-).' })
       return
     }
     setBusy(true)
@@ -74,7 +74,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
     setMsg(null)
     try {
       const r = await window.api.catalog.fetch()
-      setMsg({ ok: r.ok, text: r.ok ? `تم جلب ${r.total} نموذج، وفُعّلت النماذج الافتراضية.` : r.message })
+      setMsg({ ok: r.ok, text: r.ok ? `جبت ${r.total} موديل وفعّلت الموديلات الافتراضية.` : r.message })
       setModelsOk(r.ok)
     } catch (e) {
       setMsg({ ok: false, text: e instanceof Error ? e.message : String(e) })
@@ -117,7 +117,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
         {step === 0 && (
           <div className="space-y-3 text-sm">
             <div className="text-lg font-semibold">أهلاً فيك في TRL_AI_Agent</div>
-          <p className="text-muted">بخطوتين بتصير جاهز: مفتاح مجاني من OpenRouter، وبعدها بنجيب النماذج ونفعّلها لحالها. كل شي بيبقى على جهازك.</p>
+          <p className="text-muted">بخطوتين بتصير جاهز: مفتاح مجاني من OpenRouter، وبعدها بنجيب الموديلات ونفعّلها لحالها. كل شي بيبقى على جهازك.</p>
             <label className="block">
               <span className="mb-1 block text-muted">شو بدك نناديك؟ (اختياري)</span>
               <input
@@ -147,10 +147,10 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
                 <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-primary hover:underline" dir="ltr">
                   openrouter.ai/keys
                 </a>{' '}
-                وسجّل دخول (مجاناً).
+                وسجّل دخول (ببلاش).
               </li>
-              <li>اضغط Create Key وانسخ المفتاح.</li>
-              <li>الصقه هون. المفتاح المجاني بيكفي للبداية مع النماذج المجانية.</li>
+              <li>دوس Create Key وانسخ المفتاح.</li>
+              <li>الصقه هون. المفتاح المجاني بيكفي للبداية مع الموديلات المجانية.</li>
             </ol>
             <input
               type="password"
@@ -184,15 +184,15 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
 
         {step === 2 && (
           <div className="space-y-3 text-sm">
-            <div className="text-lg font-semibold">النماذج</div>
-            <p className="text-muted">بنجيب قائمة النماذج من OpenRouter ونفعّل الافتراضية منها. بتقدر تغيّرها بعدين من صفحة «النماذج».</p>
+            <div className="text-lg font-semibold">الموديلات</div>
+            <p className="text-muted">بنجيب قائمة الموديلات من OpenRouter ونفعّل الافتراضية منها. بتقدر تغيّرها بعدين من صفحة «الموديلات».</p>
             <button disabled={busy} onClick={pullModels} className={modelsOk ? ghost : primary}>
-              {busy ? 'عم أجلب…' : modelsOk ? 'إعادة الجلب' : 'جلب النماذج وتفعيلها'}
+              {busy ? 'عم أجلب…' : modelsOk ? 'جيب من جديد' : 'جيب الموديلات وفعّلها'}
             </button>
             {msg && <div className={msg.ok ? 'text-success' : 'text-warning'}>{msg.text}</div>}
             <label className="flex cursor-pointer items-center gap-2 pt-1">
               <input type="checkbox" checked={freeOnly} onChange={toggleFree} />
-              <span>استعمل النماذج المجانية فقط (بدون أي إنفاق)</span>
+              <span>استعمل الموديلات المجانية بس (بدون أي مصروف)</span>
             </label>
             <div className="flex justify-between gap-2 pt-2">
               <button onClick={() => go(1)} className={ghost}>
@@ -215,8 +215,8 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
                 المايسترو: {st?.localMaster ? 'محلي (Ollama)' : 'سحابي تلقائي'}
                 {st && !st.ollama ? ' — Ollama مو مثبّت، وما بتحتاجه.' : ''}
               </li>
-              <li>اكتب أي طلب بالدردشة وبيختار النموذج المناسب لحاله.</li>
-              <li>لربط حساباتك (Google وGitHub وغيرهم): الإعدادات ثم الموصلات.</li>
+              <li>اكتب أي طلب بالدردشة وبيختار الموديل المناسب لحاله.</li>
+              <li>لربط حساباتك (Google وGitHub وغيرهم): الإعدادات وبعدين الموصلات.</li>
               <li>بتقدر ترجّع هالمعالج من نافذة «عن البرنامج» (كبسة على اسم التطبيق).</li>
             </ul>
             <div className="flex justify-end pt-2">

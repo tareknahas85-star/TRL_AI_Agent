@@ -114,7 +114,7 @@ export function registerIpcHandlers(): void {
       return { content: 'Error: OPENROUTER_API_KEY is missing. Add it in Settings or in .env.', failed: true }
     }
     const prev = lastRuns.get(o.tabId)
-    if (retry && !prev) return { content: 'لا يوجد طلب سابق لإعادته.', failed: true }
+    if (retry && !prev) return { content: 'ما في طلب سابق لنعيده.', failed: true }
     const send = (ch: string, ...a: unknown[]): void => {
       try {
         sender.send(ch, o.tabId, ...a)

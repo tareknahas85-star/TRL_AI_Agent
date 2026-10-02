@@ -195,7 +195,7 @@ export function addComputerTools(
       const cmd = s(a.command).trim()
       if (!cmd) return 'Error: empty command'
       if (BLOCKED.test(cmd)) return 'Error: blocked by safety policy (delete/shutdown/download/policy changes). Ask the user to do it himself.'
-      if (!isReadOnly(cmd) && !(await ask('يبي ينفذ أمر PowerShell', cmd))) return 'Error: the user denied this command.'
+      if (!isReadOnly(cmd) && !(await ask('بدو ينفذ أمر PowerShell', cmd))) return 'Error: the user denied this command.'
       return runPs(cmd, {}, 60000, getSignal?.())
     }
   )
@@ -233,7 +233,7 @@ export function addComputerTools(
     async (a) => {
       const p = s(a.path)
       if (fs.existsSync(p)) return 'Error: file already exists; overwriting is not allowed. Choose a new name.'
-      if (!(await ask('يبي ينشئ ملف', p + '\n\n' + s(a.content).slice(0, 600)))) return 'Error: the user denied this.'
+      if (!(await ask('بدو يعمل ملف', p + '\n\n' + s(a.content).slice(0, 600)))) return 'Error: the user denied this.'
       try {
         await fsp.mkdir(path.dirname(p), { recursive: true })
         await fsp.writeFile(p, s(a.content), { encoding: 'utf-8', flag: 'wx' })
@@ -254,11 +254,11 @@ export function addComputerTools(
     const t = s(a.target).trim()
     if (!t || /[;&|`]|\.(bat|cmd|ps1|vbs|js|msi|reg|scr)$/i.test(t) || /^(powershell|pwsh|cmd|wt|windowsterminal|regedit|mmc)(\.exe)?$/i.test(t))
       return 'Error: this target is not allowed (terminals/scripts are blocked).'
-    if (!(await ask('يبي يفتح', t))) return 'Error: the user denied this.'
+    if (!(await ask('بدو يفتح', t))) return 'Error: the user denied this.'
     return runPs('Start-Process -FilePath $A.t; "OK: opened"', { t }, 20000)
   })
   def('pc_focus', 'Bring a window to the foreground by part of its title.', { title: str }, ['title'], async (a) => {
-    if (!(await ask('يبي يعمل تركيز على نافذة', s(a.title)))) return 'Error: the user denied this.'
+    if (!(await ask('بدو يعمل تركيز على نافذة', s(a.title)))) return 'Error: the user denied this.'
     return runPs(
       WIN32 +
         "$p=Get-Process | Where-Object {$_.MainWindowTitle -like ('*'+$A.title+'*')} | Select-Object -First 1; if(-not $p){'Error: window not found'} else {[void][W32]::ShowWindow($p.MainWindowHandle,9); [void][W32]::SetForegroundWindow($p.MainWindowHandle); 'OK: focused '+$p.MainWindowTitle}",
@@ -292,7 +292,7 @@ export function addComputerTools(
     async (a) => {
       const g = await guardForeground()
       if (g) return g
-      if (!(await ask('يبي يضغط بالماوس', a.name ? `على العنصر: ${s(a.name)}` : `على الإحداثيات (${s(a.x)}, ${s(a.y)})`)))
+      if (!(await ask('بدو يدوس بالماوس', a.name ? `على العنصر: ${s(a.name)}` : `على الإحداثيات (${s(a.x)}, ${s(a.y)})`)))
         return 'Error: the user denied this.'
       return runPs(
         WIN32 +
@@ -314,7 +314,7 @@ for($i=0;$i -lt $n;$i++){ [W32]::mouse_event($d,0,0,0,0); [W32]::mouse_event($u,
   def('pc_type', 'Type text into the focused field (supports Arabic/Unicode via paste).', { text: str }, ['text'], async (a) => {
     const g = await guardForeground()
     if (g) return g
-    if (!(await ask('يبي يكتب نص', s(a.text).slice(0, 500)))) return 'Error: the user denied this.'
+    if (!(await ask('بدو يكتب نص', s(a.text).slice(0, 500)))) return 'Error: the user denied this.'
     return runPs(
       WIN32 +
         "$old=$null; try{$old=Get-Clipboard -Raw}catch{}; Set-Clipboard -Value $A.text; Start-Sleep -Milliseconds 100; Combo @(0x11) 0x56; Start-Sleep -Milliseconds 300; if($old -ne $null){Set-Clipboard -Value $old}; 'OK: typed'",
@@ -332,7 +332,7 @@ for($i=0;$i -lt $n;$i++){ [W32]::mouse_event($d,0,0,0,0); [W32]::mouse_event($u,
       if (/%\{F4\}|\^\+\{ESC\}|\^%\{DEL\}|\+\{DEL\}/i.test(k)) return 'Error: this key combination is blocked.'
       const g = await guardForeground()
       if (g) return g
-      if (!(await ask('يبي يرسل اختصار لوحة مفاتيح', k))) return 'Error: the user denied this.'
+      if (!(await ask('بدو يبعت اختصار لوحة مفاتيح', k))) return 'Error: the user denied this.'
       return runPs(
         WIN32 +
           "Add-Type -AssemblyName System.Windows.Forms; if($A.k -match '^([\^%+]+)([A-Za-z0-9])$'){ $mods=@(); if($Matches[1].Contains('^')){$mods+=0x11}; if($Matches[1].Contains('%')){$mods+=0x12}; if($Matches[1].Contains('+')){$mods+=0x10}; Combo $mods ([int][char]$Matches[2].ToUpper()) } else { [System.Windows.Forms.SendKeys]::SendWait($A.k) }; 'OK: sent'",
@@ -344,7 +344,7 @@ for($i=0;$i -lt $n;$i++){ [W32]::mouse_event($d,0,0,0,0); [W32]::mouse_event($u,
   def('pc_scroll', 'Scroll the mouse wheel at the current position. amount>0 scrolls up, <0 scrolls down (in notches).', { amount: num }, ['amount'], async (a) => {
     const g = await guardForeground()
     if (g) return g
-    if (!(await ask('يبي يعمل سكرول', s(a.amount)))) return 'Error: the user denied this.'
+    if (!(await ask('بدو يعمل سكرول', s(a.amount)))) return 'Error: the user denied this.'
     return runPs(WIN32 + "[W32]::mouse_event(0x0800,0,0,[int]([double]$A.n*120),0); 'OK: scrolled'", { n: Number(a.amount) || 0 }, 15000)
   })
   def(

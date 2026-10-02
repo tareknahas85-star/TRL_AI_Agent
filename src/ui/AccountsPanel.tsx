@@ -8,7 +8,7 @@ type Status = 'checking' | 'connected' | 'disconnected' | 'needs-setup'
 const STATUS: Record<Status, { text: string; cls: string }> = {
   checking: { text: 'عم يتحقق…', cls: 'bg-surface2 text-muted' },
   connected: { text: 'متصل ✓', cls: 'bg-success/15 text-success' },
-  disconnected: { text: 'غير متصل', cls: 'bg-warning/20 text-warning' },
+  disconnected: { text: 'مش متصل', cls: 'bg-warning/20 text-warning' },
   'needs-setup': { text: 'بدو إعداد (مرة وحدة)', cls: 'bg-surface2 text-muted' }
 }
 
@@ -80,7 +80,7 @@ function GoogleCard() {
     const c = await window.api.accounts.googleCreds()
     setTail(c.clientTail)
     setStatus('disconnected')
-    setMsg({ ok: true, text: 'انحفظ الإعداد. هلأ اكتب إيميلك واضغط اتصل.' })
+    setMsg({ ok: true, text: 'انحفظ الإعداد. هلأ اكتب إيميلك ودوس اتصل.' })
   }
 
   const saveEmail = async (): Promise<string | null> => {
@@ -112,11 +112,11 @@ function GoogleCard() {
       tries++
       if (await check()) {
         stopPoll()
-        setMsg({ ok: true, text: 'تم الاتصال.' })
+        setMsg({ ok: true, text: 'اتصلنا.' })
       } else if (tries >= 40) {
         stopPoll()
         setStatus('disconnected')
-        setMsg({ ok: false, text: 'ما انتهى تسجيل الدخول. اضغط اتصل وجرّب مرة تانية.' })
+        setMsg({ ok: false, text: 'ما انتهى تسجيل الدخول. دوس اتصل وجرّب مرة تانية.' })
       }
     }, 3000)
   }
@@ -150,7 +150,7 @@ function GoogleCard() {
             <Settings2 size={14} /> إعداد لمرة وحدة
           </div>
           <p className="text-[11px] leading-relaxed text-muted">
-            من Google Cloud Console ثم Google Auth Platform ثم Clients، افتح الـ Client (Desktop app) والصق Client ID و Client secret. أو الصق محتوى ملف JSON
+            من Google Cloud Console وبعدين Google Auth Platform وبعدين Clients، افتح الـ Client (Desktop app) والصق Client ID و Client secret. أو الصق محتوى ملف JSON
             كامل بالخانة الأولى والتطبيق بيقرأ الاتنين. المفاتيح بتنخزّن بالجهاز بس.
           </p>
           <textarea
@@ -191,7 +191,7 @@ function GoogleCard() {
           <div className="flex flex-wrap items-center gap-2">
             {status === 'connected' ? (
               <button className={ghostBtn + ' border border-outline'} disabled={busy !== null} onClick={connect}>
-                <RefreshCw size={13} className="ml-1 inline" /> إعادة الاتصال
+                <RefreshCw size={13} className="ml-1 inline" /> اتصل من جديد
               </button>
             ) : (
               <button className={primaryBtn} disabled={busy !== null || !email.trim() || status === 'checking'} onClick={connect}>
@@ -219,7 +219,7 @@ function GoogleCard() {
             label="السماح بالكتابة: إرسال إيميل، إنشاء مواعيد ومهام، تعديل ملفات… (بيطلب موافقتك قبل كل إجراء)"
             onChange={async () => {
               const next = !write
-              if (next && !confirm('تفعيل الكتابة بيخلي النموذج يقترح إجراءات تغيّر بحسابك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
+              if (next && !confirm('تفعيل الكتابة بيخلي الموديل يقترح إجراءات تغيّر بحسابك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
               const list = await window.api.accounts.setWrite(GOOGLE, next)
               setWrite(list.includes(GOOGLE))
             }}
@@ -279,7 +279,7 @@ function ServiceCard({ def }: { def: Def }) {
   const verb = def.kind === 'local' ? 'تفعيل' : 'اتصل'
   return (
     <Card title={def.title} subtitle={def.subtitle} status={connected ? 'connected' : 'disconnected'}>
-      {def.unavailable && <p className="text-xs text-warning">غير جاهز: {def.unavailable}</p>}
+      {def.unavailable && <p className="text-xs text-warning">مش جاهز: {def.unavailable}</p>}
       {def.kind === 'token' && !connected && (
         <div className="space-y-2 rounded-card border border-outline p-3">
           <p className="text-[11px] leading-relaxed text-muted">{def.hint}</p>
@@ -303,7 +303,7 @@ function ServiceCard({ def }: { def: Def }) {
       <div className="flex flex-wrap items-center gap-2">
         {connected ? (
           <button className={ghostBtn + ' border border-outline'} disabled={busy !== null} onClick={() => run('connect')}>
-            <RefreshCw size={13} className="ml-1 inline" /> إعادة الاتصال
+            <RefreshCw size={13} className="ml-1 inline" /> اتصل من جديد
           </button>
         ) : def.kind === 'token' ? null : (
           <button className={primaryBtn} disabled={busy !== null || !!def.unavailable} onClick={() => run('connect')}>
@@ -335,7 +335,7 @@ function ServiceCard({ def }: { def: Def }) {
           label="السماح بالكتابة (بيطلب موافقتك قبل كل إجراء)"
           onChange={async () => {
             const next = !write
-            if (next && !confirm('تفعيل الكتابة بيخلي النموذج يقترح إجراءات تغيّر ببياناتك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
+            if (next && !confirm('تفعيل الكتابة بيخلي الموديل يقترح إجراءات تغيّر ببياناتك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
             const list = await window.api.accounts.setWrite(id, next)
             setWrite(list.includes(id))
           }}
@@ -360,9 +360,9 @@ export function AccountsPanel() {
     <section className="mb-6">
       <h3 className="mb-1 text-base font-semibold">الموصلات</h3>
       <p className="mb-3 text-xs text-muted">
-        اضغط «اتصل» على أي خدمة، سجّل الدخول بالمتصفح، وخلص. التطبيق ما بيشوف كلمة السر، وأي إجراء بيغيّر ببياناتك بيطلب موافقتك أول.
+        دوس «اتصل» على أي خدمة، سجّل الدخول بالمتصفح، وخلص. التطبيق ما بيشوف كلمة السر، وأي إجراء بيغيّر ببياناتك بيطلب موافقتك أول.
       </p>
-      <input className={inputCls + ' mb-4'} placeholder="ابحث عن موصّل…" value={q} onChange={(e) => setQ(e.target.value)} />
+      <input className={inputCls + ' mb-4'} placeholder="دوّر على موصّل…" value={q} onChange={(e) => setQ(e.target.value)} />
       {(showGoogle || accounts.length > 0) && (
         <>
           <h4 className="mb-2 text-sm font-semibold text-muted">حسابات (تسجيل دخول)</h4>

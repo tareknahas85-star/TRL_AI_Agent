@@ -33,7 +33,7 @@ export function MemoryPanel() {
         })
     }
     const n = await window.api.memory.import(entries, 'import')
-    setErr(n ? '' : 'لم يتم استيراد أي مدخل — تأكد من الصيغة')
+    setErr(n ? '' : 'ما انستورد أي مدخل — تأكد من الصيغة')
     if (n) {
       setRaw('')
       setImporting(false)
@@ -66,12 +66,12 @@ export function MemoryPanel() {
           <div>
             <div className="font-medium">الذاكرة</div>
             <p className="mt-1 text-xs text-muted">
-              المدخلات المفعّلة بتنضاف لتعليمات النموذج مع كل رسالة (حد أقصى ~6000 حرف). ما بتنبعت للماستر، بس للنموذج
+              المدخلات المفعّلة بتنضاف لتعليمات الموديل مع كل رسالة (حد أقصى ~6000 حرف). ما بتنبعت للماستر، بس للموديل
               اللي بيجاوب.
             </p>
             {preview && (
               <p className="mt-1 text-xs text-muted">
-                داخل بالطلب الآن: {preview.count} مدخل ({preview.chars} حرف){preview.truncated ? ' — في مدخلات انقطعت بسبب الحد' : ''}
+                داخل بالطلب هلق: {preview.count} مدخل ({preview.chars} حرف){preview.truncated ? ' — في مدخلات انقطعت بسبب الحد' : ''}
               </p>
             )}
           </div>
@@ -86,7 +86,7 @@ export function MemoryPanel() {
               استيراد
             </button>
             <button className={primaryBtn} onClick={() => setEditing({ title: '', content: '' })}>
-              + إضافة
+              + ضيف
             </button>
           </div>
         </div>

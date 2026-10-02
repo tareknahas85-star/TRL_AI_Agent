@@ -49,7 +49,7 @@ function CodeBlock({ code, lang }: { code: string; lang: string }) {
         <span>{lang || 'code'}</span>
         <button onClick={copy} className="flex items-center gap-1 rounded px-1.5 py-0.5 hover:bg-outline">
           {copied ? <Check size={12} /> : <Copy size={12} />}
-          {copied ? 'تم النسخ' : 'نسخ'}
+          {copied ? 'اننسخ' : 'نسخ'}
         </button>
       </div>
       <pre className="overflow-x-auto p-3 text-[13px] leading-6">

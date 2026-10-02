@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import type { SkillInfo } from '../preload/index.d'
 import { Empty, Modal, PageShell, Toggle, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
-const TEMPLATE = '# اسم السكيل\n\nاكتب هنا تعليمات السكيل (System Prompt)...\n'
+const TEMPLATE = '# اسم السكيل\n\nاكتب هون تعليمات السكيل (System Prompt)...\n'
 
 export function SkillsPage() {
   const [skills, setSkills] = useState<SkillInfo[]>([])
@@ -30,15 +30,15 @@ export function SkillsPage() {
   return (
     <PageShell
       title="السكيلز"
-      subtitle="تعليمات جاهزة يختارها الماستر تلقائياً حسب الطلب (coding / research / file) أو تضيف سكيلك."
+      subtitle="تعليمات جاهزة الماستر بيختارها لحاله حسب الطلب (coding / research / file) أو ضيف سكيلك."
       action={
         <button className={primaryBtn + ' flex items-center gap-1'} onClick={() => setAdding(true)}>
-          <Plus size={16} /> إضافة سكيل
+          <Plus size={16} /> ضيف سكيل
         </button>
       }
     >
       {skills.length === 0 ? (
-        <Empty text="لا يوجد سكيلز - أضف واحد" />
+        <Empty text="ما في سكيلز - ضيف واحد" />
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {skills.map((s) => (
@@ -63,7 +63,7 @@ export function SkillsPage() {
               <button
                 className={ghostBtn + ' mt-3 flex items-center gap-1 self-end text-danger'}
                 onClick={async () => {
-                  if (confirm(`حذف السكيل ${s.name}؟`)) {
+                  if (confirm(`بدك تحذف السكيل ${s.name}؟`)) {
                     await window.api.skills.delete(s.name)
                     load()
                   }
@@ -77,7 +77,7 @@ export function SkillsPage() {
       )}
 
       {adding && (
-        <Modal title="إضافة سكيل" onClose={() => setAdding(false)}>
+        <Modal title="ضيف سكيل" onClose={() => setAdding(false)}>
           <div className="space-y-3">
             <input dir="ltr" className={inputCls} placeholder="skill-name" value={name} onChange={(e) => setName(e.target.value)} />
             <textarea dir="auto" rows={10} className={inputCls + ' font-mono'} value={content} onChange={(e) => setContent(e.target.value)} />

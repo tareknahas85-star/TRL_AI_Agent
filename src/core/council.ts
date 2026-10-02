@@ -52,7 +52,7 @@ export async function runCouncil(userInput: string, analysis: Analysis, draft: F
   const auto = [...pool.filter((m) => provider(m) !== provider(draft.modelUsed)), ...pool.filter((m) => provider(m) === provider(draft.modelUsed))]
   // A critic picked by the user goes first (even if it is the same model as the author); the automatic ones stay as fallback.
   const candidates = [...(pick?.critic ? [pick.critic] : []), ...auto.filter((m) => m !== pick?.critic)].slice(0, 4)
-  if (!candidates.length) return keep({ ran: false, skipped: 'ما في نموذج ثاني' })
+  if (!candidates.length) return keep({ ran: false, skipped: 'ما في موديل تاني' })
 
   try {
     emitProgress('المجلس: الناقد يراجع المسودة…')

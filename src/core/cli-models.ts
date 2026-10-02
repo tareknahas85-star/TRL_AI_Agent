@@ -65,7 +65,7 @@ export function buildCliPrompt(system: string | undefined, history: { role: stri
 export function runClaudeCli(prompt: string, signal?: AbortSignal, model?: string, timeoutMs = 180000): Promise<string> {
   return new Promise((resolve, reject) => {
     const exe = claudeCliPath()
-    if (!exe) return reject(new Error('أداة claude غير مثبّتة'))
+    if (!exe) return reject(new Error('أداة claude مو مثبّتة'))
     const child = spawn(exe, ['-p', ...(model ? ['--model', model] : []), '--tools', '', '--no-session-persistence', '--output-format', 'text', '--disable-slash-commands'], {
       cwd: os.tmpdir(),
       env: cleanEnv(),
@@ -91,7 +91,7 @@ export function runClaudeCli(prompt: string, signal?: AbortSignal, model?: strin
     }
     const onAbort = (): void => {
       kill()
-      finish(() => reject(new Error('أُلغي')))
+      finish(() => reject(new Error('انلغى')))
     }
     const timer = setTimeout(() => {
       kill()

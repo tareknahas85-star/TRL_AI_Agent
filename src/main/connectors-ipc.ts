@@ -77,7 +77,7 @@ const DEFS: Def[] = [
     hint: 'بتفتح صفحة Dropbox: سجّل الدخول ووافق. (تجريبي: Dropbox بتدعم التسجيل التلقائي لعملاء معينين، وإذا رفضت بنعمل إعداد يدوي.)', server: () => remote('dropbox', 'https://mcp.dropbox.com/mcp') },
   { id: 'box', title: 'Box', subtitle: 'ملفات ومجلدات وبحث (تجريبي)', group: 'accounts', kind: 'token',
     fields: [ { env: 'BOX_CLIENT_ID', label: 'Client ID' }, { env: 'BOX_CLIENT_SECRET', label: 'Client Secret' } ],
-    hint: 'مرة وحدة: Box Admin Console ثم Integrations ثم Platform Apps ثم Create Custom App (OAuth 2.0). حط Redirect URI = http://localhost:3334/oauth/callback وفعّل scopes: root_readwrite و ai.readwrite، وانسخ الـ Client ID والـ Secret هون. بعدها بتنفتح صفحة Box للموافقة.',
+    hint: 'مرة وحدة: Box Admin Console وبعدين Integrations وبعدين Platform Apps وبعدين Create Custom App (OAuth 2.0). حط Redirect URI = http://localhost:3334/oauth/callback وفعّل scopes: root_readwrite و ai.readwrite، وانسخ الـ Client ID والـ Secret هون. بعدها بتنفتح صفحة Box للموافقة.',
     build: (v) => {
       const dir = app.getPath('userData')
       fs.mkdirSync(dir, { recursive: true })
@@ -92,7 +92,7 @@ const DEFS: Def[] = [
     server: () => npx('browseruse', ['mcp-remote', 'https://api.browser-use.com/v3/mcp', '--header', 'x-browser-use-api-key:${BROWSER_USE_API_KEY}']) },
   { id: 'deepgram', title: 'Deepgram', subtitle: 'تفريغ صوت وتحليله (Speech-to-Text)', group: 'accounts', kind: 'token',
     fields: [ { env: 'DEEPGRAM_API_KEY', label: 'API key' } ],
-    hint: 'من console.deepgram.com أنشئ API key والصقه هون. بيشتغل عبر uvx (deepgram-mcp).',
+    hint: 'من console.deepgram.com اعمل API key والصقه هون. بيشتغل عبر uvx (deepgram-mcp).',
     server: () => ({ name: 'deepgram', command: 'uvx', args: ['--with', 'mcp<2', 'deepgram-mcp'], env: {}, enabled: true }) },
   { id: 'assemblyai', title: 'AssemblyAI', subtitle: 'بحث بوثائق AssemblyAI (بدون تسجيل دخول)', group: 'accounts', kind: 'remote',
     hint: 'سيرفر الوثائق الرسمي: بدون تسجيل دخول. للتفريغ الفعلي بتستعمل Deepgram أو API مباشر.',
@@ -101,7 +101,7 @@ const DEFS: Def[] = [
     hint: 'أداة محلية بدون تسجيل. أدوات الكتابة والتشغيل مخفية إلا إذا فعّلت «السماح بالكتابة» وبتطلب موافقتك كل مرة.',
     server: () => npx('desktopcommander', ['@wonderwhy-er/desktop-commander@latest']) },
   { id: 'filesystem', title: 'Filesystem', subtitle: 'قراءة وكتابة ملفات بمجلدات Documents وDesktop وDownloads', group: 'device', kind: 'local',
-    hint: 'محصور بالمجلدات: Documents وDesktop وDownloads. الحذف ممنوع دائماً.',
+    hint: 'محصور بالمجلدات: Documents وDesktop وDownloads. الحذف ممنوع دايماً.',
     server: () => npx('filesystem', ['@modelcontextprotocol/server-filesystem', ...fsRoots()]) },
 ]
 const byId = (id: unknown): Def | undefined => (typeof id === 'string' ? DEFS.find((d) => d.id === id) : undefined)
@@ -114,7 +114,7 @@ const onPath = (cmd: string): Promise<boolean> =>
   })
 
 async function missing(d: Def): Promise<string | null> {
-  if (d.requires && !(await onPath(d.requires))) return `${d.requires} غير مثبّت أو مو بالـ PATH.`
+  if (d.requires && !(await onPath(d.requires))) return `${d.requires} مش مثبّت أو مو بالـ PATH.`
   return d.requiresFile?.() ?? null
 }
 
@@ -205,7 +205,7 @@ async function githubToken(send: (code: string, url: string) => void): Promise<{
     },
     5 * 60 * 1000
   )
-  if (r.code === -1) return { error: 'GitHub CLI (gh) غير مثبّت. ثبّته من cli.github.com ثم جرّب.' }
+  if (r.code === -1) return { error: 'GitHub CLI (gh) مش مثبّت. ثبّته من cli.github.com وبعدين جرّب.' }
   t = await get()
   return t ? { token: t } : { error: r.out.trim().split(/\r?\n/).slice(-2).join(' ').slice(0, 200) || 'فشل تسجيل الدخول.' }
 }
@@ -241,7 +241,7 @@ function microsoftLogin(send: (code: string, url: string) => void, flag: '--logi
     child.on('exit', (c) => {
       clearTimeout(timer)
       const tail = out.trim().split(/\r?\n/).slice(-3).join(' ').slice(0, 240)
-      resolve(c === 0 ? { ok: true, message: flag === '--login' ? 'تم الاتصال.' : 'تم الفصل.' } : { ok: false, message: tail || 'فشل تسجيل الدخول.' })
+      resolve(c === 0 ? { ok: true, message: flag === '--login' ? 'اتصلنا.' : 'انفصل.' } : { ok: false, message: tail || 'فشل تسجيل الدخول.' })
     })
   })
 }
@@ -268,7 +268,7 @@ export function registerConnectorsHandlers(): void {
   // token kind: store the pasted values in the MCP config (never returned to the UI), then connect.
   ipcMain.handle('connectors:setup', async (_e, id: unknown, values: unknown): Promise<Reply> => {
     const d = byId(id)
-    if (!d || d.kind !== 'token' || !d.fields || !Array.isArray(values)) return { ok: false, message: 'طلب غير صالح' }
+    if (!d || d.kind !== 'token' || !d.fields || !Array.isArray(values)) return { ok: false, message: 'طلب مو صالح' }
     const vals = values.map((v) => (typeof v === 'string' ? v.trim() : ''))
     if (vals.length !== d.fields.length || vals.some((v) => v.length < 4)) return { ok: false, message: 'عبّي كل الحقول.' }
     await ensureServer(d)
@@ -278,18 +278,18 @@ export function registerConnectorsHandlers(): void {
     const s = await ensureServer(d)
     const r = await testMCPServer(s, d.build ? 180000 : 90000)
     if (r.ok) setConnected(d.id, true)
-    return r.ok ? { ok: true, message: 'تم الاتصال بـ ' + d.title + '.' } : { ok: false, message: r.message.slice(0, 240) }
+    return r.ok ? { ok: true, message: 'اتصلنا بـ ' + d.title + '.' } : { ok: false, message: r.message.slice(0, 240) }
   })
 
   ipcMain.handle('connectors:connect', async (e, id: unknown): Promise<Reply> => {
     const d = byId(id)
-    if (!d) return { ok: false, message: 'خدمة غير معروفة' }
+    if (!d) return { ok: false, message: 'خدمة مو معروفة' }
     try {
       const miss = await missing(d)
       if (miss) return { ok: false, message: miss }
       if (d.kind === 'token') {
         const cur = (await loadMCPConfig()).servers.find((x) => x.name === d.id)
-        if (!d.fields?.every((f) => cur?.env?.[f.env])) return { ok: false, message: 'الصق القيم المطلوبة أول واضغط «حفظ واتصال».' }
+        if (!d.fields?.every((f) => cur?.env?.[f.env])) return { ok: false, message: 'الصق القيم المطلوبة أول ودوس «حفظ واتصال».' }
       }
       const s = await ensureServer(d)
       const send = (code: string, url: string): void => e.sender.send('connectors:code', d.id, code, url)
@@ -299,7 +299,7 @@ export function registerConnectorsHandlers(): void {
         await setServerEnv(d.id, { GITHUB_PERSONAL_ACCESS_TOKEN: g.token })
         setConnected(d.id, true)
         resetMcp()
-        return { ok: true, message: 'تم الاتصال بـ GitHub.' }
+        return { ok: true, message: 'اتصلنا بـ GitHub.' }
       }
       if (d.id === 'ms365') {
         const r = await microsoftLogin(send, '--login')
@@ -313,7 +313,7 @@ export function registerConnectorsHandlers(): void {
       if (!r.ok && d.kind === 'token') setConnected(d.id, false)
       if (r.ok) setConnected(d.id, true)
       resetMcp()
-      return r.ok ? { ok: true, message: `تم الاتصال بـ ${d.title}.` } : { ok: false, message: r.message.slice(0, 240) }
+      return r.ok ? { ok: true, message: `اتصلنا بـ ${d.title}.` } : { ok: false, message: r.message.slice(0, 240) }
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : String(err) }
     }
@@ -335,13 +335,13 @@ export function registerConnectorsHandlers(): void {
 
   ipcMain.handle('connectors:test', async (_e, id: unknown): Promise<Reply> => {
     const d = byId(id)
-    if (!d) return { ok: false, message: 'خدمة غير معروفة' }
+    if (!d) return { ok: false, message: 'خدمة مو معروفة' }
     try {
       await ensureServer(d)
       const tools = (await listMcpTools()).filter((t) => t.server === d.id)
       if (!tools.length) {
         setConnected(d.id, false)
-        return { ok: false, message: 'ما في أدوات. اضغط اتصل.' }
+        return { ok: false, message: 'ما في أدوات. دوس اتصل.' }
       }
       if (d.id === 'ms365') {
         const v = tools.find((t) => /verify.?login/i.test(t.name))
@@ -349,7 +349,7 @@ export function registerConnectorsHandlers(): void {
           const out = await callMcpTool(v, {}, { noReauth: true })
           const good = !out.startsWith('Error') && /success|logged in|authenticated|displayName|userPrincipalName/i.test(out) && !/not (logged|authenticated)|no (account|token)/i.test(out)
           setConnected(d.id, good)
-          return { ok: good, message: good ? 'الاتصال شغال.' : 'غير متصل. اضغط اتصل.' }
+          return { ok: good, message: good ? 'الاتصال شغال.' : 'مش متصل. دوس اتصل.' }
         }
       }
       setConnected(d.id, true)
@@ -361,7 +361,7 @@ export function registerConnectorsHandlers(): void {
 
   ipcMain.handle('connectors:disconnect', async (e, id: unknown): Promise<Reply> => {
     const d = byId(id)
-    if (!d) return { ok: false, message: 'خدمة غير معروفة' }
+    if (!d) return { ok: false, message: 'خدمة مو معروفة' }
     setConnected(d.id, false)
     setWriteServer(d.id, false)
     resetMcp()

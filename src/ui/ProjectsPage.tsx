@@ -19,7 +19,7 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
   return (
     <PageShell
       title="المشاريع"
-      subtitle="أضف مجلدات مشاريعك. كبسة على 'فتح' بتفتح تبويب خاص بالمشروع: النموذج بيشوف ملفاته وبيقرأها، وباقي التبويبات مستقلة عنه."
+      subtitle="ضيف مجلدات مشاريعك. كبسة على 'فتح' بتفتح تبويب خاص بالمشروع: الموديل بيشوف ملفاته وبيقرأها، وباقي التبويبات مستقلة عنه."
       action={
         <button
           className={primaryBtn + ' flex items-center gap-1'}
@@ -29,7 +29,7 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
             else if (r.error !== 'cancelled') setError(r.error ?? 'خطأ')
           }}
         >
-          <FolderOpen size={16} /> اختيار مجلد
+          <FolderOpen size={16} /> اختار مجلد
         </button>
       }
     >
@@ -46,13 +46,13 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
             changed()
           }}
         >
-          <Plus size={16} /> إضافة
+          <Plus size={16} /> ضيف
         </button>
       </div>
       {error && <p className="mb-3 text-sm text-danger">{error}</p>}
 
       {data.projects.length === 0 ? (
-        <Empty text="لا يوجد مشاريع - اختر مجلد مشروعك" />
+        <Empty text="ما في مشاريع - اختار مجلد مشروعك" />
       ) : (
         <div className="space-y-2">
           {data.projects.map((p) => {
@@ -71,13 +71,13 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
                     className={ghostBtn}
                     onClick={() => onOpen(p)}
                   >
-                    {active ? 'انتقل للتبويب' : 'فتح'}
+                    {active ? 'روح عالتبويب' : 'فتح'}
                   </button>
                   <button
                     className={ghostBtn + ' text-danger'}
-                    aria-label={`إزالة ${p.name}`}
+                    aria-label={`شيل ${p.name}`}
                     onClick={async () => {
-                      if (confirm(`إزالة المشروع ${p.name} من القائمة؟ (ما بينحذف من جهازك)`)) {
+                      if (confirm(`بدك تشيل المشروع ${p.name} من القائمة؟ (ما بينحذف من جهازك)`)) {
                         await window.api.projects.remove(p.id)
                         changed()
                       }

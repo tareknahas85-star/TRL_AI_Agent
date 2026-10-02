@@ -64,22 +64,22 @@ export function ModelsPage() {
 
   return (
     <PageShell
-      title="النماذج"
-      subtitle="الراوتر بيجرّب النماذج حسب الطبقة وبينتقل للتالي إذا فشل واحد. أضف نموذجك الخارجي وحدد طبقته."
+      title="الموديلات"
+      subtitle="الراوتر بيجرّب الموديلات حسب الطبقة وبينتقل للتالي إذا فشل واحد. ضيف موديلك الخارجي وحدد طبقته."
       action={
         <button className={primaryBtn + ' flex items-center gap-1'} onClick={() => setAdding(true)}>
-          <Plus size={16} /> إضافة نموذج
+          <Plus size={16} /> ضيف موديل
         </button>
       }
     >
       <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-muted">نماذج محلية (Ollama / LM Studio)</h3>
-        <button className={ghostBtn} onClick={scan} disabled={scanning}>{scanning ? 'جاري الفحص…' : 'فحص النماذج المحلية'}</button>
+        <h3 className="text-sm font-semibold text-muted">موديلات محلية (Ollama / LM Studio)</h3>
+        <button className={ghostBtn} onClick={scan} disabled={scanning}>{scanning ? 'عم أفحص…' : 'فحص الموديلات المحلية'}</button>
       </div>
       {local !== null && (
         <div className="mb-6 space-y-2">
           {local.length === 0 ? (
-            <Empty text="ما لقيت سيرفر محلي شغّال. ثبّت Ollama (أو LM Studio) وشغّله، وحمّل موديل صغير مثل qwen3:1.7b، وبعدين اضغط فحص." />
+            <Empty text="ما لقيت سيرفر محلي شغّال. ثبّت Ollama (أو LM Studio) وشغّله، وحمّل موديل صغير مثل qwen3:1.7b، وبعدين دوس فحص." />
           ) : (
             local.map((rt) => (
               <div key={rt.runtime} className={cardCls}>
@@ -93,7 +93,7 @@ export function ModelsPage() {
                       return (
                         <li key={m} className="flex items-center justify-between gap-3">
                           <span dir="ltr" className="truncate font-mono text-xs">{m}</span>
-                          <button className={ghostBtn} disabled={added} onClick={() => addLocal(rt.baseURL, m, rt.runtime)}>{added ? 'مضاف' : 'إضافة'}</button>
+                          <button className={ghostBtn} disabled={added} onClick={() => addLocal(rt.baseURL, m, rt.runtime)}>{added ? 'مضاف' : 'ضيف'}</button>
                         </li>
                       )
                     })}
@@ -104,9 +104,9 @@ export function ModelsPage() {
           )}
         </div>
       )}
-      <h3 className="mb-2 text-sm font-semibold text-muted">نماذجك المخصصة</h3>
+      <h3 className="mb-2 text-sm font-semibold text-muted">موديلاتك المخصصة</h3>
       {models.length === 0 ? (
-        <Empty text="لا يوجد نماذج مخصصة - أضف نموذج خارجي (OpenAI-compatible أو OpenRouter)" />
+        <Empty text="ما في موديلات مخصصة - ضيف موديل خارجي (OpenAI-compatible أو OpenRouter)" />
       ) : (
         <div className="space-y-2">
           {models.map((m) => {
@@ -139,20 +139,20 @@ export function ModelsPage() {
                   </button>
                   <button
                     className={ghostBtn}
-                    title="ترتيب التجربة داخل طبقته: قبل أو بعد نماذج OpenRouter"
+                    title="ترتيب التجربة داخل طبقته: قبل أو بعد موديلات OpenRouter"
                     onClick={async () => { await window.api.models.setPosition(m.id, !m.last); load() }}
                   >
-                    {m.last ? 'يُجرَّب: بعد' : 'يُجرَّب: أول'}
+                    {m.last ? 'بينجرّب: بعد' : 'بينجرّب: أول'}
                   </button>
                   {m.baseURL && m.hasKey && !m.baseURL.includes('11434') && (
-                    <button className={ghostBtn} disabled={remoteBusy === m.id} onClick={() => fetchRemote(m)}>{remoteBusy === m.id ? 'جاري الجلب…' : 'جلب المجانية'}</button>
+                    <button className={ghostBtn} disabled={remoteBusy === m.id} onClick={() => fetchRemote(m)}>{remoteBusy === m.id ? 'عم أجلب…' : 'جلب المجانية'}</button>
                   )}
                   <button className={ghostBtn} onClick={() => { setKeyVal(''); setKeyFor(m) }}>المفتاح</button>
                   <button
                     className={ghostBtn + ' text-danger'}
                     aria-label={`حذف ${m.name}`}
                     onClick={async () => {
-                      if (confirm(`حذف النموذج ${m.name}؟`)) {
+                      if (confirm(`بدك تحذف الموديل ${m.name}؟`)) {
                         await window.api.models.remove(m.id)
                         load()
                       }
@@ -170,12 +170,12 @@ export function ModelsPage() {
 
       <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">مفاتيح الـ API</h3>
       <div className={cardCls}>
-        <p className="mb-3 text-xs text-muted">تُحفظ مشفّرة على جهازك.</p>
+        <p className="mb-3 text-xs text-muted">بتنحفظ مشفّرة على جهازك.</p>
         <Settings variant="inline" />
       </div>
       <div className="mt-3"><CatalogPanel /></div>
 
-      <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">النماذج المدمجة (حسب الطبقة)</h3>
+      <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>
       <div className="grid gap-3 md:grid-cols-3">
         {BUILTIN.map((t) => (
           <div key={t.tier} className={cardCls}>
@@ -188,11 +188,11 @@ export function ModelsPage() {
       </div>
 
       {adding && (
-        <Modal title="إضافة نموذج خارجي" onClose={() => setAdding(false)}>
+        <Modal title="ضيف موديل خارجي" onClose={() => setAdding(false)}>
           <div className="space-y-3">
             <input className={inputCls} placeholder="اسم للعرض (e.g. Llama محلي)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input dir="ltr" className={inputCls + ' font-mono'} placeholder="Model ID (e.g. gpt-4o-mini)" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
-            <input dir="ltr" className={inputCls + ' font-mono'} placeholder="Base URL (فارغ = OpenRouter) e.g. http://localhost:11434/v1" value={form.baseURL} onChange={(e) => setForm({ ...form, baseURL: e.target.value })} />
+            <input dir="ltr" className={inputCls + ' font-mono'} placeholder="Base URL (فاضي = OpenRouter) e.g. http://localhost:11434/v1" value={form.baseURL} onChange={(e) => setForm({ ...form, baseURL: e.target.value })} />
             <input dir="ltr" type="password" className={inputCls} placeholder="API Key (اختياري للسيرفرات المحلية)" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} />
             <select className={inputCls} value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value as Tier })}>
               {(Object.keys(TIER_LABEL) as Tier[]).map((t) => <option key={t} value={t}>الطبقة: {TIER_LABEL[t].label}</option>)}
@@ -207,12 +207,12 @@ export function ModelsPage() {
         </Modal>
       )}
       {remote && (
-        <Modal title={`نماذج مجانية من ${remote.src.baseURL}`} onClose={() => setRemote(null)}>
+        <Modal title={`موديلات مجانية من ${remote.src.baseURL}`} onClose={() => setRemote(null)}>
           <div className="space-y-3">
-            <p className="text-xs text-muted">{remote.list.length} نموذج مجاني. الـcoding-* غير محددة افتراضياً (غالباً محصورة بأدوات البرمجة). بتنضاف بآخر السلسلة وبنفس المفتاح المحفوظ.</p>
+            <p className="text-xs text-muted">{remote.list.length} موديل مجاني. الـcoding-* مو محددة افتراضي (غالباً محصورة بأدوات البرمجة). بتنضاف بآخر السلسلة وبنفس المفتاح المحفوظ.</p>
             <label className="flex items-center gap-2 text-xs">
               <input type="checkbox" checked={remote.all} onChange={(e) => fetchRemote(remote.src, e.target.checked)} />
-              عرض كل النماذج (بما فيها المدفوعة). غير المجانية بتنضاف بطبقة "رخيص" فما بتُستخدم إلا إذا سمحت بالمدفوع.
+              عرض كل الموديلات (بما فيها المدفوعة). غير المجانية بتنضاف بطبقة "رخيص" فما بتنستخدم إلا إذا سمحت بالمدفوع.
             </label>
             <div className="max-h-80 space-y-1 overflow-y-auto">
               {remote.list.map((x) => (
@@ -226,7 +226,7 @@ export function ModelsPage() {
             </div>
             <div className="flex justify-end gap-2">
               <button className={ghostBtn} onClick={() => setRemote(null)}>إلغاء</button>
-              <button className={primaryBtn} disabled={!remote.sel.size} onClick={async () => { await window.api.models.importRemote(remote.src.id, remote.list.filter((x) => remote.sel.has(x.id)).map((x) => ({ id: x.id, free: x.free }))); setRemote(null); load() }}>إضافة المحدد ({remote.sel.size})</button>
+              <button className={primaryBtn} disabled={!remote.sel.size} onClick={async () => { await window.api.models.importRemote(remote.src.id, remote.list.filter((x) => remote.sel.has(x.id)).map((x) => ({ id: x.id, free: x.free }))); setRemote(null); load() }}>ضيف المحدد ({remote.sel.size})</button>
             </div>
           </div>
         </Modal>
@@ -234,7 +234,7 @@ export function ModelsPage() {
       {keyFor && (
         <Modal title={`مفتاح ${keyFor.name}`} onClose={() => setKeyFor(null)}>
           <div className="space-y-3">
-            <input dir="ltr" type="password" className={inputCls} placeholder="API Key الجديد (فارغ = مسح المفتاح)" value={keyVal} onChange={(e) => setKeyVal(e.target.value)} />
+            <input dir="ltr" type="password" className={inputCls} placeholder="API Key الجديد (فاضي = مسح المفتاح)" value={keyVal} onChange={(e) => setKeyVal(e.target.value)} />
             <div className="flex justify-end gap-2">
               <button className={ghostBtn} onClick={() => setKeyFor(null)}>إلغاء</button>
               <button className={primaryBtn} onClick={async () => { await window.api.models.setKey(keyFor.id, keyVal); setKeyFor(null); load() }}>حفظ</button>

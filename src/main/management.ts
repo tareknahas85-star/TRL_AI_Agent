@@ -98,7 +98,7 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('mcp:toggle', (_e, name: unknown) => (typeof name === 'string' ? toggleMCPServer(name) : null))
   ipcMain.handle('mcp:test', async (_e, name: unknown) => {
     const s = (await loadMCPConfig()).servers.find((x) => x.name === name)
-    return s ? testMCPServer(s) : { ok: false, message: 'السيرفر غير موجود' }
+    return s ? testMCPServer(s) : { ok: false, message: 'السيرفر مو موجود' }
   })
 
   // ---- Tools (built-in + user-defined)
@@ -160,7 +160,7 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('models:remove', (_e, id: unknown) => typeof id === 'string' && removeCustomModel(id))
   ipcMain.handle('models:toggle', (_e, id: unknown) => (typeof id === 'string' ? toggleCustomModel(id) : null))
   ipcMain.handle('models:test', (_e, id: unknown) =>
-    typeof id === 'string' ? testCustomModel(id) : { ok: false, message: 'id غير صالح' }
+    typeof id === 'string' ? testCustomModel(id) : { ok: false, message: 'id مو صالح' }
   )
 
   // ---- Master memory (overview of all projects)
@@ -211,7 +211,7 @@ export function registerManagementHandlers(): void {
   })
   ipcMain.handle('conv:export', async (event, id: unknown) => {
     const c = typeof id === 'string' ? getConversation(id) : null
-    if (!c) return { ok: false, error: 'المحادثة غير موجودة' }
+    if (!c) return { ok: false, error: 'المحادثة مو موجودة' }
     const win = BrowserWindow.fromWebContents(event.sender)
     const safe = c.title.replace(/[\\/:*?"<>|]/g, '_').slice(0, 60) || 'conversation'
     const opts = { defaultPath: safe + '.md', filters: [{ name: 'Markdown', extensions: ['md'] }] }

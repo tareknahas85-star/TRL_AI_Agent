@@ -33,7 +33,7 @@ export async function addMCPServer(server: MCPServer): Promise<MCPServer> {
   const command = String(server.command ?? '').trim()
   if (!name || !command) throw new Error('الاسم والأمر مطلوبين')
   const cfg = await loadMCPConfig()
-  if (cfg.servers.some((s) => s.name === name)) throw new Error('يوجد سيرفر بنفس الاسم')
+  if (cfg.servers.some((s) => s.name === name)) throw new Error('في سيرفر بنفس الاسم')
   const clean: MCPServer = {
     name,
     command,
@@ -92,8 +92,8 @@ export function testMCPServer(server: MCPServer, timeoutMs = 30000): Promise<{ o
       resolve({ ok, message })
     }
     const timer = setTimeout(() => finish(false, 'انتهت المهلة (30 ثانية) بدون رد من السيرفر'), timeoutMs)
-    child.on('error', (e) => finish(false, 'تعذر تشغيل الأمر: ' + e.message))
-    child.on('exit', (code) => finish(false, `السيرفر أغلق (code ${code}) ${stderr.trim().slice(0, 200)}`))
+    child.on('error', (e) => finish(false, 'ما زبط تشغيل الأمر: ' + e.message))
+    child.on('exit', (code) => finish(false, `السيرفر سكّر (code ${code}) ${stderr.trim().slice(0, 200)}`))
     child.stderr.on('data', (d) => (stderr += d.toString()))
     child.stdout.on('data', (d) => {
       buf += d.toString()

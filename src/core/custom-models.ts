@@ -52,7 +52,7 @@ export function addCustomModel(input: {
   const model = String(input.model ?? '').trim()
   const baseURL = String(input.baseURL ?? '').trim().replace(/\/+$/, '')
   if (!name || !model) throw new Error('الاسم ومعرّف الموديل مطلوبين')
-  if (!validBaseURL(baseURL)) throw new Error('Base URL غير صالح')
+  if (!validBaseURL(baseURL)) throw new Error('Base URL مو صالح')
   const tier = TIERS.includes(input.tier as Tier) ? (input.tier as Tier) : 'TIER_2_CHEAP'
   const m: CustomModel = { id: newId(), name, model, baseURL, tier, enabled: true }
   writeJson(FILE, [...listCustomModels(), m])
@@ -92,7 +92,7 @@ export function clientForCustomModel(m: CustomModel): { client: OpenAI; modelId:
 
 export async function testCustomModel(id: string): Promise<{ ok: boolean; message: string }> {
   const m = getCustomModel(id)
-  if (!m) return { ok: false, message: 'الموديل غير موجود' }
+  if (!m) return { ok: false, message: 'الموديل مو موجود' }
   try {
     const { client, modelId } = clientForCustomModel(m)
     const r = await client.chat.completions.create(
@@ -157,7 +157,7 @@ export async function fetchRemoteModels(
   all = false
 ): Promise<{ ok: boolean; models?: RemoteModel[]; error?: string }> {
   const src = getCustomModel(sourceId)
-  if (!src || !src.baseURL) return { ok: false, error: 'اختر نموذج له Base URL' }
+  if (!src || !src.baseURL) return { ok: false, error: 'اختار موديل له Base URL' }
   const key = getSecret(`model:${src.id}`)
   try {
     const res = await fetch(src.baseURL + '/models', {

@@ -44,7 +44,7 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
         <img src={appIcon} alt="" className="h-9 w-9 rounded-2xl shadow-card" />
         <div className="leading-tight">
           <div className="text-base font-semibold">TRL_AI_Agent</div>
-          <div className="text-[11px] text-muted">مايسترو النماذج</div>
+          <div className="text-[11px] text-muted">مايسترو الموديلات</div>
         </div>
       </button>
       {open && (
@@ -74,7 +74,7 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
                     {OWNER.email}
                   </a>
                   <button onClick={() => copy(OWNER.email, 'mail')} className="text-[11px] text-muted hover:text-fg">
-                    {copied === 'mail' ? 'تم النسخ' : 'نسخ'}
+                    {copied === 'mail' ? 'اننسخ' : 'نسخ'}
                   </button>
                 </span>
               </div>
@@ -97,14 +97,14 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
               }}
               className="mt-4 w-full rounded-full border border-outline px-4 py-2 text-sm hover:bg-surface2"
             >
-              معالج الإعداد (إعادة تشغيله)
+              معالج الإعداد (شغّله من جديد)
             </button>
             <button
               disabled={!info}
               onClick={() => copy(sys, 'sys')}
               className="mt-4 w-full rounded-full border border-outline px-4 py-2 text-sm hover:bg-surface2 disabled:opacity-50"
             >
-              {copied === 'sys' ? 'تم النسخ' : 'نسخ معلومات النظام (للدعم)'}
+              {copied === 'sys' ? 'اننسخ' : 'نسخ معلومات النظام (للدعم)'}
             </button>
           </div>
         </div>
@@ -118,7 +118,7 @@ type Nav = 'chat' | 'projects' | 'models' | 'skills' | 'mcp' | 'tools' | 'settin
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
-  { id: 'models', label: 'النماذج', icon: Cpu },
+  { id: 'models', label: 'الموديلات', icon: Cpu },
   { id: 'skills', label: 'السكيلز', icon: Sparkles },
   { id: 'mcp', label: 'MCP Servers', icon: Plug },
   { id: 'tools', label: 'الأدوات', icon: Wrench },
@@ -264,7 +264,7 @@ function Shell() {
   }
   const closeTab = (id: string): void => {
     if (busy[id]) {
-      if (!confirm('هالتبويب عم يشتغل على طلب. إغلاقه بيوقف الطلب. تكمل؟')) return
+      if (!confirm('هالتبويب عم يشتغل على طلب. تسكيره بيوقف الطلب. تكمل؟')) return
       void window.api.cancelChat(id)
     }
     const idx = tabs.findIndex((t) => t.id === id)
@@ -312,7 +312,7 @@ function Shell() {
             />
           </div>
           <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-            {shownConvs.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted">{hits ? 'لا نتائج' : 'لا محادثات بعد'}</p>}
+            {shownConvs.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted">{hits ? 'ما في نتائج' : 'ما في محادثات بعد'}</p>}
             {shownConvs.map((c) => (
               <div
                 key={c.id}
@@ -325,7 +325,7 @@ function Shell() {
                   </div>
                 </button>
                 <button
-                  aria-label={c.pinned ? 'إلغاء التثبيت' : 'تثبيت'}
+                  aria-label={c.pinned ? 'شيل التثبيت' : 'تثبيت'}
                   className={`rounded-full p-1 hover:bg-outline ${c.pinned ? 'text-primary' : 'text-muted opacity-0 group-hover:opacity-100'}`}
                   onClick={async () => {
                     await window.api.conversations.pin(c.id)
@@ -346,7 +346,7 @@ function Shell() {
                   aria-label="حذف"
                   className="rounded-full p-1 text-muted opacity-0 hover:bg-outline hover:text-danger group-hover:opacity-100"
                   onClick={async () => {
-                    if (!confirm('حذف هالمحادثة؟')) return
+                    if (!confirm('بدك تحذف هالمحادثة؟')) return
                     await window.api.conversations.delete(c.id)
                     const t = tabs.find((x) => x.convId === c.id)
                     if (t) closeTab(t.id)
@@ -392,7 +392,7 @@ function Shell() {
                   <span className="truncate">{t.title}</span>
                   {busy[t.id] && <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" title="عم يشتغل" />}
                 </button>
-                <button aria-label="إغلاق التبويب" onClick={() => closeTab(t.id)} className="rounded-full p-0.5 hover:bg-outline">
+                <button aria-label="سكّر التبويب" onClick={() => closeTab(t.id)} className="rounded-full p-0.5 hover:bg-outline">
                   <X size={12} />
                 </button>
               </div>

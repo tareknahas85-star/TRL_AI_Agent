@@ -50,15 +50,15 @@ export function MCPPage() {
   return (
     <PageShell
       title="MCP Servers"
-      subtitle="أضف سيرفرات MCP (stdio) مثل ما بتعمل في Claude Desktop: الأمر + الوسائط + متغيرات البيئة."
+      subtitle="ضيف سيرفرات MCP (stdio) مثل ما بتعمل في Claude Desktop: الأمر + الوسائط + متغيرات البيئة."
       action={
         <button className={primaryBtn + ' flex items-center gap-1'} onClick={() => setAdding(true)}>
-          <Plus size={16} /> إضافة سيرفر
+          <Plus size={16} /> ضيف سيرفر
         </button>
       }
     >
       {servers.length === 0 ? (
-        <Empty text="لا يوجد سيرفرات MCP - أضف واحد" />
+        <Empty text="ما في سيرفرات MCP - ضيف واحد" />
       ) : (
         <div className="overflow-x-auto rounded-card border border-outline">
           <table className="w-full text-sm">
@@ -106,7 +106,7 @@ export function MCPPage() {
                           className={ghostBtn + ' text-danger'}
                           aria-label={`حذف ${s.name}`}
                           onClick={async () => {
-                            if (confirm(`حذف السيرفر ${s.name}؟`)) {
+                            if (confirm(`بدك تحذف السيرفر ${s.name}؟`)) {
                               await window.api.mcp.remove(s.name)
                               load()
                             }
@@ -125,7 +125,7 @@ export function MCPPage() {
       )}
 
       {adding && (
-        <Modal title="إضافة سيرفر MCP" onClose={() => setAdding(false)}>
+        <Modal title="ضيف سيرفر MCP" onClose={() => setAdding(false)}>
           <div className="space-y-3">
             <input dir="ltr" className={inputCls} placeholder="Name (e.g. filesystem)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input dir="ltr" className={inputCls} placeholder="Command (e.g. npx)" value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} />

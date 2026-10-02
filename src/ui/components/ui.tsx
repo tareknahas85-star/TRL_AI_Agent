@@ -17,7 +17,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
       >
         <div className="mb-4 flex items-center justify-between">
           <h3 className="text-lg font-semibold">{title}</h3>
-          <button onClick={onClose} aria-label="إغلاق" className="rounded-full p-1.5 hover:bg-surface2">
+          <button onClick={onClose} aria-label="سكّر" className="rounded-full p-1.5 hover:bg-surface2">
             <X size={20} />
           </button>
         </div>

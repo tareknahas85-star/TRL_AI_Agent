@@ -47,14 +47,14 @@ export async function listSkillDetails(): Promise<Skill[]> {
 }
 
 export async function createSkill(name: string, content: string): Promise<Skill> {
-  if (!isValidSkillName(name)) throw new Error('اسم السكيل لازم يكون حروف إنجليزية/أرقام/ - / _ فقط')
+  if (!isValidSkillName(name)) throw new Error('اسم السكيل لازم يكون حروف إنجليزية/أرقام/ - / _ بس')
   if (!content.trim()) throw new Error('محتوى السكيل فاضي')
   const dir = path.join(getSkillsDir(), name)
   try {
     await fs.access(dir)
-    throw new Error('السكيل موجود مسبقاً')
+    throw new Error('السكيل موجود من قبل')
   } catch (e) {
-    if (e instanceof Error && e.message === 'السكيل موجود مسبقاً') throw e
+    if (e instanceof Error && e.message === 'السكيل موجود من قبل') throw e
   }
   await fs.mkdir(dir, { recursive: true })
   await fs.writeFile(path.join(dir, 'SKILL.md'), content, 'utf-8')

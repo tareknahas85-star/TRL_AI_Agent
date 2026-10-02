@@ -17,21 +17,21 @@ export function ComputerPanel() {
         <div>
           <h3 className="text-base font-semibold">التحكم بالجهاز (Computer Control)</h3>
           <p className="mt-1 text-sm text-gray-500">
-            يخلي النماذج تشغّل أوامر PowerShell، تقرأ الملفات، تفتح البرامج، وتضغط وتكتب على الشاشة. مطفي افتراضياً وكل إجراء
+            يخلي الموديلات تشغّل أوامر PowerShell، تقرأ الملفات، تفتح البرامج، وتضغط وتكتب على الشاشة. مطفي افتراضي وكل إجراء
             بيطلب موافقتك.
           </p>
         </div>
         <button
           onClick={toggle}
           disabled={unsupported}
-          title={unsupported ? 'غير مدعوم على هالنظام حالياً (ويندوز فقط)' : undefined}
+          title={unsupported ? 'مش مدعوم على هالنظام هلق (ويندوز بس)' : undefined}
           className={`shrink-0 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50 ${st.enabled ? 'bg-green-600 hover:bg-green-700' : 'bg-gray-500 hover:bg-gray-600'}`}
         >
           {st.enabled ? 'مفعّل' : 'معطّل'}
         </button>
       </div>
       {unsupported && (
-        <p className="mt-2 text-xs text-amber-600">التحكم بالجهاز خاص بويندوز حالياً، ما هو متاح على لينكس بهالنسخة.</p>
+        <p className="mt-2 text-xs text-amber-600">التحكم بالجهاز خاص بويندوز هلق، مش متاح على لينكس بهالنسخة.</p>
       )}
       {st.enabled && (
         <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
@@ -44,10 +44,10 @@ export function ComputerPanel() {
         </div>
       )}
       <ul className="mt-3 list-disc space-y-1 pr-5 text-xs text-gray-500">
-        <li>الأوامر للقراءة فقط (Get-*, dir...) بتشتغل مباشرة، وغيرها بيسألك.</li>
-        <li>محجوب دائماً: الحذف، إطفاء الجهاز، حذف الريجستري، التنزيل، وتغيير سياسات النظام.</li>
+        <li>الأوامر للقراءة بس (Get-*, dir...) بتشتغل مباشرة، وغيرها بيسألك.</li>
+        <li>محجوب دايماً: الحذف، إطفاء الجهاز، حذف الريجستري، التنزيل، وتغيير سياسات النظام.</li>
         <li>ما بيتعامل مع نوافذ UAC وكلمات السر وأمان ويندوز، ولا بيقرأ ملفات المفاتيح.</li>
-        <li>يشتغل بشجرة عناصر الواجهة (UI Automation) فيمشي مع أي نموذج نصي.</li>
+        <li>يشتغل بشجرة عناصر الواجهة (UI Automation) فيمشي مع أي موديل نصي.</li>
       </ul>
     </div>
   )

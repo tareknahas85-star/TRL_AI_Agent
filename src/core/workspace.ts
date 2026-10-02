@@ -16,7 +16,7 @@ export function addCustomTool(input: Partial<CustomTool>, reserved: string[]): C
   if (!TOOL_NAME_RE.test(name)) throw new Error('اسم الأداة: حروف إنجليزية/أرقام/-/_ وحد أقصى 40')
   if (!command) throw new Error('الأمر مطلوب')
   const all = listCustomTools()
-  if (reserved.includes(name) || all.some((t) => t.name === name)) throw new Error('اسم الأداة مستخدم')
+  if (reserved.includes(name) || all.some((t) => t.name === name)) throw new Error('اسم الأداة مستخدم من قبل')
   const t = { name, description, command }
   writeJson(TOOLS_FILE, [...all, t])
   return t
@@ -40,7 +40,7 @@ export const listProjects = (): ProjectsData => readProjects()
 
 export function addProject(dir: string): Project {
   const p = path.resolve(String(dir ?? ''))
-  if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) throw new Error('المجلد غير موجود')
+  if (!fs.existsSync(p) || !fs.statSync(p).isDirectory()) throw new Error('المجلد مو موجود')
   const data = readProjects()
   const existing = data.projects.find((x) => x.path === p)
   if (existing) {

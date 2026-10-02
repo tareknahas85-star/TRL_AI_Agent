@@ -33,7 +33,7 @@ export function registerAccountsHandlers(): void {
         id = String(o.client_id ?? '').trim()
         secret = String(o.client_secret ?? '').trim()
       } catch {
-        return { ok: false, error: 'ملف JSON غير صالح' }
+        return { ok: false, error: 'ملف JSON مو صالح' }
       }
     }
     if (!CLIENT_ID_RE.test(id)) return { ok: false, error: 'Client ID لازم ينتهي بـ .apps.googleusercontent.com' }
@@ -62,7 +62,7 @@ export function registerAccountsHandlers(): void {
     return { ok: true }
   })
   ipcMain.handle('accounts:get', () => getAccounts())
-  ipcMain.handle('accounts:setEmail', (_e, v: unknown) => (typeof v === 'string' ? setGoogleEmail(v) : { ok: false, error: 'قيمة غير صالحة' }))
+  ipcMain.handle('accounts:setEmail', (_e, v: unknown) => (typeof v === 'string' ? setGoogleEmail(v) : { ok: false, error: 'قيمة مو صالحة' }))
   ipcMain.handle('accounts:setWrite', (_e, server: unknown, on: unknown) =>
     typeof server === 'string' && typeof on === 'boolean' ? setWriteServer(server, on) : getAccounts().writeServers
   )
@@ -89,7 +89,7 @@ export function registerAccountsHandlers(): void {
         return { ok: !out.startsWith('Error'), message: out.slice(0, 300) || 'تم.' }
       }
       if (url || /authenticat|authoriz|credentials/i.test(out.slice(0, 300))) {
-        return { ok: false, message: 'غير متصل بعد. اكبس "اتصل" وسجّل الدخول.' }
+        return { ok: false, message: 'مش متصل بعد. اكبس "اتصل" وسجّل الدخول.' }
       }
       if (out.startsWith('Error')) return { ok: false, message: out.slice(0, 300) }
       return { ok: true, message: 'الاتصال شغال.' }

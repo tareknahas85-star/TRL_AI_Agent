@@ -29,10 +29,10 @@ export function ToolsPage() {
   return (
     <PageShell
       title="الأدوات"
-      subtitle="الأدوات المتاحة للنظام. فعّل أو عطّل كل أداة، أو أضف أداتك."
+      subtitle="الأدوات المتاحة للنظام. فعّل أو عطّل كل أداة، أو ضيف أداتك."
       action={
         <button className={primaryBtn + ' flex items-center gap-1'} onClick={() => setAdding(true)}>
-          <Plus size={16} /> إضافة أداة
+          <Plus size={16} /> ضيف أداة
         </button>
       }
     >
@@ -59,7 +59,7 @@ export function ToolsPage() {
                   className={ghostBtn + ' text-danger'}
                   aria-label={`حذف ${t.name}`}
                   onClick={async () => {
-                    if (confirm(`حذف الأداة ${t.name}؟`)) {
+                    if (confirm(`بدك تحذف الأداة ${t.name}؟`)) {
                       await window.api.tools.remove(t.name)
                       load()
                     }
@@ -82,7 +82,7 @@ export function ToolsPage() {
       </div>
 
       {adding && (
-        <Modal title="إضافة أداة" onClose={() => setAdding(false)}>
+        <Modal title="ضيف أداة" onClose={() => setAdding(false)}>
           <div className="space-y-3">
             <input dir="ltr" className={inputCls} placeholder="name (e.g. gitStatus)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
             <input className={inputCls} placeholder="الوصف: شو بتعمل الأداة" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
