@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Bot, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
+import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
 import { Markdown } from './Markdown'
 import { CostDashboard } from './CostDashboard'
 import { Chip } from './components/ui'
@@ -188,10 +188,37 @@ function StatusBar({
 }
 
 function tierChip(saved: string): { label: string; cls: string } {
+  if (saved.includes('اشتراكك')) return { label: 'اشتراكك', cls: 'bg-primary/15 text-primary' }
   if (saved.includes('مجاني')) return { label: 'مجاني', cls: 'bg-success/15 text-success' }
   if (saved.includes('رخيص')) return { label: 'رخيص', cls: 'bg-primary/15 text-primary' }
   if (saved.includes('مخصص')) return { label: 'مخصص', cls: 'bg-surface2 text-fg' }
   return { label: 'قوي', cls: 'bg-warning/20 text-warning' }
+}
+
+function MsgFooter({ text, at }: { text: string; at?: number }) {
+  const [ok, setOk] = useState(false)
+  const copy = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(text)
+    } catch {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      ta.remove()
+    }
+    setOk(true)
+    setTimeout(() => setOk(false), 1500)
+  }
+  return (
+    <div className="mt-1.5 flex items-center gap-2 text-[11px] text-muted">
+      <button onClick={copy} title="نسخ الرسالة كاملة" aria-label="نسخ الرسالة كاملة" className="rounded-full p-1 hover:bg-surface2">
+        {ok ? <Check size={13} /> : <Copy size={13} />}
+      </button>
+      {at ? <span>{new Date(at).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })}</span> : null}
+    </div>
+  )
 }
 
 function MetaBar({ meta }: { meta: string }) {
@@ -348,7 +375,7 @@ export function ChatWindow({
       if (r.cancelled) {
         const partial = streamRef.current
         if (partial.trim()) {
-          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ تم الإيقاف_' }]
+          next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ تم الإيقاف_', at: Date.now() }]
         } else if (retry) {
           next = base
         } else {
@@ -359,12 +386,12 @@ export function ChatWindow({
         setRetryNote(r.content)
         next = base
       } else if (retry) {
-        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta }]
+        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta, at: Date.now() }]
       } else {
-        next = [...base, { role: 'assistant', content: r.content, meta: r.meta }]
+        next = [...base, { role: 'assistant', content: r.content, meta: r.meta, at: Date.now() }]
       }
     } catch (e) {
-      next = [...base, { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)) }]
+      next = [...base, { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)), at: Date.now() }]
     }
     setStreamText('')
     streamRef.current = ''
@@ -377,7 +404,7 @@ export function ChatWindow({
     if (!input.trim() || loading) return
     const userMsg = input
     lastUserRef.current = userMsg
-    const withUser = [...messages, { role: 'user' as const, content: userMsg }]
+    const withUser = [...messages, { role: 'user' as const, content: userMsg, at: Date.now() }]
     setMessages(withUser)
     setInput('')
     await runRequest(false, withUser)
@@ -423,8 +450,9 @@ export function ChatWindow({
 
           {messages.map((msg, i) =>
             retrying && i === messages.length - 1 ? null : msg.role === 'user' ? (
-              <div key={i} className="ms-auto w-fit max-w-[80%] whitespace-pre-wrap rounded-3xl rounded-te-md bg-bubble px-4 py-3">
-                {msg.content}
+              <div key={i} className="ms-auto w-fit max-w-[80%]">
+                <div className="whitespace-pre-wrap rounded-3xl rounded-te-md bg-bubble px-4 py-3">{msg.content}</div>
+                <MsgFooter text={msg.content} at={msg.at} />
               </div>
             ) : (
               <div key={i} className="flex gap-3">
@@ -432,6 +460,7 @@ export function ChatWindow({
                 <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
                   <Markdown text={msg.content} />
                   {msg.meta && <MetaBar meta={msg.meta} />}
+                  <MsgFooter text={msg.content} at={msg.at} />
                   {msg.meta && i === messages.length - 1 && !loading && (
                     <div className="mt-2 flex items-center gap-2">
                       <button onClick={() => handleRetry()} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">
@@ -490,7 +519,7 @@ export function ChatWindow({
                 <option value="">🎯 اختار نموذج…</option>
                 {picker.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                    {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                   </option>
                 ))}
               </select>
@@ -505,27 +534,49 @@ export function ChatWindow({
             </div>
           </div>
         )}
-        <div className="mx-auto mb-1 flex max-w-3xl items-center gap-2 text-[11px] text-muted">
+        <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
           <span>النموذج:</span>
           <select
             className={`rounded-full border border-outline bg-surface px-2 py-0.5 ${mode.kind === 'free' ? '' : 'text-warning'}`}
-            value={mode.kind === 'model' ? mode.id : mode.kind}
+            value={mode.kind === 'model' ? mode.id : mode.kind === 'council' && (mode.author || mode.critic) ? 'council-manual' : mode.kind}
             onChange={(e) => {
               const v = e.target.value
+              if (v === 'council-manual') return onModeChange({ kind: 'council', author: picker[0]?.value, critic: (picker[1] ?? picker[0])?.value })
               onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : v === 'council' ? { kind: 'council' } : { kind: 'model', id: v })
             }}
           >
             <option value="free">🆓 تلقائي — مجاني فقط</option>
             <option value="auto">⚡ تلقائي — مع المدفوع</option>
             <option value="council">🏛️ مجلس النماذج — مسودة ثم نقد ثم تصحيح</option>
+            <option value="council-manual" disabled={!picker.length}>🏛️ مجلس — أنا بختار الكاتب والناقد</option>
             <optgroup label="🎯 نموذج محدد">
               {picker.map((p) => (
                 <option key={p.value} value={p.value}>
-                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : 'مدفوع'})
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                 </option>
               ))}
             </optgroup>
           </select>
+          {mode.kind === 'council' && (mode.author || mode.critic) && (
+            <>
+              <span>الكاتب:</span>
+              <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={mode.author ?? ''} onChange={(e) => onModeChange({ ...mode, author: e.target.value })}>
+                {picker.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
+                </option>
+              ))}
+              </select>
+              <span>الناقد:</span>
+              <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={mode.critic ?? ''} onChange={(e) => onModeChange({ ...mode, critic: e.target.value })}>
+                {picker.map((p) => (
+                <option key={p.value} value={p.value}>
+                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
+                </option>
+              ))}
+              </select>
+            </>
+          )}
           {mode.kind !== 'free' && <span className="text-warning">قد يستهلك رصيدك</span>}
         </div>
         <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-outline bg-surface px-4 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow">

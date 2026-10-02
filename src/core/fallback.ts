@@ -3,6 +3,7 @@ import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, currentSignal } from './progress'
 import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel } from './custom-models'
+import { buildCliPrompt, cliModelAlias, isCliModel, runClaudeCli } from './cli-models'
 
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -109,6 +110,21 @@ export async function executeWithFallback(
     try {
       console.log(`[Fallback] Trying model: ${model}`)
       emitProgress('يجرّب: ' + model)
+      if (isCliModel(model)) {
+        // Signed-in account via the official CLI: plain chat answer, no API key and no extra tools.
+        const t0 = Date.now()
+        const text = await runClaudeCli(buildCliPrompt(systemPrompt, history, userInput), signal, cliModelAlias(model))
+        emitStream('chunk', text)
+        return {
+          content: text,
+          modelUsed: model,
+          success: true,
+          triedModels,
+          toolsUsed,
+          failures,
+          usage: { promptTokens: 0, completionTokens: Math.ceil(text.length / 3.5), genMs: Date.now() - t0, estimated: true }
+        }
+      }
       let pt = 0
       let ct = 0
       let gen = 0
@@ -189,6 +205,12 @@ export async function executeWithFallback(
       if (content && content.length < 400 && /to prevent abuse|free resource|too many requests|rate.?limit|quota (exceeded|exhausted)|insufficient (balance|quota|credit)|usage limit/i.test(content)) {
         failures.push({ model, reason: ('رد رفض: ' + content).slice(0, 90) })
         emitProgress('رفض ' + model + ' — ينتقل للتالي')
+        continue
+      }
+      // Some models print a tool call as plain text (e.g. <tool_call>Bash …) instead of using function calling. That is not an answer.
+      if (content && /<tool_call>|<arg_key>|<function_calls>|<invoke name=/i.test(content)) {
+        failures.push({ model, reason: 'كتب استدعاء أداة كنص بدل ما ينفّذه' })
+        emitProgress(model + ' كتب أداة كنص — ينتقل للتالي')
         continue
       }
       if (content) {

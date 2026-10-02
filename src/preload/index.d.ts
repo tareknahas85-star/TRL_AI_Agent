@@ -20,13 +20,13 @@ export type CustomModelInfo = {
   hasKey: boolean
   last?: boolean
 }
-export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council' } | { kind: 'model'; id: string }
+export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
 export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
 export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
 export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
 export type MasterMemoryView = { projects: ProjectMemoryInfo[]; general: { text: string; at: number }[]; conflicts: { kind: string; detail: string }[] }
 export type ProjectInfo = { id: string; name: string; path: string }
-export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string }
+export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number }
 export type ConversationSummary = {
   id: string
   title: string
