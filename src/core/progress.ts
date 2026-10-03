@@ -6,7 +6,7 @@ type StreamSink = (kind: 'chunk' | 'reset', text?: string) => void
 // How the user wants this run to pick models: free chain only, free+paid chain, or one explicit model.
 export type RunMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
 
-type Ctx = { progress: Sink; stream: StreamSink; ctl: AbortController; mode: RunMode; muted?: boolean }
+type Ctx = { progress: Sink; stream: StreamSink; ctl: AbortController; mode: RunMode; muted?: boolean; unattended?: boolean }
 
 // Every chat request runs inside its own async context, so several tabs can work in parallel
 // without sharing progress/stream sinks, cancel signals or the model mode.
@@ -17,7 +17,7 @@ export function runInContext<T>(tabId: string, mode: RunMode, progress: Sink, st
   runs.get(tabId)?.abort()
   const ctl = new AbortController()
   runs.set(tabId, ctl)
-  return als.run({ progress, stream, ctl, mode }, () => fn(ctl.signal)).finally(() => {
+  return als.run({ progress, stream, ctl, mode, unattended: tabId.startsWith('sched-') }, () => fn(ctl.signal)).finally(() => {
     if (runs.get(tabId) === ctl) runs.delete(tabId)
   })
 }
@@ -44,4 +44,5 @@ export const emitStream = (kind: 'chunk' | 'reset', text?: string): void => {
 }
 export const cancelRun = (tabId: string): void => runs.get(tabId)?.abort()
 export const currentSignal = (): AbortSignal | undefined => als.getStore()?.ctl.signal
+export const isUnattended = (): boolean => !!als.getStore()?.unattended
 export const currentMode = (): RunMode | undefined => als.getStore()?.mode

@@ -31,7 +31,7 @@ export function removeCustomTool(name: string): boolean {
 }
 
 // ---------- Projects ----------
-export type Project = { id: string; name: string; path: string }
+export type Project = { id: string; name: string; path: string; confidential?: boolean }
 type ProjectsData = { projects: Project[]; activeId: string | null }
 const PROJECTS_FILE = 'projects.json'
 const readProjects = (): ProjectsData => readJson<ProjectsData>(PROJECTS_FILE, { projects: [], activeId: null })
@@ -69,6 +69,16 @@ export function setActiveProject(id: string | null): boolean {
   const data = readProjects()
   if (id !== null && !data.projects.some((p) => p.id === id)) return false
   data.activeId = id
+  writeJson(PROJECTS_FILE, data)
+  return true
+}
+
+export function setProjectConfidential(id: string, on: boolean): boolean {
+  const data = readProjects()
+  const p = data.projects.find((x) => x.id === id)
+  if (!p) return false
+  if (on) p.confidential = true
+  else delete p.confidential
   writeJson(PROJECTS_FILE, data)
   return true
 }

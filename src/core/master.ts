@@ -184,7 +184,7 @@ export async function warmLocalMaster(): Promise<void> {
   }
 }
 
-export async function analyzeRequest(userInput: string): Promise<Analysis> {
+export async function analyzeRequest(userInput: string, localOnly = false): Promise<Analysis> {
   let catalog: { name: string; description: string }[] = []
   try {
     catalog = await skillCatalog()
@@ -233,6 +233,11 @@ export async function analyzeRequest(userInput: string): Promise<Analysis> {
     } catch (error) {
       console.warn('[Master] local maestro failed, using OpenRouter:', error)
     }
+  }
+  if (localOnly) {
+    // Confidential project: the request text never goes to a cloud maestro.
+    emitProgress('مشروع سري: التحليل محلي بس')
+    return { ...fallbackAnalysis(), complexity: 'complex' }
   }
   const system = catalog.length
     ? SYSTEM_PROMPT +

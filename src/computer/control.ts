@@ -4,10 +4,30 @@ import fsp from 'fs/promises'
 import fs from 'fs'
 import path from 'path'
 import type OpenAI from 'openai'
+import { BUILD_ENV_PS } from './build-env'
+import { addOfficeTools } from './office'
+import { isUnattended } from '../core/progress'
 
 // ---------- config (master switch, default OFF) ----------
 const cfgFile = (): string => path.join(app.getPath('userData'), 'computer.json')
 let sessionAllowAll = false
+
+type Cfg = { enabled?: boolean; autoApprove?: boolean }
+function readCfg(): Cfg {
+  try {
+    return JSON.parse(fs.readFileSync(cfgFile(), 'utf-8'))
+  } catch {
+    return {}
+  }
+}
+function writeCfg(p: Cfg): void {
+  fs.writeFileSync(cfgFile(), JSON.stringify({ ...readCfg(), ...p }))
+}
+// Default ON: the user wants the program to act without asking every time. The BLOCKED list still applies.
+export const autoApproveOn = (): boolean => readCfg().autoApprove !== false
+export function setAutoApprove(on: boolean): void {
+  writeCfg({ autoApprove: !!on })
+}
 
 export function computerEnabled(): boolean {
   if (process.platform !== 'win32') return false // PowerShell-based: Windows only for now
@@ -19,11 +39,11 @@ export function computerEnabled(): boolean {
 }
 export function setComputerEnabled(on: boolean): void {
   if (process.platform !== 'win32') return
-  fs.writeFileSync(cfgFile(), JSON.stringify({ enabled: !!on }))
+  writeCfg({ enabled: !!on })
   if (!on) sessionAllowAll = false
 }
-export function computerState(): { enabled: boolean; sessionAllowed: boolean } {
-  return { enabled: computerEnabled(), sessionAllowed: sessionAllowAll }
+export function computerState(): { enabled: boolean; sessionAllowed: boolean; autoApprove: boolean } {
+  return { enabled: computerEnabled(), sessionAllowed: sessionAllowAll, autoApprove: autoApproveOn() }
 }
 export function resetComputerSession(): void {
   sessionAllowAll = false
@@ -44,7 +64,8 @@ function isReadOnly(cmd: string): boolean {
 const WIN_BLOCK = /(user account control|windows security|credential|windows hello|sign in to|password|uac)/i
 
 async function ask(title: string, detail: string): Promise<boolean> {
-  if (sessionAllowAll) return true
+  if (sessionAllowAll || autoApproveOn()) return true
+  if (isUnattended()) return false // scheduled run: nobody is there to click
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   const opts = {
     type: 'warning' as const,
@@ -100,6 +121,17 @@ function runPs(script: string, args: unknown = {}, timeoutMs = 60000, signal?: A
     })
     p.stdout.on('data', (d) => (out += d.toString('utf-8')))
     p.stderr.on('data', (d) => (err += d.toString('utf-8')))
+    // A child it started (e.g. the Gradle daemon) can keep the pipes open long after the command ended: finish on exit.
+    p.on('exit', () => {
+      setTimeout(() => {
+        try {
+          p.stdout.destroy()
+          p.stderr.destroy()
+        } catch {
+          /* ignore */
+        }
+      }, 1500)
+    })
     p.on('close', () => {
       const e = err.startsWith('#< CLIXML') ? '' : err.trim()
       finish((out.trim() + (e ? '\n[stderr] ' + e.slice(0, 1500) : '')).trim() || '(no output)')
@@ -188,15 +220,18 @@ export function addComputerTools(
 
   def(
     'pc_run',
-    "Run a PowerShell command on the user's Windows computer and return its output. Read-only commands (Get-*, dir, ...) run directly; anything else asks the user for approval. Deleting files, shutdown, registry deletion and downloads are blocked.",
-    { command: str },
+    "Run a PowerShell command on the user's Windows computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder; optional timeout_seconds (default 120, max 1800) - use a big value for builds. JAVA_HOME / ANDROID_HOME are set up automatically, and 'gradlew assembleDebug' works even when the project has no wrapper (it falls back to the Gradle installed on this machine and steps into a nested Gradle folder). Read-only commands (Get-*, dir, ...) run directly; anything else asks the user for approval. Deleting files, shutdown, registry deletion and downloads are blocked.",
+    { command: str, cwd: str, timeout_seconds: num },
     ['command'],
     async (a) => {
-      const cmd = s(a.command).trim()
+      let cmd = s(a.command).trim()
       if (!cmd) return 'Error: empty command'
       if (BLOCKED.test(cmd)) return 'Error: blocked by safety policy (delete/shutdown/download/policy changes). Ask the user to do it himself.'
-      if (!isReadOnly(cmd) && !(await ask('بدو ينفذ أمر PowerShell', cmd))) return 'Error: the user denied this command.'
-      return runPs(cmd, {}, 60000, getSignal?.())
+      if (!isReadOnly(cmd) && !(await ask('بدو ينفذ أمر PowerShell', (a.cwd ? '[' + s(a.cwd) + '] ' : '') + cmd))) return 'Error: the user denied this command.'
+      cmd = cmd.replace(/(?<![\w.-])(?:\.[\\/])?gradlew(?:\.bat)?(?![\w-])/gi, '__gw')
+      const secs = Math.min(1800, Math.max(60, Number(a.timeout_seconds) || 120))
+      const out = await runPs(BUILD_ENV_PS + "\nif($A.cwd){ Set-Location -LiteralPath $A.cwd }\n" + cmd, { cwd: s(a.cwd) }, secs * 1000, getSignal?.())
+      return out.length > 5500 ? '…[start of output cut]\n' + out.slice(-5500) : out
     }
   )
   def('pc_list_dir', 'List files and folders of a directory on the computer (absolute path).', { path: str }, ['path'], async (a) => {
@@ -227,22 +262,30 @@ export function addComputerTools(
   })
   def(
     'pc_write_file',
-    'Create a new text file on the computer (absolute path). Refuses to overwrite an existing file. Asks the user for approval.',
-    { path: str, content: str },
+    'Create a text file on the computer (absolute path). To change an EXISTING file pass overwrite:true (a timestamped .bak copy is made first). For Word/Excel/PowerPoint use the office_* tools instead.',
+    { path: str, content: str, overwrite: { type: 'boolean' } },
     ['path', 'content'],
     async (a) => {
       const p = s(a.path)
-      if (fs.existsSync(p)) return 'Error: file already exists; overwriting is not allowed. Choose a new name.'
+      const exists = fs.existsSync(p)
+      if (exists && a.overwrite !== true) return 'Error: file already exists. Pass overwrite:true to replace it (a backup copy is made) or choose a new name.'
       if (!(await ask('بدو يعمل ملف', p + '\n\n' + s(a.content).slice(0, 600)))) return 'Error: the user denied this.'
       try {
         await fsp.mkdir(path.dirname(p), { recursive: true })
-        await fsp.writeFile(p, s(a.content), { encoding: 'utf-8', flag: 'wx' })
-        return 'OK: created ' + p
+        let bak = ''
+        if (exists) {
+          const d = new Date()
+          bak = p + '.bak-' + d.toISOString().replace(/[-:T]/g, '').slice(0, 14)
+          await fsp.copyFile(p, bak)
+        }
+        await fsp.writeFile(p, s(a.content), { encoding: 'utf-8' })
+        return 'OK: ' + (exists ? 'updated ' : 'created ') + p + (bak ? ' (backup: ' + bak + ')' : '')
       } catch (e) {
         return 'Error: ' + (e instanceof Error ? e.message : String(e))
       }
     }
   )
+  addOfficeTools({ def, ask, runPs, getSignal })
   def('pc_windows', 'List the open windows (title + process).', {}, [], async () =>
     runPs(
       'Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -First 40 ProcessName,Id,MainWindowTitle | Format-Table -AutoSize | Out-String -Width 200',
@@ -254,6 +297,8 @@ export function addComputerTools(
     const t = s(a.target).trim()
     if (!t || /[;&|`]|\.(bat|cmd|ps1|vbs|js|msi|reg|scr)$/i.test(t) || /^(powershell|pwsh|cmd|wt|windowsterminal|regedit|mmc)(\.exe)?$/i.test(t))
       return 'Error: this target is not allowed (terminals/scripts are blocked).'
+    if (/\.(wav|mp3|mp4|m4a|avi|mkv|mov|webm|ogg|flac)$/i.test(t))
+      return 'Error: media files are not opened automatically (it pops a player/app chooser on the user PC). Just tell the user the file path.'
     if (!(await ask('بدو يفتح', t))) return 'Error: the user denied this.'
     return runPs('Start-Process -FilePath $A.t; "OK: opened"', { t }, 20000)
   })

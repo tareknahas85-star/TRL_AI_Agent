@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CheckCircle2, FolderOpen, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, FolderOpen, Lock, Plus, Trash2 } from 'lucide-react'
 import type { ProjectInfo } from '../preload/index.d'
 import { Chip, Empty, PageShell, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
@@ -63,10 +63,21 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{p.name}</span>
                     {active && <Chip cls="bg-primary/15 text-primary"><CheckCircle2 size={12} /> مفتوح بتبويب</Chip>}
+                    {p.confidential && <Chip cls="bg-warning/20 text-warning"><Lock size={12} /> سري — موديلات مدفوعة قوية بس</Chip>}
                   </div>
                   <div dir="ltr" className="truncate text-start font-mono text-xs text-muted">{p.path}</div>
                 </div>
                 <div className="flex gap-1">
+                  <button
+                    className={ghostBtn}
+                    title="المشروع السري بيستعمل بس موديلات مدفوعة قوية، والتحليل محلي"
+                    onClick={async () => {
+                      await window.api.projects.setConfidential(p.id, !p.confidential)
+                      changed()
+                    }}
+                  >
+                    {p.confidential ? 'شيل السرية' : '🔒 مشروع سري'}
+                  </button>
                   <button
                     className={ghostBtn}
                     onClick={() => onOpen(p)}

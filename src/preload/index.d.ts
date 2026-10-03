@@ -25,7 +25,24 @@ export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode
 export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
 export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
 export type MasterMemoryView = { projects: ProjectMemoryInfo[]; general: { text: string; at: number }[]; conflicts: { kind: string; detail: string }[] }
-export type ProjectInfo = { id: string; name: string; path: string }
+export type ProjectInfo = { id: string; name: string; path: string; confidential?: boolean }
+export type ScheduleInfo = {
+  id: string
+  name: string
+  prompt: string
+  projectId: string | null
+  mode: 'free' | 'auto'
+  kind: 'daily' | 'weekly' | 'interval'
+  time: string
+  days: number[]
+  everyMin: number
+  enabled: boolean
+  createdAt: number
+  lastRun?: number
+  lastStatus?: 'ok' | 'failed' | 'running'
+  lastResult?: string
+  lastConversationId?: string
+}
 export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number }
 export type ConversationSummary = {
   id: string
@@ -51,9 +68,10 @@ declare global {
         set: (on: boolean) => Promise<boolean>
       }
       computer: {
-        get: () => Promise<{ enabled: boolean; sessionAllowed: boolean }>
-        set: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean }>
-        reset: () => Promise<{ enabled: boolean; sessionAllowed: boolean }>
+        get: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
+        set: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
+        reset: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
+        setAuto: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
       }
       onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void) => () => void
       status: () => Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number }>
@@ -74,6 +92,18 @@ declare global {
         remove: (name: string) => Promise<boolean>
         test: (name: string) => Promise<{ ok: boolean; message: string }>
         toggle: (name: string) => Promise<boolean | null>
+        scan: () => Promise<{ source: string; file: string; servers: MCPServerInfo[] }[]>
+        scanPlugins: () => Promise<{ id: string; name: string; origin: string; version: string; skills: string[]; mcp: string[]; remoteMcp: number }[]>
+        importPlugins: (ids: string[]) => Promise<{ skills: string[]; skippedSkills: string[]; mcp: string[]; skippedMcp: string[] }>
+        parse: (text: string) => Promise<MCPServerInfo[]>
+        import: (servers: MCPServerInfo[]) => Promise<{ added: string[]; skipped: string[] }>
+      }
+      schedules: {
+        list: () => Promise<{ tasks: ScheduleInfo[]; running: string[] }>
+        add: (t: Partial<ScheduleInfo>) => Promise<{ ok: boolean; task?: ScheduleInfo; error?: string }>
+        update: (id: string, p: Partial<ScheduleInfo>) => Promise<{ ok: boolean; error?: string }>
+        remove: (id: string) => Promise<boolean>
+        run: (id: string) => Promise<boolean>
       }
       tools: {
         list: () => Promise<ToolInfo[]>
@@ -153,7 +183,17 @@ declare global {
         setEnabled: (ids: string[], on: boolean) => Promise<number>
         move: (id: string, dir: 'up' | 'down') => Promise<boolean>
       }
-      projects: {
+      claudeAcct: {
+        get: () => Promise<{ cfg: { active: 'work' | 'personal'; auto: boolean }; work: { installed: boolean; loggedIn: boolean; email?: string; plan?: string }; personal: { installed: boolean; loggedIn: boolean; email?: string; plan?: string } }>
+        set: (p: { active?: string; auto?: boolean }) => Promise<{ active: 'work' | 'personal'; auto: boolean }>
+        login: () => Promise<{ ok: boolean; error?: string }>
+      }
+      effort: {
+    get: () => Promise<string>
+    set: (v: string) => Promise<string>
+  }
+  projects: {
+    setConfidential: (id: string, on: boolean) => Promise<boolean>
         list: () => Promise<{ projects: ProjectInfo[]; activeId: string | null }>
         add: (dir: string) => Promise<{ ok: boolean; project?: ProjectInfo; error?: string }>
         pick: () => Promise<{ ok: boolean; project?: ProjectInfo; error?: string }>

@@ -25,10 +25,14 @@
     "@electron-toolkit/preload": "^3.0.2",
     "@electron-toolkit/utils": "^4.0.0",
     "ai": "^7.0.122",
+    "docx": "^9.8.1",
     "dotenv": "^18.0.4",
     "electron-store": "^11.0.2",
+    "exceljs": "^4.4.0",
+    "jszip": "^3.10.2",
     "lucide-react": "^1.48.0",
-    "openai": "^7.23.0"
+    "openai": "^7.23.0",
+    "pptxgenjs": "^4.0.1"
   },
   "devDependencies": {
     "@electron-toolkit/eslint-config-prettier": "^3.0.0",

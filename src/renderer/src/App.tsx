@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Bot, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
+  Bot, Clock, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
   Sparkles, Sun, Trash2, User, Wrench, Download, Search, X
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
@@ -9,6 +9,7 @@ import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
 import { ProjectsPage } from '../../ui/ProjectsPage'
+import { SchedulePage } from '../../ui/SchedulePage'
 import { Settings } from '../../ui/Settings'
 import { SkillsPage } from '../../ui/SkillsPage'
 import { ToolsPage } from '../../ui/ToolsPage'
@@ -113,11 +114,12 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
   )
 }
 
-type Nav = 'chat' | 'projects' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
+type Nav = 'chat' | 'projects' | 'schedule' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
 
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
+  { id: 'schedule', label: 'المهام المجدولة', icon: Clock },
   { id: 'models', label: 'الموديلات', icon: Cpu },
   { id: 'skills', label: 'السكيلز', icon: Sparkles },
   { id: 'mcp', label: 'MCP Servers', icon: Plug },
@@ -421,7 +423,8 @@ function Shell() {
               }}
             />
           ))}
-        {activeNav === 'projects' && (
+        {activeNav === 'schedule' && <SchedulePage />}
+      {activeNav === 'projects' && (
           <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} />
         )}
         {activeNav === 'models' && <ModelsPage />}

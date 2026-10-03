@@ -7,6 +7,8 @@ import { runCouncil, type CouncilInfo } from '../core/council'
 import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { registerManagementHandlers } from './management'
 import { listProjects } from '../core/workspace'
+import { setScheduleRunner, startScheduler } from '../core/scheduler'
+import { refreshFreeRanking } from '../core/free-best'
 import { buildProjectContext } from '../core/project-context'
 import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
 import { registerAccountsHandlers } from './accounts-ipc'
@@ -146,7 +148,8 @@ export function registerIpcHandlers(): void {
             userMsg = prev.userMsg
             masterMs = prev.masterMs
           } else {
-            analysis = await analyzeRequest(userMsg)
+            const confP = o.projectId ? listProjects().projects.find((p) => p.id === o.projectId) : null
+            analysis = await analyzeRequest(userMsg, !!confP?.confidential)
             masterMs = Date.now() - started
           }
           if (signal.aborted) return { content: '', cancelled: true }
@@ -195,7 +198,10 @@ export function registerIpcHandlers(): void {
             retried: retry
           }
           const nm = (id?: string): string | undefined => (id && isCliModel(id) ? cliModelName(id) : id?.startsWith(CUSTOM_PREFIX) ? (getCustomModel(id.slice(CUSTOM_PREFIX.length))?.name ?? id) : id)
-          const meta = `Model: ${shownModel} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${council ? 'Council: ' + (council.revised ? 'صُحّح بعد مراجعة ' + nm(council.critic) + ' (' + council.issues + ' ملاحظات)' : council.ran ? 'راجعه ' + nm(council.critic) + ' — ' + (council.skipped ?? 'بدون تعديل') : (council.skipped ?? '')) + ' | ' : ''}${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
+          const detail = (result as { modelDetail?: string }).modelDetail
+          const effUsed = (result as { effort?: string }).effort
+          const lock = project?.confidential ? ' 🔒' : ''
+          const meta = `Model: ${shownModel}${detail && !shownModel.includes(detail) ? ' [' + detail + ']' : ''}${effUsed ? ' · effort ' + effUsed : ''}${lock} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${council ? 'Council: ' + (council.revised ? 'صُحّح بعد مراجعة ' + nm(council.critic) + ' (' + council.issues + ' ملاحظات)' : council.ran ? 'راجعه ' + nm(council.critic) + ' — ' + (council.skipped ?? 'بدون تعديل') : (council.skipped ?? '')) + ' | ' : ''}${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
           if (result.modelUsed !== 'none') recordTurn(projectId, userMsg, result.content)
           // needsChoice: nothing answered (free chain exhausted or the picked model failed) -> the UI asks the user what to do.
           return { content: result.content, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none' }
@@ -217,6 +223,13 @@ export function registerIpcHandlers(): void {
       mode: parseMode(r.mode)
     }
   }
+
+  setScheduleRunner(async (prompt, projectId, mode, taskId) => {
+    const fake = { send: () => undefined } as unknown as WebContents
+    return (await runChat(fake, prompt, false, [], { tabId: 'sched-' + taskId, projectId, mode: mode === 'free' ? { kind: 'free' } : { kind: 'auto' } })) as { content: string; failed?: boolean; meta?: string }
+  })
+  startScheduler()
+  void refreshFreeRanking()
 
   ipcMain.handle('chat:send', (event, userMsg: unknown, history?: unknown, opts?: unknown) => {
     if (typeof userMsg !== 'string' || !userMsg.trim()) return { content: 'Error: empty message' }

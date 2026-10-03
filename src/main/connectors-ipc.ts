@@ -75,17 +75,6 @@ const DEFS: Def[] = [
     hint: 'بتفتح صفحة Cloudflare: سجّل الدخول واختار الحساب والصلاحيات.', server: () => remote('cloudflare', 'https://mcp.cloudflare.com/mcp') },
   { id: 'dropbox', title: 'Dropbox', subtitle: 'ملفات ومجلدات ومشاركة', group: 'accounts', kind: 'remote',
     hint: 'بتفتح صفحة Dropbox: سجّل الدخول ووافق. (تجريبي: Dropbox بتدعم التسجيل التلقائي لعملاء معينين، وإذا رفضت بنعمل إعداد يدوي.)', server: () => remote('dropbox', 'https://mcp.dropbox.com/mcp') },
-  { id: 'box', title: 'Box', subtitle: 'ملفات ومجلدات وبحث (تجريبي)', group: 'accounts', kind: 'token',
-    fields: [ { env: 'BOX_CLIENT_ID', label: 'Client ID' }, { env: 'BOX_CLIENT_SECRET', label: 'Client Secret' } ],
-    hint: 'مرة وحدة: Box Admin Console وبعدين Integrations وبعدين Platform Apps وبعدين Create Custom App (OAuth 2.0). حط Redirect URI = http://localhost:3334/oauth/callback وفعّل scopes: root_readwrite و ai.readwrite، وانسخ الـ Client ID والـ Secret هون. بعدها بتنفتح صفحة Box للموافقة.',
-    build: (v) => {
-      const dir = app.getPath('userData')
-      fs.mkdirSync(dir, { recursive: true })
-      const file = path.join(dir, 'box-oauth-client.json')
-      fs.writeFileSync(file, JSON.stringify({ client_id: v[0], client_secret: v[1] }))
-      return ['-y', 'mcp-remote', 'https://mcp.box.com', '--static-oauth-client-info', '@' + file]
-    },
-    server: () => remote('box', 'https://mcp.box.com') },
   { id: 'browseruse', title: 'Browser Use', subtitle: 'أتمتة متصفح سحابي: تنفيذ مهام ويب وجلسات', group: 'accounts', kind: 'token',
     fields: [ { env: 'BROWSER_USE_API_KEY', label: 'API key' } ],
     hint: 'من cloud.browser-use.com/settings انسخ الـ API key والصقه هون.',

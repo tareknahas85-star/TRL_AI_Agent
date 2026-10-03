@@ -5,6 +5,7 @@ import { MasterMemoryPanel } from './MasterMemoryPanel'
 import { AccountsPanel } from './AccountsPanel'
 import { ComputerPanel } from './ComputerPanel'
 import { SpendPanel } from './SpendPanel'
+import { ClaudeAccountsPanel } from './ClaudeAccountsPanel'
 
 const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
@@ -97,6 +98,7 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
         {tab === 'general' && (
           <>
             <SpendPanel />
+            <ClaudeAccountsPanel />
             <ComputerPanel />
           </>
         )}

@@ -3,6 +3,7 @@ import { currentSignal } from '../core/progress'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
 import path from 'path'
 import type OpenAI from 'openai'
+import { listSkills, loadSkill } from '../skills/loader'
 import { loadMCPConfig, type MCPServer } from './client'
 import { readFile, listFiles } from '../tools/file-tools'
 import { readState } from '../core/state'
@@ -210,6 +211,8 @@ export function closeAllMcp(): void {
 export type Toolset = {
   defs: OpenAI.Chat.ChatCompletionTool[]
   call: (name: string, args: Record<string, unknown>) => Promise<string>
+  // Why some capabilities are missing this turn (shown to the model and, if it pretends, to the user).
+  notes: string[]
 }
 
 const MAX_MCP = 12
@@ -277,6 +280,27 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
 
   if (computerEnabled()) addComputerTools(defs, handlers, currentSignal)
 
+  // Skills: the model can list and load any enabled skill, like Claude does.
+  try {
+    const names = await listSkills()
+    if (names.length) {
+      defs.push({
+        type: 'function',
+        function: {
+          name: 'use_skill',
+          description: 'Load the instructions of a skill and follow them. Available skills: ' + names.join(', ') + '. Load the matching one before doing a task it covers.',
+          parameters: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] }
+        }
+      })
+      handlers.set('use_skill', async (a) => {
+        const sk = await loadSkill(String(a.name ?? ''))
+        return sk && sk.enabled ? sk.content.slice(0, 12000) : 'Error: skill not found or disabled. Available: ' + names.join(', ')
+      })
+    }
+  } catch {
+    /* skills are optional */
+  }
+
   let mcp: McpToolInfo[] = []
   try {
     mcp = await listMcpTools()
@@ -287,16 +311,25 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
   for (const [re, ex] of SYN) if (re.test(userInput)) ex.forEach((w) => words.add(w))
   const acc = getAccounts()
   const writeOn = new Set(acc.writeServers)
-  const scored = mcp
-    .map((t) => {
-      const hay = `${t.server} ${t.name.replace(/[-_]/g, ' ')} ${t.description}`.toLowerCase()
-      let sc = 0
-      for (const w of words) if (hay.includes(w)) sc += t.name.toLowerCase().includes(w) || t.server.toLowerCase().includes(w) ? 3 : 1
-      return { t, sc }
-    })
+  const all = mcp.map((t) => {
+    const hay = `${t.server} ${t.name.replace(/[-_]/g, ' ')} ${t.description}`.toLowerCase()
+    let sc = 0
+    for (const w of words) if (hay.includes(w)) sc += t.name.toLowerCase().includes(w) || t.server.toLowerCase().includes(w) ? 3 : 1
+    return { t, sc }
+  })
+  const scored = all
     .filter((x) => x.sc > 0 && !disabled.includes(x.t.fullName) && !HARD_BLOCK.test(x.t.name) && (!RISKY.test(x.t.name) || writeOn.has(x.t.server)))
     .sort((a, b) => b.sc - a.sc)
     .slice(0, MAX_MCP)
+  // Tools that matched the request but were held back because they change state and the server has no write access.
+  const lockedServers = new Set(
+    all.filter((x) => x.sc > 0 && !disabled.includes(x.t.fullName) && !HARD_BLOCK.test(x.t.name) && RISKY.test(x.t.name) && !writeOn.has(x.t.server)).map((x) => x.t.server)
+  )
+  const notes: string[] = []
+  if (!projectPath) notes.push('no project is open, so the file tools readFile/listFiles are not available')
+  if (!mcp.length) notes.push('no MCP server answered, so no MCP tools exist this turn')
+  if (lockedServers.size) notes.push(`tools that write, create, send or run exist for [${[...lockedServers].join(', ')}] but are locked until the user enables write access for that server (Accounts page)`)
+  if (!computerEnabled()) notes.push('PC control (pc_* tools: run commands, build, save files) is switched off')
   const byName = new Map<string, McpToolInfo>()
   for (const { t } of scored) {
     byName.set(t.fullName, t)
@@ -312,9 +345,9 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
       function: { name: t.fullName, description: `[${t.server}] ${t.description}`.slice(0, 500), parameters: schema }
     })
   }
-  if (!defs.length) return null
   return {
     defs,
+    notes,
     call: async (name, args) => {
       const h = handlers.get(name)
       let out: string

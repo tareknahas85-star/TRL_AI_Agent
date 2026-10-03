@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 
 export function ComputerPanel() {
-  const [st, setSt] = useState<{ enabled: boolean; sessionAllowed: boolean }>({ enabled: false, sessionAllowed: false })
+  const [st, setSt] = useState<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>({ enabled: false, sessionAllowed: false, autoApprove: true })
 
   useEffect(() => {
     void window.api.computer.get().then(setSt)
@@ -35,7 +35,10 @@ export function ComputerPanel() {
       )}
       {st.enabled && (
         <div className="mt-3 flex items-center justify-between rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-200">
-          <span>{st.sessionAllowed ? 'الموافقة لكل الجلسة مفعّلة (ما رح يسألك مرة تانية).' : 'كل إجراء بيطلب موافقتك.'}</span>
+          <span>{st.autoApprove ? 'موافقة تلقائية مفعّلة: البرنامج بينفّذ بدون ما يسألك (المحجوب يبقى محجوب).' : st.sessionAllowed ? 'الموافقة لكل الجلسة مفعّلة (ما رح يسألك مرة تانية).' : 'كل إجراء بيطلب موافقتك.'}</span>
+          <button onClick={async () => setSt(await window.api.computer.setAuto(!st.autoApprove))} className="rounded border border-amber-400 px-2 py-1 text-xs hover:bg-amber-100">
+            {st.autoApprove ? 'رجّع السؤال' : 'فعّل الموافقة التلقائية'}
+          </button>
           {st.sessionAllowed && (
             <button onClick={reset} className="rounded border border-amber-400 px-2 py-1 text-xs hover:bg-amber-100">
               إلغاء موافقة الجلسة

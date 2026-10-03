@@ -4,7 +4,11 @@ import { moveCatalogModel } from '../core/catalog'
 import { deleteMemoryEntry, importMemory, listMemory, memoryPrompt, saveMemoryEntry, toggleMemoryEntry } from '../core/memory'
 import { fetchOpenRouterModels, listCatalog, setCatalogEnabled, testOpenRouterKey } from '../core/catalog'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { computerState, resetComputerSession, setComputerEnabled } from '../computer/control'
+import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled } from '../computer/control'
+import { addSchedule, listSchedules, removeSchedule, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
+import { importServers, parseAny, scanSources } from '../mcp/import'
+import { importPlugins, scanPlugins } from '../mcp/plugins'
+import { claudeCliStatus, claudePersonalLogin, getClaudeAcctCfg, setClaudeAcctCfg } from '../core/cli-models'
 import fsp from 'fs/promises'
 import {
   createSkill,
@@ -31,6 +35,7 @@ import {
   testCustomModel,
   toggleCustomModel
 } from '../core/custom-models'
+import { getEffort, setEffort } from '../core/effort'
 import { clearGeneral, getMasterMemory, updateProjectMemory } from '../core/master-memory'
 import {
   addCustomTool,
@@ -45,6 +50,7 @@ import {
   renameConversation,
   saveConversation,
   setActiveProject,
+  setProjectConfidential,
   togglePinConversation
 } from '../core/workspace'
 
@@ -265,6 +271,44 @@ export function registerManagementHandlers(): void {
       return { ok: false, error: msg(e) }
     }
   })
+  ipcMain.handle('projects:setConfidential', (_e, id: unknown, on: unknown) => typeof id === 'string' && setProjectConfidential(id, !!on))
+  ipcMain.handle('schedules:list', () => ({ tasks: listSchedules(), running: runningSchedules() }))
+  ipcMain.handle('schedules:add', (_e, t: unknown) => {
+    try {
+      return { ok: true, task: addSchedule((t ?? {}) as never) }
+    } catch (e) {
+      return { ok: false, error: msg(e) }
+    }
+  })
+  ipcMain.handle('schedules:update', (_e, id: unknown, p: unknown) => {
+    try {
+      return typeof id === 'string' ? { ok: !!updateSchedule(id, (p ?? {}) as never) } : { ok: false }
+    } catch (e) {
+      return { ok: false, error: msg(e) }
+    }
+  })
+  ipcMain.handle('schedules:remove', (_e, id: unknown) => typeof id === 'string' && removeSchedule(id))
+  ipcMain.handle('schedules:run', (_e, id: unknown) => {
+    if (typeof id === 'string') void runScheduleNow(id)
+    return typeof id === 'string'
+  })
+  ipcMain.handle('claudeAcct:get', async () => ({ cfg: getClaudeAcctCfg(), work: await claudeCliStatus('work'), personal: await claudeCliStatus('personal') }))
+  ipcMain.handle('claudeAcct:set', (_e, p: unknown) => {
+    const o = (p ?? {}) as { active?: string; auto?: boolean }
+    return setClaudeAcctCfg({ ...(o.active === 'work' || o.active === 'personal' ? { active: o.active } : {}), ...(typeof o.auto === 'boolean' ? { auto: o.auto } : {}) })
+  })
+  ipcMain.handle('claudeAcct:login', () => claudePersonalLogin())
+  ipcMain.handle('mcp:scan', () => scanSources())
+  ipcMain.handle('plugins:scan', () => scanPlugins().map((p) => ({ id: p.id, name: p.name, origin: p.origin, version: p.version, skills: p.skills, mcp: p.mcp.map((m) => m.name), remoteMcp: p.remoteMcp })))
+  ipcMain.handle('plugins:import', (_e, ids: unknown) => importPlugins(Array.isArray(ids) ? ids.map(String) : []))
+  ipcMain.handle('mcp:parse', (_e, text: unknown) => parseAny(String(text ?? '')))
+  ipcMain.handle('mcp:import', (_e, servers: unknown) => importServers(Array.isArray(servers) ? (servers as never[]) : []))
+  ipcMain.handle('computer:setAuto', (_e, on: unknown) => {
+    setAutoApprove(on === true)
+    return computerState()
+  })
+  ipcMain.handle('effort:get', () => getEffort())
+  ipcMain.handle('effort:set', (_e, v: unknown) => setEffort(v))
   ipcMain.handle('projects:remove', (_e, id: unknown) => typeof id === 'string' && removeProject(id))
   ipcMain.handle('projects:setActive', (_e, id: unknown) =>
     id === null || typeof id === 'string' ? setActiveProject(id) : false

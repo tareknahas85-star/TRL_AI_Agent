@@ -18,9 +18,10 @@ const api = {
     set: (on: boolean): Promise<boolean> => ipcRenderer.invoke('spend:set', on)
   },
   computer: {
-    get: (): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:get'),
-    set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:set', on),
-    reset: (): Promise<{ enabled: boolean; sessionAllowed: boolean }> => ipcRenderer.invoke('computer:reset')
+    get: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:get'),
+    set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:set', on),
+    reset: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:reset'),
+    setAuto: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:setAuto', on)
   },
   onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void): (() => void) => {
     const h = (_e: unknown, tabId: string, k: 'chunk' | 'reset', t?: string): void => cb(tabId, k, t)
@@ -50,7 +51,12 @@ const api = {
     add: (server: unknown) => ipcRenderer.invoke('mcp:add', server),
     remove: (name: string) => ipcRenderer.invoke('mcp:remove', name),
     test: (name: string) => ipcRenderer.invoke('mcp:test', name),
-    toggle: (name: string) => ipcRenderer.invoke('mcp:toggle', name)
+    toggle: (name: string) => ipcRenderer.invoke('mcp:toggle', name),
+    scan: () => ipcRenderer.invoke('mcp:scan'),
+    scanPlugins: () => ipcRenderer.invoke('plugins:scan'),
+    importPlugins: (ids: string[]) => ipcRenderer.invoke('plugins:import', ids),
+    parse: (text: string) => ipcRenderer.invoke('mcp:parse', text),
+    import: (servers: unknown) => ipcRenderer.invoke('mcp:import', servers)
   },
   tools: {
     list: () => ipcRenderer.invoke('tools:list'),
@@ -116,7 +122,24 @@ const api = {
     setEnabled: (ids: string[], on: boolean) => ipcRenderer.invoke('catalog:setEnabled', ids, on),
     move: (id: string, dir: 'up' | 'down') => ipcRenderer.invoke('catalog:move', id, dir)
   },
+  schedules: {
+    list: () => ipcRenderer.invoke('schedules:list'),
+    add: (t: unknown) => ipcRenderer.invoke('schedules:add', t),
+    update: (id: string, p: unknown) => ipcRenderer.invoke('schedules:update', id, p),
+    remove: (id: string) => ipcRenderer.invoke('schedules:remove', id),
+    run: (id: string) => ipcRenderer.invoke('schedules:run', id)
+  },
+  claudeAcct: {
+    get: () => ipcRenderer.invoke('claudeAcct:get'),
+    set: (p: { active?: string; auto?: boolean }) => ipcRenderer.invoke('claudeAcct:set', p),
+    login: () => ipcRenderer.invoke('claudeAcct:login')
+  },
+  effort: {
+    get: () => ipcRenderer.invoke('effort:get'),
+    set: (v: string) => ipcRenderer.invoke('effort:set', v)
+  },
   projects: {
+    setConfidential: (id: string, on: boolean) => ipcRenderer.invoke('projects:setConfidential', id, on),
     list: () => ipcRenderer.invoke('projects:list'),
     add: (dir: string) => ipcRenderer.invoke('projects:add', dir),
     pick: () => ipcRenderer.invoke('projects:pick'),

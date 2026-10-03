@@ -308,6 +308,10 @@ export function ChatWindow({
   }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
   const [picker, setPicker] = useState<{ value: string; label: string; tier: string }[]>([])
   const [needsChoice, setNeedsChoice] = useState(false)
+  const [effort, setEffortUi] = useState('auto')
+  useEffect(() => {
+    window.api.effort.get().then(setEffortUi).catch(() => undefined)
+  }, [active])
   useEffect(() => {
     window.api.modelPicker().then(setPicker).catch(() => undefined)
   }, [active])
@@ -556,6 +560,22 @@ export function ChatWindow({
                 </option>
               ))}
             </optgroup>
+          </select>
+          <span>التفكير:</span>
+          <select
+            className="rounded-full border border-outline bg-surface px-2 py-0.5"
+            value={effort}
+            title="مستوى التفكير لكل الجلسة، بينطبق على أي موديل بيدعمه"
+            onChange={(e) => {
+              setEffortUi(e.target.value)
+              window.api.effort.set(e.target.value).catch(() => undefined)
+            }}
+          >
+            <option value="auto">تلقائي</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+            <option value="max">Max</option>
           </select>
           {mode.kind === 'council' && (mode.author || mode.critic) && (
             <>
