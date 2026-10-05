@@ -12,7 +12,7 @@ import { isUnattended } from '../core/progress'
 const cfgFile = (): string => path.join(app.getPath('userData'), 'computer.json')
 let sessionAllowAll = false
 
-type Cfg = { enabled?: boolean; autoApprove?: boolean }
+type Cfg = { enabled?: boolean; autoApprove?: boolean; fullAccess?: boolean }
 function readCfg(): Cfg {
   try {
     return JSON.parse(fs.readFileSync(cfgFile(), 'utf-8'))
@@ -29,6 +29,14 @@ export function setAutoApprove(on: boolean): void {
   writeCfg({ autoApprove: !!on })
 }
 
+// Full Access: everything runs without per-action prompts; only destructive commands still need an explicit confirmation click.
+export const fullAccessOn = (): boolean => process.platform === 'win32' && readCfg().fullAccess === true
+export function setFullAccess(on: boolean): void {
+  if (process.platform !== 'win32') return
+  // Turning Full Access on also switches Computer Control on (it is useless without it).
+  writeCfg(on ? { fullAccess: true, enabled: true } : { fullAccess: false })
+}
+
 export function computerEnabled(): boolean {
   if (process.platform !== 'win32') return false // PowerShell-based: Windows only for now
   try {
@@ -42,8 +50,8 @@ export function setComputerEnabled(on: boolean): void {
   writeCfg({ enabled: !!on })
   if (!on) sessionAllowAll = false
 }
-export function computerState(): { enabled: boolean; sessionAllowed: boolean; autoApprove: boolean } {
-  return { enabled: computerEnabled(), sessionAllowed: sessionAllowAll, autoApprove: autoApproveOn() }
+export function computerState(): { enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean } {
+  return { enabled: computerEnabled(), sessionAllowed: sessionAllowAll, autoApprove: autoApproveOn(), fullAccess: fullAccessOn() }
 }
 export function resetComputerSession(): void {
   sessionAllowAll = false
@@ -61,10 +69,31 @@ function isReadOnly(cmd: string): boolean {
   return cmd.split('|').every((seg) => SAFE_CMD.test(seg))
 }
 
+// Even in Full Access these need a real confirmation click every time.
+const DESTRUCTIVE =
+  /(remove-item|\brm\b|\bdel\b|\berase\b|\brmdir\b|\brd\b|format-volume|\bformat\s+[a-z]:|clear-disk|diskpart|reg(\.exe)?\s+delete|remove-itemproperty|bcdedit|net\s+user|net\s+localgroup|uninstall|cipher\s+\/w|vssadmin|wevtutil\s+cl|clear-eventlog|\bremove-)/i
+
 const WIN_BLOCK = /(user account control|windows security|credential|windows hello|sign in to|password|uac)/i
 
+async function confirmAlways(title: string, detail: string): Promise<boolean> {
+  if (isUnattended()) return false // nobody is there to confirm
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  const opts = {
+    type: 'warning' as const,
+    title: 'تأكيد مطلوب (أمر خطير)',
+    message: title,
+    detail: detail.slice(0, 1500),
+    buttons: ['إلغاء', 'تأكيد التنفيذ'],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  }
+  const r = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts)
+  return r.response === 1
+}
+
 async function ask(title: string, detail: string): Promise<boolean> {
-  if (sessionAllowAll || autoApproveOn()) return true
+  if (sessionAllowAll || autoApproveOn() || fullAccessOn()) return true
   if (isUnattended()) return false // scheduled run: nobody is there to click
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   const opts = {
@@ -220,13 +249,16 @@ export function addComputerTools(
 
   def(
     'pc_run',
-    "Run a PowerShell command on the user's Windows computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder; optional timeout_seconds (default 120, max 1800) - use a big value for builds. JAVA_HOME / ANDROID_HOME are set up automatically, and 'gradlew assembleDebug' works even when the project has no wrapper (it falls back to the Gradle installed on this machine and steps into a nested Gradle folder). Read-only commands (Get-*, dir, ...) run directly; anything else asks the user for approval. Deleting files, shutdown, registry deletion and downloads are blocked.",
+    "Run a PowerShell command on the user's Windows computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder; optional timeout_seconds (default 120, max 1800) - use a big value for builds. JAVA_HOME / ANDROID_HOME are set up automatically, and 'gradlew assembleDebug' works even when the project has no wrapper (it falls back to the Gradle installed on this machine and steps into a nested Gradle folder). Read-only commands (Get-*, dir, ...) run directly; anything else asks the user for approval. " + (fullAccessOn() ? "FULL ACCESS is ON: every command runs (terminal, installs, downloads, services, registry), except destructive ones (delete/format/registry delete/user changes) which pop a confirmation the user must click. Use pc_power for shutdown/restart/sleep/lock." : "Deleting files, shutdown, registry deletion and downloads are blocked here (use pc_power for shutdown/restart/sleep/lock, it asks the user).") + "",
     { command: str, cwd: str, timeout_seconds: num },
     ['command'],
     async (a) => {
       let cmd = s(a.command).trim()
       if (!cmd) return 'Error: empty command'
-      if (BLOCKED.test(cmd)) return 'Error: blocked by safety policy (delete/shutdown/download/policy changes). Ask the user to do it himself.'
+      if (fullAccessOn()) {
+        if (DESTRUCTIVE.test(cmd) && !(await confirmAlways('أمر مدمّر (حذف/فرمتة/ريجستري/مستخدمين)', (a.cwd ? '[' + s(a.cwd) + '] ' : '') + cmd)))
+          return 'Error: this destructive command was not confirmed by the user.'
+      } else if (BLOCKED.test(cmd)) return 'Error: blocked by safety policy (delete/shutdown/download/policy changes). For shutdown/restart/sleep use pc_power. Otherwise ask the user to turn on Full Access in Settings or do it himself.'
       if (!isReadOnly(cmd) && !(await ask('بدو ينفذ أمر PowerShell', (a.cwd ? '[' + s(a.cwd) + '] ' : '') + cmd))) return 'Error: the user denied this command.'
       cmd = cmd.replace(/(?<![\w.-])(?:\.[\\/])?gradlew(?:\.bat)?(?![\w-])/gi, '__gw')
       const secs = Math.min(1800, Math.max(60, Number(a.timeout_seconds) || 120))
@@ -285,6 +317,30 @@ export function addComputerTools(
       }
     }
   )
+  def(
+    'pc_power',
+    'Power actions on the computer: action = shutdown | restart | sleep | hibernate | lock | logoff | cancel. shutdown/restart wait delay_seconds (default 30, 0-600) so it can be aborted with action "cancel". Asks the user to confirm unless Full Access is on.',
+    { action: str, delay_seconds: num },
+    ['action'],
+    async (a) => {
+      const act = s(a.action).toLowerCase().trim()
+      const delay = Math.min(600, Math.max(0, a.delay_seconds === undefined ? 30 : Number(a.delay_seconds) || 0))
+      const cmds: Record<string, string> = {
+        shutdown: `shutdown /s /t ${delay}`,
+        restart: `shutdown /r /t ${delay}`,
+        logoff: 'shutdown /l',
+        hibernate: 'shutdown /h',
+        sleep: 'rundll32.exe powrprof.dll,SetSuspendState 0,1,0',
+        lock: 'rundll32.exe user32.dll,LockWorkStation',
+        cancel: 'shutdown /a'
+      }
+      const cmd = cmds[act]
+      if (!cmd) return 'Error: unknown action. Use shutdown, restart, sleep, hibernate, lock, logoff or cancel.'
+      if (act !== 'cancel' && act !== 'lock' && !fullAccessOn() && !(await confirmAlways('بدو ينفذ إجراء طاقة: ' + act, cmd))) return 'Error: the user did not confirm this power action.'
+      const out = await runPs(cmd + "; 'OK: ' + $A.act + ' requested'", { act }, 20000)
+      return out + (act === 'shutdown' || act === 'restart' ? ` (starts in ${delay}s; call pc_power with action "cancel" to abort)` : '')
+    }
+  )
   addOfficeTools({ def, ask, runPs, getSignal })
   def('pc_windows', 'List the open windows (title + process).', {}, [], async () =>
     runPs(
@@ -295,7 +351,7 @@ export function addComputerTools(
   )
   def('pc_open', 'Open an application, file or http(s) URL (e.g. "notepad", "calc", "https://example.com"). Asks for approval.', { target: str }, ['target'], async (a) => {
     const t = s(a.target).trim()
-    if (!t || /[;&|`]|\.(bat|cmd|ps1|vbs|js|msi|reg|scr)$/i.test(t) || /^(powershell|pwsh|cmd|wt|windowsterminal|regedit|mmc)(\.exe)?$/i.test(t))
+    if (!t || (!fullAccessOn() && (/[;&|`]|\.(bat|cmd|ps1|vbs|js|msi|reg|scr)$/i.test(t) || /^(powershell|pwsh|cmd|wt|windowsterminal|regedit|mmc)(\.exe)?$/i.test(t))))
       return 'Error: this target is not allowed (terminals/scripts are blocked).'
     if (/\.(wav|mp3|mp4|m4a|avi|mkv|mov|webm|ogg|flac)$/i.test(t))
       return 'Error: media files are not opened automatically (it pops a player/app chooser on the user PC). Just tell the user the file path.'
@@ -374,7 +430,7 @@ for($i=0;$i -lt $n;$i++){ [W32]::mouse_event($d,0,0,0,0); [W32]::mouse_event($u,
     ['keys'],
     async (a) => {
       const k = s(a.keys)
-      if (/%\{F4\}|\^\+\{ESC\}|\^%\{DEL\}|\+\{DEL\}/i.test(k)) return 'Error: this key combination is blocked.'
+      if (!fullAccessOn() && /%\{F4\}|\^\+\{ESC\}|\^%\{DEL\}|\+\{DEL\}/i.test(k)) return 'Error: this key combination is blocked.'
       const g = await guardForeground()
       if (g) return g
       if (!(await ask('بدو يبعت اختصار لوحة مفاتيح', k))) return 'Error: the user denied this.'

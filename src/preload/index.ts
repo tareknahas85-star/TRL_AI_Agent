@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron'
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
 // Custom APIs for renderer. All core logic (OpenRouter calls, skills, tools, key storage)
@@ -21,14 +21,15 @@ const api = {
     get: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:get'),
     set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:set', on),
     reset: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:reset'),
-    setAuto: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:setAuto', on)
+    setAuto: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }> => ipcRenderer.invoke('computer:setAuto', on),
+    setFull: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }> => ipcRenderer.invoke('computer:setFull', on)
   },
   onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void): (() => void) => {
     const h = (_e: unknown, tabId: string, k: 'chunk' | 'reset', t?: string): void => cb(tabId, k, t)
     ipcRenderer.on('chat:stream', h)
     return () => ipcRenderer.removeListener('chat:stream', h)
   },
-  status: (): Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number }> =>
+  status: (): Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number; free: { count: number; limit: number; limited: boolean } }> =>
     ipcRenderer.invoke('status:get'),
   onProgress: (cb: (tabId: string, text: string) => void): (() => void) => {
     const h = (_e: unknown, tabId: string, t: string): void => cb(tabId, t)
@@ -90,7 +91,21 @@ const api = {
     }
   },
   app: {
-    about: () => ipcRenderer.invoke('app:about')
+    about: () => ipcRenderer.invoke('app:about'),
+    show: (): Promise<void> => ipcRenderer.invoke('app:show'),
+    flash: (): Promise<void> => ipcRenderer.invoke('app:flash')
+  },
+  attach: {
+    pick: (projectId?: string | null) => ipcRenderer.invoke('attach:pick', projectId ?? null),
+    prepare: (paths: string[], projectId?: string | null) => ipcRenderer.invoke('attach:prepare', paths, projectId ?? null),
+    savePasted: (name: string, data: ArrayBuffer, projectId?: string | null) => ipcRenderer.invoke('attach:savePasted', name, data, projectId ?? null),
+    pathFor: (file: File): string => {
+      try {
+        return webUtils.getPathForFile(file)
+      } catch {
+        return ''
+      }
+    }
   },
   accounts: {
     get: () => ipcRenderer.invoke('accounts:get'),
@@ -146,6 +161,24 @@ const api = {
     remove: (id: string) => ipcRenderer.invoke('projects:remove', id),
     setActive: (id: string | null) => ipcRenderer.invoke('projects:setActive', id)
   },
+  files: {
+    exists: (paths: string[]): Promise<boolean[]> => ipcRenderer.invoke('file:exists', paths),
+    preview: (p: string) => ipcRenderer.invoke('file:preview', p),
+    open: (p: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('file:open', p),
+    reveal: (p: string): Promise<boolean> => ipcRenderer.invoke('file:reveal', p)
+  },
+  report: {
+    tasks: () => ipcRenderer.invoke('report:tasks'),
+    export: (csv: string) => ipcRenderer.invoke('report:export', csv),
+    budget: (v?: number) => ipcRenderer.invoke('report:budget', v)
+  },
+  telegram: {
+    get: () => ipcRenderer.invoke('telegram:get'),
+    set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string }) => ipcRenderer.invoke('telegram:set', p),
+    clearToken: () => ipcRenderer.invoke('telegram:clearToken'),
+    detect: () => ipcRenderer.invoke('telegram:detect'),
+    test: () => ipcRenderer.invoke('telegram:test')
+  },
   conversations: {
     search: (q: string): Promise<{ id: string; snippet: string }[]> => ipcRenderer.invoke('conv:search', q),
     exportMd: (id: string): Promise<{ ok: boolean; error?: string; path?: string }> => ipcRenderer.invoke('conv:export', id),
@@ -154,6 +187,7 @@ const api = {
     save: (conv: unknown) => ipcRenderer.invoke('conv:save', conv),
     delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
     pin: (id: string) => ipcRenderer.invoke('conv:pin', id),
+    setProject: (id: string, projectId: string | null): Promise<boolean> => ipcRenderer.invoke('conv:setProject', id, projectId),
     rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title)
   }
 }

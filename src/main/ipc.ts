@@ -12,9 +12,12 @@ import { refreshFreeRanking } from '../core/free-best'
 import { buildProjectContext } from '../core/project-context'
 import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
 import { registerAccountsHandlers } from './accounts-ipc'
+import { registerAttachHandlers } from './attach'
+import { registerExtrasHandlers } from './extras'
+import { notifyDone } from '../core/telegram'
 import { registerConnectorsHandlers } from './connectors-ipc'
 import { memoryPrompt } from '../core/memory'
-import { runInContext, cancelRun, type RunMode } from '../core/progress'
+import { runInContext, cancelRun, isUnattended, type RunMode } from '../core/progress'
 import { listCatalog } from '../core/catalog'
 import { CUSTOM_PREFIX, getCustomModel, listCustomModels } from '../core/custom-models'
 import { getApiKey, setApiKey } from '../store/secure-store'
@@ -38,6 +41,8 @@ export function registerIpcHandlers(): void {
   registerManagementHandlers()
   registerAccountsHandlers()
   registerConnectorsHandlers()
+  registerAttachHandlers()
+  registerExtrasHandlers()
   void ensureOllama().then(() => setTimeout(() => void warmLocalMaster(), 500))
 
   type Hist = { role: 'user' | 'assistant'; content: string }[]
@@ -203,6 +208,7 @@ export function registerIpcHandlers(): void {
           const lock = project?.confidential ? ' 🔒' : ''
           const meta = `Model: ${shownModel}${detail && !shownModel.includes(detail) ? ' [' + detail + ']' : ''}${effUsed ? ' · effort ' + effUsed : ''}${lock} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${council ? 'Council: ' + (council.revised ? 'صُحّح بعد مراجعة ' + nm(council.critic) + ' (' + council.issues + ' ملاحظات)' : council.ran ? 'راجعه ' + nm(council.critic) + ' — ' + (council.skipped ?? 'بدون تعديل') : (council.skipped ?? '')) + ' | ' : ''}${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
           if (result.modelUsed !== 'none') recordTurn(projectId, userMsg, result.content)
+          notifyDone({ unattended: isUnattended(), confidential: !!project?.confidential, ms: Date.now() - started, model: shownModel, preview: userMsg.split('\n[ملفات مرفقة')[0], failed: result.modelUsed === 'none' })
           // needsChoice: nothing answered (free chain exhausted or the picked model failed) -> the UI asks the user what to do.
           return { content: result.content, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none' }
         } catch (e) {

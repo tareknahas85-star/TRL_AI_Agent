@@ -1,7 +1,7 @@
 import OpenAI from 'openai'
 import fs from 'fs'
 import { dataFile } from './json-store'
-import { modelBlockReason, noteModelFailure } from './model-health'
+import { bumpFreeCount, modelBlockReason, noteModelFailure } from './model-health'
 import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, currentSignal } from './progress'
@@ -23,6 +23,7 @@ async function streamCompletion(
   let usage: { prompt_tokens?: number; completion_tokens?: number } | undefined
   let emitted = false
   const run = async (withUsage: boolean): Promise<void> => {
+    if (/:free$|^openrouter\/free$/.test(String(params.model))) bumpFreeCount()
     const stream: any = await client.chat.completions.create(
       { ...params, stream: true, ...(withUsage ? { stream_options: { include_usage: true } } : {}) } as any,
       { signal }
@@ -238,6 +239,7 @@ export async function executeWithFallback(
       effortApplied = Object.keys(extra).length ? getEffort() : ''
       const isEffortErr = (e: unknown): boolean => Object.keys(extra).length > 0 && [400, 422].includes((e as { status?: number })?.status ?? 0)
       const chat = async (params: Record<string, unknown>): Promise<OpenAI.Chat.ChatCompletion> => {
+        if (route === 'openrouter' && (model.endsWith(':free') || model === 'openrouter/free')) bumpFreeCount()
         try {
           return (await client.chat.completions.create({ ...params, ...extra } as never, { signal })) as OpenAI.Chat.ChatCompletion
         } catch (e) {

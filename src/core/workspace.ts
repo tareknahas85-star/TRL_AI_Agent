@@ -161,6 +161,16 @@ export function togglePinConversation(id: string): boolean | null {
   return c.pinned
 }
 
+export function setConversationProject(id: string, projectId: string | null): boolean {
+  const all = readConvs()
+  const c = all.find((x) => x.id === id)
+  if (!c) return false
+  if (projectId !== null && !readProjects().projects.some((p) => p.id === projectId)) return false
+  c.projectId = projectId
+  writeJson(CONV_FILE, all)
+  return true
+}
+
 export function renameConversation(id: string, title: string): boolean {
   const all = readConvs()
   const c = all.find((x) => x.id === id)

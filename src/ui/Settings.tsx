@@ -4,6 +4,7 @@ import { MemoryPanel } from './MemoryPanel'
 import { MasterMemoryPanel } from './MasterMemoryPanel'
 import { AccountsPanel } from './AccountsPanel'
 import { ComputerPanel } from './ComputerPanel'
+import { TelegramPanel } from './TelegramPanel'
 import { SpendPanel } from './SpendPanel'
 import { ClaudeAccountsPanel } from './ClaudeAccountsPanel'
 
@@ -100,6 +101,7 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
             <SpendPanel />
             <ClaudeAccountsPanel />
             <ComputerPanel />
+            <TelegramPanel />
           </>
         )}
         {tab === 'connectors' && <AccountsPanel />}

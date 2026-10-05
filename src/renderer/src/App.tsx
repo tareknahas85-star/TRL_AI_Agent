@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Bot, Clock, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
-  Sparkles, Sun, Trash2, User, Wrench, Download, Search, X
+  Sparkles, Sun, Trash2, User, Wrench, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
 import { ChatWindow } from '../../ui/ChatWindow'
@@ -9,7 +9,9 @@ import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
 import { ProjectsPage } from '../../ui/ProjectsPage'
+import { BarChart3 } from 'lucide-react'
 import { SchedulePage } from '../../ui/SchedulePage'
+import { TasksReportPage } from '../../ui/TasksReportPage'
 import { Settings } from '../../ui/Settings'
 import { SkillsPage } from '../../ui/SkillsPage'
 import { ToolsPage } from '../../ui/ToolsPage'
@@ -114,12 +116,13 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
   )
 }
 
-type Nav = 'chat' | 'projects' | 'schedule' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
+type Nav = 'chat' | 'projects' | 'schedule' | 'report' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
 
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
   { id: 'schedule', label: 'المهام المجدولة', icon: Clock },
+  { id: 'report', label: 'تقرير المهام', icon: BarChart3 },
   { id: 'models', label: 'الموديلات', icon: Cpu },
   { id: 'skills', label: 'السكيلز', icon: Sparkles },
   { id: 'mcp', label: 'MCP Servers', icon: Plug },
@@ -158,6 +161,20 @@ function Shell() {
   const [ready, setReady] = useState(false)
   const [wizard, setWizard] = useState(false)
   const [uname, setUname] = useState(readName)
+  const [done, setDone] = useState<Record<string, boolean>>({})
+  const [sound, setSound] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('air.sound') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const [ctx, setCtx] = useState<{ x: number; y: number; id: string; sub: boolean } | null>(null)
+  const [renaming, setRenaming] = useState<{ id: string; value: string } | null>(null)
+  const [flash, setFlash] = useState('')
+  const activeRef = useRef<{ tab: string | null; nav: Nav }>({ tab: null, nav: 'chat' })
+  const prevBusy = useRef<Record<string, boolean>>({})
+  const tabsRef = useRef<Tab[]>([])
   useEffect(() => {
     window.api
       .status()
@@ -244,6 +261,7 @@ function Shell() {
   const focusTab = (id: string): void => {
     setActiveTabId(id)
     setActiveNav('chat')
+    setDone((d) => (d[id] ? { ...d, [id]: false } : d))
   }
   const newTab = (projectId: string | null = null, title = 'محادثة جديدة'): void => {
     const t: Tab = { id: newId(), convId: null, initial: [], projectId, mode: defaultMode.current, title }
@@ -277,7 +295,108 @@ function Shell() {
   }
   const patchTab = (id: string, patch: Partial<Tab>): void => setTabs((ts) => ts.map((t) => (t.id === id ? { ...t, ...patch } : t)))
 
+  // ---- completion alert: dot on the tab + sound + system notification + taskbar flash (only when you are not looking at that chat)
+  const beep = (): void => {
+    try {
+      const AC = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const ac = new AC()
+      ;[660, 880].forEach((f, i) => {
+        const o = ac.createOscillator()
+        const g = ac.createGain()
+        o.frequency.value = f
+        o.connect(g)
+        g.connect(ac.destination)
+        const t = ac.currentTime + i * 0.18
+        g.gain.setValueAtTime(0.0001, t)
+        g.gain.exponentialRampToValueAtTime(0.25, t + 0.02)
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16)
+        o.start(t)
+        o.stop(t + 0.18)
+      })
+      setTimeout(() => void ac.close().catch(() => undefined), 900)
+    } catch {
+      /* no audio available */
+    }
+  }
+  const onBusyTab = (id: string, b: boolean): void => {
+    setBusy((x) => (x[id] === b ? x : { ...x, [id]: b }))
+    const was = prevBusy.current[id] === true
+    prevBusy.current[id] = b
+    if (!(was && !b)) return
+    const here = activeRef.current.tab === id && activeRef.current.nav === 'chat' && document.hasFocus()
+    if (here) return
+    setDone((d) => ({ ...d, [id]: true }))
+    if (sound) beep()
+    try {
+      const title = tabsRef.current.find((x) => x.id === id)?.title ?? 'محادثة'
+      const n = new Notification('TRL_AI_Agent', { body: title + ' — خلصت المهمة', silent: true })
+      n.onclick = () => {
+        void window.api.app.show()
+        focusTab(id)
+      }
+    } catch {
+      /* notifications unavailable */
+    }
+    void window.api.app.flash()
+  }
+
+  const flashMsg = (m: string): void => {
+    setFlash(m)
+    setTimeout(() => setFlash(''), 3500)
+  }
+  const moveToProject = async (convId: string, projectId: string | null): Promise<void> => {
+    setCtx(null)
+    const ok = await window.api.conversations.setProject(convId, projectId)
+    if (!ok) return flashMsg('ما قدرت أنقل المحادثة')
+    setTabs((ts) => ts.map((t) => (t.convId === convId ? { ...t, projectId } : t)))
+    const p = projects.find((x) => x.id === projectId)
+    flashMsg(projectId ? 'انضافت لمشروع «' + (p?.name ?? '') + '»' + (p?.confidential ? ' 🔒' : '') : 'انشالت من المشروع')
+    void loadConvs()
+  }
+  const commitRename = async (): Promise<void> => {
+    const r = renaming
+    setRenaming(null)
+    if (!r || !r.value.trim()) return
+    const title = r.value.trim()
+    await window.api.conversations.rename(r.id, title)
+    setTabs((ts) => ts.map((t) => (t.convId === r.id && !t.projectId ? { ...t, title: title.slice(0, 30) } : t)))
+    void loadConvs()
+  }
+
   const activeTab = tabs.find((t) => t.id === activeTabId) ?? null
+
+  useEffect(() => {
+    activeRef.current = { tab: activeTabId, nav: activeNav }
+    tabsRef.current = tabs
+  })
+  // Ctrl+Tab / Ctrl+Shift+Tab: next / previous chat tab. Esc closes the context menu.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (e.key === 'Tab' && e.ctrlKey && !e.altKey) {
+        e.preventDefault()
+        const ts = tabsRef.current
+        if (ts.length < 2) return
+        const i = ts.findIndex((t) => t.id === activeRef.current.tab)
+        const n = ts[(i + (e.shiftKey ? -1 : 1) + ts.length) % ts.length]
+        setActiveTabId(n.id)
+        setActiveNav('chat')
+        setDone((d) => (d[n.id] ? { ...d, [n.id]: false } : d))
+      } else if (e.key === 'Escape') {
+        setCtx(null)
+        setRenaming(null)
+      }
+    }
+    const onFocus = (): void => {
+      const id = activeRef.current.tab
+      if (id && activeRef.current.nav === 'chat') setDone((d) => (d[id] ? { ...d, [id]: false } : d))
+    }
+    window.addEventListener('keydown', onKey)
+    window.addEventListener('focus', onFocus)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('focus', onFocus)
+    }
+  }, [])
 
   return (
     <div className="flex h-screen w-full bg-bg text-fg">
@@ -318,14 +437,33 @@ function Shell() {
             {shownConvs.map((c) => (
               <div
                 key={c.id}
+                onContextMenu={(e) => {
+                  e.preventDefault()
+                  setCtx({ x: e.clientX, y: e.clientY, id: c.id, sub: false })
+                }}
                 className={`group flex items-center gap-1 rounded-xl px-2 py-1.5 text-sm hover:bg-surface2 ${c.id === activeTab?.convId ? 'bg-surface2' : ''}`}
               >
+                {renaming?.id === c.id ? (
+                  <input
+                    autoFocus
+                    dir="auto"
+                    value={renaming.value}
+                    onChange={(e) => setRenaming({ id: c.id, value: e.target.value })}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') void commitRename()
+                      if (e.key === 'Escape') setRenaming(null)
+                    }}
+                    onBlur={() => void commitRename()}
+                    className="min-w-0 flex-1 rounded-lg border border-primary bg-bg px-2 py-1 text-sm outline-none"
+                  />
+                ) : (
                 <button onClick={() => openConv(c.id)} className="min-w-0 flex-1 text-start">
                   <div className="truncate">{c.title}</div>
                   <div className="text-[11px] text-muted">
                     {hits ? hits[c.id] : `${new Date(c.updatedAt).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })} · ${c.count} رسالة`}
                   </div>
                 </button>
+                )}
                 <button
                   aria-label={c.pinned ? 'شيل التثبيت' : 'تثبيت'}
                   className={`rounded-full p-1 hover:bg-outline ${c.pinned ? 'text-primary' : 'text-muted opacity-0 group-hover:opacity-100'}`}
@@ -362,10 +500,27 @@ function Shell() {
           </div>
         </div>
 
+        {flash && <div className="mt-2 rounded-xl bg-primary/15 px-3 py-2 text-xs text-primary">{flash}</div>}
         <div className="mt-2 space-y-1 border-t border-outline pt-2">
           <button onClick={toggleTheme} className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             <span>{theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}</span>
+          </button>
+          <button
+            onClick={() => {
+              const v = !sound
+              setSound(v)
+              try {
+                localStorage.setItem('air.sound', v ? '1' : '0')
+              } catch {
+                /* ignore */
+              }
+              if (v) beep()
+            }}
+            className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2"
+          >
+            {sound ? <Bell size={18} /> : <BellOff size={18} />}
+            <span>{sound ? 'صوت التنبيه: شغال' : 'صوت التنبيه: مطفي'}</span>
           </button>
           <div className="flex items-center gap-3 px-4 py-2 text-sm">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface2">
@@ -393,6 +548,7 @@ function Shell() {
                   {t.projectId ? <FolderOpen size={13} className="shrink-0 text-primary" /> : <MessageSquare size={13} className="shrink-0" />}
                   <span className="truncate">{t.title}</span>
                   {busy[t.id] && <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" title="عم يشتغل" />}
+                  {done[t.id] && !busy[t.id] && <span className="h-2 w-2 shrink-0 rounded-full bg-success" title="خلصت المهمة" />}
                 </button>
                 <button aria-label="سكّر التبويب" onClick={() => closeTab(t.id)} className="rounded-full p-0.5 hover:bg-outline">
                   <X size={12} />
@@ -416,7 +572,7 @@ function Shell() {
               project={projects.find((p) => p.id === t.projectId) ?? null}
               mode={t.mode}
               onModeChange={(m) => patchTab(t.id, { mode: m })}
-              onBusy={(b) => setBusy((x) => (x[t.id] === b ? x : { ...x, [t.id]: b }))}
+              onBusy={(b) => onBusyTab(t.id, b)}
               onSaved={(id, title) => {
                 patchTab(t.id, { convId: id, ...(t.projectId || !title ? {} : { title: title.slice(0, 30) }) })
                 loadConvs()
@@ -424,6 +580,7 @@ function Shell() {
             />
           ))}
         {activeNav === 'schedule' && <SchedulePage />}
+          {activeNav === 'report' && <TasksReportPage onOpenConv={(id) => void openConv(id)} />}
       {activeNav === 'projects' && (
           <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} />
         )}
@@ -433,6 +590,83 @@ function Shell() {
         {activeNav === 'tools' && <ToolsPage />}
         {activeNav === 'settings' && <Settings variant="page" />}
       </main>
+      {ctx &&
+        (() => {
+          const c = convs.find((x) => x.id === ctx.id)
+          if (!c) return null
+          const item = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start hover:bg-surface2'
+          return (
+            <div className="fixed inset-0 z-50" onClick={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null) }}>
+              <div
+                className="absolute w-56 rounded-xl border border-outline bg-surface p-1 text-sm shadow-card"
+                style={{ left: Math.max(4, Math.min(ctx.x, window.innerWidth - 232)), top: Math.max(4, Math.min(ctx.y, window.innerHeight - 300)) }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <button className={item} onClick={() => setCtx({ ...ctx, sub: !ctx.sub })}>
+                  <FolderPlus size={14} /> إضافة لمشروع {ctx.sub ? '▴' : '▾'}
+                </button>
+                {ctx.sub && (
+                  <div className="max-h-48 overflow-y-auto border-y border-outline py-1">
+                    {projects.length === 0 && <div className="px-3 py-2 text-xs text-muted">ما في مشاريع. ضيف مشروع من صفحة المشاريع.</div>}
+                    {projects.map((p) => (
+                      <button key={p.id} className={item} onClick={() => void moveToProject(c.id, p.id)}>
+                        📁 <span className="truncate">{p.name}</span>
+                        {p.confidential ? ' 🔒' : ''}
+                        {c.projectId === p.id ? ' ✓' : ''}
+                      </button>
+                    ))}
+                    {c.projectId && (
+                      <button className={item} onClick={() => void moveToProject(c.id, null)}>
+                        ✖ بدون مشروع
+                      </button>
+                    )}
+                  </div>
+                )}
+                <button
+                  className={item}
+                  onClick={() => {
+                    setCtx(null)
+                    setRenaming({ id: c.id, value: c.title })
+                  }}
+                >
+                  <Pencil size={14} /> إعادة تسمية
+                </button>
+                <button
+                  className={item}
+                  onClick={async () => {
+                    setCtx(null)
+                    await window.api.conversations.pin(c.id)
+                    void loadConvs()
+                  }}
+                >
+                  {c.pinned ? <PinOff size={14} /> : <Pin size={14} />} {c.pinned ? 'شيل التثبيت' : 'تثبيت'}
+                </button>
+                <button
+                  className={item}
+                  onClick={() => {
+                    setCtx(null)
+                    void window.api.conversations.exportMd(c.id)
+                  }}
+                >
+                  <Download size={14} /> تصدير Markdown
+                </button>
+                <button
+                  className={item + ' text-danger'}
+                  onClick={async () => {
+                    setCtx(null)
+                    if (!confirm('بدك تحذف هالمحادثة؟')) return
+                    await window.api.conversations.delete(c.id)
+                    const t = tabs.find((x) => x.convId === c.id)
+                    if (t) closeTab(t.id)
+                    void loadConvs()
+                  }}
+                >
+                  <Trash2 size={14} /> حذف
+                </button>
+              </div>
+            </div>
+          )
+        })()}
       {wizard && (
         <Onboarding
           onClose={() => {

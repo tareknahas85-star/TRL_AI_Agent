@@ -32,3 +32,17 @@ export function modelBlockReason(model: string): string | null {
   if ((h.blocked[model] ?? 0) > now) return 'blocked'
   return null
 }
+
+// Counts today's OpenRouter free-model requests (UTC day) so the UI can show how close the daily cap is.
+const COUNT_FILE = 'free-usage.json'
+export const FREE_DAILY_LIMIT = 50 // 1000 once the OpenRouter account has $10 credit
+const utcDay = (): string => new Date().toISOString().slice(0, 10)
+export function bumpFreeCount(): void {
+  const u = readJson<{ day?: string; count?: number }>(COUNT_FILE, {})
+  const day = utcDay()
+  writeJson(COUNT_FILE, { day, count: (u.day === day ? (u.count ?? 0) : 0) + 1 })
+}
+export function freeUsage(): { count: number; limit: number; limited: boolean } {
+  const u = readJson<{ day?: string; count?: number }>(COUNT_FILE, {})
+  return { count: u.day === utcDay() ? (u.count ?? 0) : 0, limit: FREE_DAILY_LIMIT, limited: load().freeUntil > Date.now() }
+}

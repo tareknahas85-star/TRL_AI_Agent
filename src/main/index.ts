@@ -98,6 +98,10 @@ app.whenReady().then(() => {
 
   hydrateEnvFromStore()
   registerIpcHandlers()
+  ipcMain.handle('app:show', () => showMain())
+  ipcMain.handle('app:flash', () => {
+    if (mainWin && !mainWin.isDestroyed() && !mainWin.isFocused()) mainWin.flashFrame(true)
+  })
 
   createWindow()
   createTray()

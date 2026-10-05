@@ -55,6 +55,33 @@ export type ConversationSummary = {
 }
 export type ConversationFull = Omit<ConversationSummary, 'count'> & { messages: StoredMessage[] }
 
+export type FilePreviewInfo = { ok: boolean; kind?: string; name?: string; size?: number; text?: string; dataUrl?: string; mime?: string; note?: string }
+export type TelegramInfo = { enabled: boolean; chatId: string; minSeconds: number; hasToken: boolean }
+export type TaskRowInfo = {
+  at: number
+  convId: string
+  convTitle: string
+  projectId: string | null
+  cost: number
+  model: string
+  tried: string[]
+  escalated: boolean
+  failures: number
+  tools: string[]
+  totalMs: number
+  tokens: number
+  tier: 'free' | 'cheap' | 'sub' | 'custom' | 'other'
+  prompt: string
+}
+export type AttachmentInfo = {
+  path: string
+  name: string
+  kind: 'text' | 'office' | 'pdf' | 'image' | 'audio' | 'video' | 'other'
+  size: number
+  text?: string
+  note?: string
+}
+
 declare global {
   interface Window {
     electron: ElectronAPI
@@ -68,13 +95,14 @@ declare global {
         set: (on: boolean) => Promise<boolean>
       }
       computer: {
-        get: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
-        set: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
-        reset: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
-        setAuto: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }>
+        get: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }>
+        set: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }>
+        reset: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }>
+        setAuto: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }>
+        setFull: (on: boolean) => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }>
       }
       onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void) => () => void
-      status: () => Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number }>
+      status: () => Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number; free: { count: number; limit: number; limited: boolean } }>
       onProgress: (cb: (tabId: string, text: string) => void) => () => void
       getKey: (key: string) => Promise<string>
       setKey: (key: string, value: string) => Promise<boolean>
@@ -142,6 +170,32 @@ declare global {
       }
       app: {
         about: () => Promise<{ version: string; electron: string; chrome: string; node: string; platform: string }>
+        show: () => Promise<void>
+        flash: () => Promise<void>
+      }
+      files: {
+        exists: (paths: string[]) => Promise<boolean[]>
+        preview: (p: string) => Promise<FilePreviewInfo>
+        open: (p: string) => Promise<{ ok: boolean; error?: string }>
+        reveal: (p: string) => Promise<boolean>
+      }
+      report: {
+        tasks: () => Promise<TaskRowInfo[]>
+        export: (csv: string) => Promise<{ ok: boolean; path?: string }>
+        budget: (v?: number) => Promise<number>
+      }
+      telegram: {
+        get: () => Promise<TelegramInfo>
+        set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string }) => Promise<TelegramInfo>
+        clearToken: () => Promise<TelegramInfo>
+        detect: () => Promise<{ ok: boolean; chatId?: string; name?: string; error?: string }>
+        test: () => Promise<{ ok: boolean; error?: string }>
+      }
+      attach: {
+        pick: (projectId?: string | null) => Promise<AttachmentInfo[]>
+        prepare: (paths: string[], projectId?: string | null) => Promise<AttachmentInfo[]>
+        savePasted: (name: string, data: ArrayBuffer, projectId?: string | null) => Promise<AttachmentInfo[]>
+        pathFor: (file: File) => string
       }
       accounts: {
         get: () => Promise<{ googleEmail: string; writeServers: string[]; connected: string[] }>
@@ -208,6 +262,7 @@ declare global {
         save: (conv: { id?: string; messages: StoredMessage[]; projectId?: string | null }) => Promise<ConversationSummary>
         delete: (id: string) => Promise<boolean>
         pin: (id: string) => Promise<boolean | null>
+        setProject: (id: string, projectId: string | null) => Promise<boolean>
         rename: (id: string, title: string) => Promise<boolean>
       }
     }

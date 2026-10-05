@@ -59,8 +59,16 @@ export function claudePersonalLogin(): { ok: boolean; error?: string } {
   if (!exe) return { ok: false, error: 'أداة claude مو مثبّتة' }
   fs.mkdirSync(personalClaudeDir(), { recursive: true })
   if (!isWin) return { ok: false, error: 'شغّل بالتيرمينال: CLAUDE_CONFIG_DIR="' + personalClaudeDir() + '" claude auth login' }
-  const cmd = 'set "CLAUDE_CONFIG_DIR=' + personalClaudeDir() + '" && "' + exe + '" auth login'
-  spawn('cmd.exe', ['/c', 'start', '"تسجيل دخول Claude الشخصي"', 'cmd.exe', '/k', cmd], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
+  // Pick a launcher cmd.exe can run: the npm shim claude.cmd, or a real .exe (never the extensionless sh shim / .ps1).
+  let run = exe
+  if (!/\.(exe|cmd|bat)$/i.test(run)) {
+    const alt = path.join(path.dirname(run), 'claude.cmd')
+    run = fs.existsSync(alt) ? alt : run
+  }
+  // A .bat avoids the quoting/&& problems of passing the whole line through `cmd /c start`.
+  const bat = path.join(personalClaudeDir(), 'login.bat')
+  fs.writeFileSync(bat, ['@echo off', 'chcp 65001 >nul', 'title Claude personal login', 'set "CLAUDE_CONFIG_DIR=' + personalClaudeDir() + '"', 'call "' + run + '" auth login', 'echo.', 'echo Done. You can close this window and press Refresh in the app.', 'pause', ''].join('\r\n'))
+  spawn('cmd.exe', ['/c', 'start', '', bat], { detached: true, stdio: 'ignore', windowsHide: false }).unref()
   return { ok: true }
 }
 

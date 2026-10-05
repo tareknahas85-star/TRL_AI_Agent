@@ -102,8 +102,15 @@ export function MCPPage() {
       {servers.length === 0 ? (
         <Empty text="ما في سيرفرات MCP - ضيف واحد" />
       ) : (
-        <div className="overflow-x-auto rounded-card border border-outline">
-          <table className="w-full text-sm">
+        <div className="rounded-card border border-outline">
+          <table className="w-full table-fixed text-sm">
+            <colgroup>
+              <col style={{ width: '15%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '22%' }} />
+              <col style={{ width: '21%' }} />
+              <col style={{ width: '20%' }} />
+            </colgroup>
             <thead className="bg-surface2">
               <tr>
                 <th className={th}>Name</th>
@@ -118,11 +125,11 @@ export function MCPPage() {
                 const r = results[s.name]
                 return (
                   <tr key={s.name} className="border-t border-outline">
-                    <td className="px-4 py-3 font-medium">{s.name}</td>
-                    <td dir="ltr" className="px-4 py-3 text-start font-mono text-xs">{s.command}</td>
-                    <td dir="ltr" className="max-w-[220px] truncate px-4 py-3 text-start font-mono text-xs">{(s.args ?? []).join(' ')}</td>
+                    <td className="break-words px-4 py-3 font-medium">{s.name}</td>
+                    <td dir="ltr" className="truncate px-4 py-3 text-start font-mono text-xs" title={s.command}>{s.command}</td>
+                    <td dir="ltr" className="truncate px-4 py-3 text-start font-mono text-xs" title={(s.args ?? []).join(' ')}>{(s.args ?? []).join(' ')}</td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <Toggle
                           checked={s.enabled !== false}
                           label={`تفعيل ${s.name}`}
@@ -140,7 +147,7 @@ export function MCPPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex gap-1">
+                      <div className="flex flex-wrap gap-1">
                         <button className={ghostBtn + ' flex items-center gap-1'} disabled={testing === s.name} onClick={() => test(s.name)}>
                           {testing === s.name ? <Loader2 size={14} className="animate-spin" /> : <Plug size={14} />} اختبار
                         </button>

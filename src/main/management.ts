@@ -1,10 +1,11 @@
 import { fetchRemoteModels, importRemoteModels, setCustomModelKey, setCustomModelPosition } from '../core/custom-models'
 import { freeOnly, setFreeOnly } from '../core/spend'
+import { freeUsage } from '../core/model-health'
 import { moveCatalogModel } from '../core/catalog'
 import { deleteMemoryEntry, importMemory, listMemory, memoryPrompt, saveMemoryEntry, toggleMemoryEntry } from '../core/memory'
 import { fetchOpenRouterModels, listCatalog, setCatalogEnabled, testOpenRouterKey } from '../core/catalog'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
-import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled } from '../computer/control'
+import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled, setFullAccess } from '../computer/control'
 import { addSchedule, listSchedules, removeSchedule, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
 import { importServers, parseAny, scanSources } from '../mcp/import'
 import { importPlugins, scanPlugins } from '../mcp/plugins'
@@ -42,6 +43,7 @@ import {
   addProject,
   deleteConversation,
   getConversation,
+  setConversationProject,
   listConversations,
   listCustomTools,
   listProjects,
@@ -67,6 +69,10 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('computer:get', () => computerState())
   ipcMain.handle('computer:set', (_e, on: unknown) => {
     setComputerEnabled(on === true)
+    return computerState()
+  })
+  ipcMain.handle('computer:setFull', (_e, on: unknown) => {
+    setFullAccess(on === true)
     return computerState()
   })
   ipcMain.handle('spend:get', () => freeOnly())
@@ -246,7 +252,8 @@ export function registerManagementHandlers(): void {
       ollama,
       localMaster,
       mcpOn: servers.filter((s) => s.enabled !== false).length,
-      mcpTotal: servers.length
+      mcpTotal: servers.length,
+      free: freeUsage()
     }
   })
 
@@ -319,6 +326,9 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('conv:get', (_e, id: unknown) => (typeof id === 'string' ? getConversation(id) : null))
   ipcMain.handle('conv:save', (_e, conv: unknown) => saveConversation((conv ?? {}) as never))
   ipcMain.handle('conv:delete', (_e, id: unknown) => typeof id === 'string' && deleteConversation(id))
+  ipcMain.handle('conv:setProject', (_e, id: unknown, pid: unknown) =>
+    typeof id === 'string' && (pid === null || typeof pid === 'string') ? setConversationProject(id, pid) : false
+  )
   ipcMain.handle('conv:pin', (_e, id: unknown) => (typeof id === 'string' ? togglePinConversation(id) : null))
   ipcMain.handle('conv:rename', (_e, id: unknown, t: unknown) =>
     typeof id === 'string' && typeof t === 'string' && renameConversation(id, t)

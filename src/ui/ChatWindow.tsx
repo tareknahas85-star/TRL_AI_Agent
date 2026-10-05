@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
-import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, RotateCcw, Square } from 'lucide-react'
+import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, Mic, Paperclip, Play, RotateCcw, Square, X } from 'lucide-react'
 import { Markdown } from './Markdown'
 import { CostDashboard } from './CostDashboard'
 import { Chip } from './components/ui'
-import type { ChatMode, ProjectInfo, StoredMessage } from '../preload/index.d'
+import { FileChips } from './FileChips'
+import type { AttachmentInfo, ChatMode, ProjectInfo, StoredMessage } from '../preload/index.d'
 
 type ChatMessage = StoredMessage
+
+const fmtSize = (n: number): string => (n > 1048576 ? (n / 1048576).toFixed(1) + 'MB' : Math.max(1, Math.round(n / 1024)) + 'KB')
+const attBlock = (a: AttachmentInfo): string =>
+  '--- ' + a.name + ' [' + a.kind + ', ' + fmtSize(a.size) + ']\npath: ' + a.path + '\n' + (a.text ?? '') + (a.note ? '\n[ملاحظة] ' + a.note : '')
+
+const TEMPLATES: { label: string; text: string }[] = [
+  { label: '✉️ راجع إيميل', text: 'راجعلي هالإيميل قبل ما ابعتو: دقّق اللغة والنبرة واقترحلي تعديلات.\n\n' },
+  { label: '📊 تقرير Excel', text: 'اعملي ملف Excel فيه جدول وملخص ورسم بياني للبيانات التالية:\n\n' },
+  { label: '📄 مستند Word', text: 'اكتبلي مستند Word رسمي عن:\n\n' },
+  { label: '📽️ عرض PowerPoint', text: 'جهزلي عرض PowerPoint عن:\n\n' },
+  { label: '📎 لخّص ملف', text: 'لخصلي الملف المرفق بنقاط واضحة وطلعلي القرارات والمهام.\n\n' },
+  { label: '⚙️ سكربت PowerShell', text: 'اكتبلي سكربت PowerShell يعمل التالي:\n\n' }
+]
 
 function Avatar() {
   return (
@@ -243,7 +257,7 @@ function MetaBar({ meta }: { meta: string }) {
 }
 
 function StatusChips() {
-  const [st, setSt] = useState<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number } | null>(null)
+  const [st, setSt] = useState<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number; free: { count: number; limit: number; limited: boolean } } | null>(null)
   useEffect(() => {
     let alive = true
     const load = (): void => {
@@ -269,6 +283,7 @@ function StatusChips() {
       {item(st.ollama, 'Ollama')}
       {item(st.localMaster, 'ماستر محلي')}
       {item(st.mcpTotal === 0 || st.mcpOn > 0, `MCP ${st.mcpOn}/${st.mcpTotal}`)}
+      {item(!st.free.limited && st.free.count < st.free.limit - 5, st.free.limited ? '🆓 خلصت كوتا اليوم' : `🆓 ${st.free.count}/${st.free.limit} اليوم`)}
     </>
   )
 }
@@ -301,6 +316,78 @@ export function ChatWindow({
   const convIdRef = useRef<string | null>(conversationId)
   const [progress, setProgress] = useState('')
   const [elapsed, setElapsed] = useState(0)
+  const [atts, setAtts] = useState<AttachmentInfo[]>([])
+  const [dragOver, setDragOver] = useState(false)
+  const taRef = useRef<HTMLTextAreaElement>(null)
+  const lastTypedRef = useRef('')
+  const [prep, setPrep] = useState(0)
+  // voice note: record with the mic, transcribe locally (Whisper) and drop the text into the input box
+  const [rec, setRec] = useState(false)
+  const recRef = useRef<MediaRecorder | null>(null)
+  const toggleRec = async (): Promise<void> => {
+    if (recRef.current) {
+      recRef.current.stop()
+      return
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const mr = new MediaRecorder(stream)
+      const chunks: Blob[] = []
+      mr.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop())
+        recRef.current = null
+        setRec(false)
+        if (!chunks.length) return
+        setPrep((n) => n + 1)
+        try {
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          const [a] = await window.api.attach.savePasted('voice-' + Date.now() + '.webm', await blob.arrayBuffer(), project?.id ?? null)
+          const txt = a?.text?.trim()
+          if (txt) setInput((v) => (v ? v + ' ' : '') + txt)
+          else addAtts(a ? [a] : [])
+        } finally {
+          setPrep((n) => Math.max(0, n - 1))
+        }
+      }
+      recRef.current = mr
+      mr.start()
+      setRec(true)
+    } catch (e) {
+      console.warn('mic failed', e)
+    }
+  }
+  const addAtts = (list: AttachmentInfo[]): void => setAtts((a) => [...a, ...list.filter((x) => !a.some((y) => y.path === x.path))])
+  const pickFiles = async (): Promise<void> => {
+    try {
+      setPrep((n) => n + 1)
+      addAtts(await window.api.attach.pick(project?.id ?? null))
+    } catch (e) {
+      console.warn('attach pick failed', e)
+    } finally {
+      setPrep((n) => Math.max(0, n - 1))
+    }
+  }
+  const addFiles = async (files: File[]): Promise<void> => {
+    setPrep((n) => n + 1)
+    try {
+    const paths: string[] = []
+    for (const f of files) {
+      const p = window.api.attach.pathFor(f)
+      if (p) paths.push(p)
+      else addAtts(await window.api.attach.savePasted(f.name || 'pasted-' + Date.now() + '.png', await f.arrayBuffer(), project?.id ?? null))
+    }
+    if (paths.length) addAtts(await window.api.attach.prepare(paths, project?.id ?? null))
+    } finally {
+      setPrep((n) => Math.max(0, n - 1))
+    }
+  }
+  useEffect(() => {
+    const el = taRef.current
+    if (!el) return
+    el.style.height = 'auto'
+    el.style.height = Math.min(el.scrollHeight, 160) + 'px'
+  }, [input])
 
   useEffect(() => window.api.onProgress((id, t) => id === tabId && setProgress(t)), [tabId])
   useEffect(() => {
@@ -343,6 +430,7 @@ export function ChatWindow({
 
   const lastUserRef = useRef('')
   const streamRef = useRef('')
+  const partialRef = useRef('') // last streamed text; survives the 'reset' a cancel triggers, so Stop keeps what was written
   const [streamText, setStreamText] = useState('')
   const [retrying, setRetrying] = useState(false)
   const [retryNote, setRetryNote] = useState('')
@@ -352,10 +440,12 @@ export function ChatWindow({
       window.api.onStream((id, kind, t) => {
         if (id !== tabId) return
         if (kind === 'reset') {
+          if (streamRef.current.trim()) partialRef.current = streamRef.current
           streamRef.current = ''
           setStreamText('')
         } else if (t) {
           streamRef.current += t
+          partialRef.current = streamRef.current
           setStreamText(streamRef.current)
         }
       }),
@@ -366,6 +456,7 @@ export function ChatWindow({
     setProgress('')
     setStreamText('')
     streamRef.current = ''
+    partialRef.current = ''
     setRetryNote('')
     setNeedsChoice(false)
     setLoading(true)
@@ -377,13 +468,13 @@ export function ChatWindow({
         : await window.api.chat(lastUserRef.current, base.slice(0, -1).map((m) => ({ role: m.role, content: m.content })), opts)
       if (r.needsChoice) setNeedsChoice(true)
       if (r.cancelled) {
-        const partial = streamRef.current
+        const partial = streamRef.current.trim() ? streamRef.current : partialRef.current
         if (partial.trim()) {
           next = [...base, { role: 'assistant', content: partial + '\n\n_⏹ انوقف_', at: Date.now() }]
         } else if (retry) {
           next = base
         } else {
-          setInput(lastUserRef.current)
+          setInput(lastTypedRef.current)
           next = base.slice(0, -1)
         }
       } else if (retry && r.failed) {
@@ -405,12 +496,16 @@ export function ChatWindow({
   }
 
   const handleSend = async (): Promise<void> => {
-    if (!input.trim() || loading) return
-    const userMsg = input
-    lastUserRef.current = userMsg
-    const withUser = [...messages, { role: 'user' as const, content: userMsg, at: Date.now() }]
+    if ((!input.trim() && !atts.length) || loading || prep > 0) return
+    const typed = input.trim() ? input : 'حلل الملفات المرفقة وقلي شو فيها.'
+    const shown = atts.length ? typed + '\n\n' + atts.map((a) => '📎 ' + a.path).join('\n') : typed
+    const toModel = atts.length ? (typed + '\n\n[ملفات مرفقة من المستخدم]\n' + atts.map(attBlock).join('\n\n')).slice(0, 70000) : typed
+    lastTypedRef.current = typed
+    lastUserRef.current = toModel
+    const withUser = [...messages, { role: 'user' as const, content: shown, at: Date.now() }]
     setMessages(withUser)
     setInput('')
+    setAtts([])
     await runRequest(false, withUser)
   }
 
@@ -419,6 +514,16 @@ export function ChatWindow({
     setRetrying(true)
     await runRequest(true, messages, retryMode)
     setRetrying(false)
+  }
+
+  const handleResume = async (): Promise<void> => {
+    if (loading) return
+    const t = 'كمّل من وين وقفت، وما تعيد اللي خلص.'
+    lastTypedRef.current = t
+    lastUserRef.current = t
+    const w = [...messages, { role: 'user' as const, content: t, at: Date.now() }]
+    setMessages(w)
+    await runRequest(false, w)
   }
 
   const handleStop = (): void => {
@@ -447,9 +552,25 @@ export function ChatWindow({
       <div className="min-h-0 flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
           {messages.length === 0 && !loading && (
-            <p className="pt-16 text-center text-sm text-muted">
+            <div className="pt-16 text-center">
+            <p className="text-sm text-muted">
               جرب: مرحبا كيفك (بسيط ← مجاني) | اكتبلي فانكشن بايثون ترتب مصفوفة (معقد ← غالي + سكيل)
             </p>
+            <div className="mx-auto mt-4 flex max-w-xl flex-wrap justify-center gap-2">
+              {TEMPLATES.map((t) => (
+                <button
+                  key={t.label}
+                  onClick={() => {
+                    setInput(t.text)
+                    taRef.current?.focus()
+                  }}
+                  className="rounded-full border border-outline bg-surface px-3 py-1.5 text-xs hover:bg-surface2"
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+            </div>
           )}
 
           {messages.map((msg, i) =>
@@ -463,8 +584,16 @@ export function ChatWindow({
                 <Avatar />
                 <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
                   <Markdown text={msg.content} />
+                  <FileChips text={msg.content} />
                   {msg.meta && <MetaBar meta={msg.meta} />}
                   <MsgFooter text={msg.content} at={msg.at} />
+                  {!msg.meta && i === messages.length - 1 && !loading && (msg.content.trimEnd().endsWith('_⏹ انوقف_') || msg.content.startsWith('Error:')) && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <button onClick={() => void handleResume()} className="flex items-center gap-1 rounded-full bg-primary px-3 py-1 text-[11px] text-white">
+                        <Play size={12} /> كمّل من وين وقفت
+                      </button>
+                    </div>
+                  )}
                   {msg.meta && i === messages.length - 1 && !loading && (
                     <div className="mt-2 flex items-center gap-2">
                       <button onClick={() => handleRetry()} className="flex items-center gap-1 rounded-full border border-outline px-3 py-1 text-[11px] text-muted hover:bg-surface2">
@@ -505,7 +634,22 @@ export function ChatWindow({
         </div>
       </div>
 
-      <div className="bg-bg px-4 pb-4 pt-2">
+      <div
+        className="bg-bg px-4 pb-4 pt-2"
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes('Files')) {
+            e.preventDefault()
+            setDragOver(true)
+          }
+        }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={(e) => {
+          if (!e.dataTransfer.files.length) return
+          e.preventDefault()
+          setDragOver(false)
+          void addFiles(Array.from(e.dataTransfer.files))
+        }}
+      >
         {needsChoice && !loading && (
           <div className="mx-auto mb-2 max-w-3xl rounded-card border border-warning/50 bg-warning/10 p-3 text-xs">
             <div className="mb-2 font-medium">
@@ -599,29 +743,86 @@ export function ChatWindow({
           )}
           {mode.kind !== 'free' && <span className="text-warning">ممكن يستهلك رصيدك</span>}
         </div>
-        <div className="mx-auto flex max-w-3xl items-center gap-2 rounded-full border border-outline bg-surface px-4 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow">
-          <input
+        {prep > 0 && (
+          <div className="mx-auto mb-1.5 flex max-w-3xl items-center gap-2 text-[11px] text-muted">
+            <Loader2 size={12} className="animate-spin" /> عم يجهّز الملفات (تفريغ الصوت أو وصف الصور ممكن ياخد شوي)…
+          </div>
+        )}
+        {atts.length > 0 && (
+          <div className="mx-auto mb-1.5 flex max-w-3xl flex-wrap gap-1.5">
+            {atts.map((a) => (
+              <span key={a.path} title={a.note ?? a.path} className="flex items-center gap-1 rounded-full border border-outline bg-surface2 px-2.5 py-1 text-[11px]">
+                <Paperclip size={11} />
+                <span dir="ltr" className="max-w-[200px] truncate">
+                  {a.name}
+                </span>
+                {a.note && !a.text && <span className="text-warning">⚠</span>}
+                <button aria-label="شيل المرفق" onClick={() => setAtts((x) => x.filter((y) => y.path !== a.path))} className="rounded-full p-0.5 hover:bg-outline">
+                  <X size={11} />
+                </button>
+              </span>
+            ))}
+          </div>
+        )}
+        <div
+          className={
+            'mx-auto flex max-w-3xl items-end gap-2 rounded-3xl border bg-surface px-3 py-2 shadow-card focus-within:border-primary focus-within:shadow-glow ' +
+            (dragOver ? 'border-primary' : 'border-outline')
+          }
+        >
+          <button
+            onClick={() => void pickFiles()}
+            title="إرفاق ملفات (صوت، Office، صور، PDF، نصوص...)"
+            aria-label="إرفاق ملفات"
+            className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface2"
+          >
+            <Paperclip size={18} />
+          </button>
+          <button
+            onClick={() => void toggleRec()}
+            title={rec ? 'وقّف التسجيل وفرّغو لنص' : 'فويس نوت (بيتفرّغ محلياً بـ Whisper)'}
+            aria-label="تسجيل صوت"
+            className={'mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full ' + (rec ? 'animate-pulse bg-danger text-white' : 'text-muted hover:bg-surface2')}
+          >
+            <Mic size={18} />
+          </button>
+          <textarea
+            ref={taRef}
+            rows={1}
+            dir="auto"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-            placeholder="اكتب طلبك هون..."
-            className="flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-muted"
+            onPaste={(e) => {
+              const fs = Array.from(e.clipboardData.files)
+              if (fs.length) {
+                e.preventDefault()
+                void addFiles(fs)
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+                e.preventDefault()
+                void handleSend()
+              }
+            }}
+            placeholder="اكتب طلبك هون… (Enter بيبعت، Shift+Enter سطر جديد)"
+            className="max-h-40 flex-1 resize-none bg-transparent py-2 text-sm outline-none placeholder:text-muted"
           />
           {loading ? (
             <button
               onClick={handleStop}
               aria-label="وقّف"
               title="وقّف الطلب"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-danger text-white"
+              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-danger text-white"
             >
               <Square size={14} fill="currentColor" />
             </button>
           ) : (
             <button
               onClick={handleSend}
-              disabled={!input.trim()}
+              disabled={(!input.trim() && !atts.length) || prep > 0}
               aria-label="ابعت"
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-40"
+              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary text-white transition-opacity disabled:opacity-40"
             >
               <ArrowUp size={18} />
             </button>
