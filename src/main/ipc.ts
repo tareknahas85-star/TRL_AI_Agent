@@ -14,6 +14,7 @@ import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
 import { registerAccountsHandlers } from './accounts-ipc'
 import { registerAttachHandlers } from './attach'
 import { registerExtrasHandlers } from './extras'
+import { registerHfHandlers } from './hf'
 import { notifyDone } from '../core/telegram'
 import { registerConnectorsHandlers } from './connectors-ipc'
 import { memoryPrompt } from '../core/memory'
@@ -22,7 +23,7 @@ import { listCatalog } from '../core/catalog'
 import { CUSTOM_PREFIX, getCustomModel, listCustomModels } from '../core/custom-models'
 import { getApiKey, setApiKey } from '../store/secure-store'
 
-const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] as const
+const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
 
 function isKeyName(k: unknown): k is KeyName {
@@ -43,6 +44,7 @@ export function registerIpcHandlers(): void {
   registerConnectorsHandlers()
   registerAttachHandlers()
   registerExtrasHandlers()
+  registerHfHandlers()
   void ensureOllama().then(() => setTimeout(() => void warmLocalMaster(), 500))
 
   type Hist = { role: 'user' | 'assistant'; content: string }[]

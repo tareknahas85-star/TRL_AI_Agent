@@ -8,7 +8,8 @@ import { getApiKey } from '../store/secure-store'
 import { OPENROUTER_MODELS_API } from '../core/config'
 import { scoreFree } from '../core/free-best'
 import { bumpFreeCount } from '../core/model-health'
-import { readJson } from '../core/json-store'
+import { readJson, dataFile } from '../core/json-store'
+import { hfChosen } from './hf'
 import { freeOnly } from '../core/spend'
 
 // ---------- audio / video -> text (local faster-whisper, nothing leaves the PC) ----------
@@ -212,12 +213,58 @@ async function describeOpenRouter(dataUrl: string): Promise<{ text: string; mode
         signal: AbortSignal.timeout(75000)
       })
       bumpFreeCount()
-      if (!r.ok) continue
+      if (!r.ok) {
+        visionLog('or/' + model, r.status + ' ' + (await r.text().catch(() => '')))
+        continue
+      }
       const j = (await r.json()) as { choices?: { message?: { content?: string } }[] }
       const text = (j.choices?.[0]?.message?.content ?? '').trim()
       if (text.length > 10) return { text, model }
     } catch {
       /* try next model */
+    }
+  }
+  return null
+}
+
+// Failed vision attempts are written to router.log so the real reason (403 / 429 / no key) is visible later.
+function visionLog(model: string, reason: string): void {
+  try {
+    fs.appendFileSync(dataFile('router.log'), new Date().toISOString() + ' vision:' + model + ' :: ' + reason.replace(/\s+/g, ' ').slice(0, 200) + '\n')
+  } catch {
+    /* best-effort */
+  }
+}
+
+// Hugging Face Inference Providers (OpenAI-compatible router). Free tier is limited; needs HUGGINGFACE_API_KEY.
+const HF_DEFAULT_MODELS = ['google/gemma-4-31B-it', 'google/gemma-3-27b-it', 'Qwen/Qwen3.5-35B-A3B']
+
+async function describeHuggingFace(dataUrl: string): Promise<{ text: string; model: string } | null> {
+  const key = getApiKey('HUGGINGFACE_API_KEY')
+  if (!key) return null
+  const chosen = hfChosen()
+  for (const model of [...new Set([chosen, ...HF_DEFAULT_MODELS].filter(Boolean))]) {
+    try {
+      const r = await fetch('https://router.huggingface.co/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+        body: JSON.stringify({
+          model,
+          max_tokens: 2500,
+          messages: [{ role: 'user', content: [{ type: 'text', text: VISION_PROMPT }, { type: 'image_url', image_url: { url: dataUrl } }] }]
+        }),
+        signal: AbortSignal.timeout(75000)
+      })
+      if (!r.ok) {
+        visionLog('hf/' + model, r.status + ' ' + (await r.text().catch(() => '')))
+        continue
+      }
+      const j = (await r.json()) as { choices?: { message?: { content?: string } }[] }
+      const text = (j.choices?.[0]?.message?.content ?? '').trim()
+      if (text.length > 10) return { text, model }
+      visionLog('hf/' + model, 'empty answer')
+    } catch (e) {
+      visionLog('hf/' + model, e instanceof Error ? e.message : String(e))
     }
   }
   return null
@@ -240,5 +287,7 @@ export async function describeImage(file: string, confidential: boolean): Promis
   }
   const r = await describeOpenRouter(dataUrl)
   if (r) return { text: r.text, note: 'وصف الصورة بموديل رؤية مجاني (' + r.model + ') عبر OpenRouter' }
-  return { note: 'ما لقيت موديل رؤية شغّال هلأ (الكوتا المجانية أو ما في مفتاح). المسار محفوظ' }
+  const h = await describeHuggingFace(dataUrl)
+  if (h) return { text: h.text, note: 'وصف الصورة بموديل Hugging Face (' + h.model + ')' }
+  return { note: 'ما لقيت موديل رؤية شغّال هلأ (الكوتا المجانية أو ما في مفتاح). المسار محفوظ. السبب بالتفصيل بملف router.log' }
 }

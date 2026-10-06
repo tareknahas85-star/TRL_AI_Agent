@@ -8,7 +8,7 @@ import { TelegramPanel } from './TelegramPanel'
 import { SpendPanel } from './SpendPanel'
 import { ClaudeAccountsPanel } from './ClaudeAccountsPanel'
 
-const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY'] as const
+const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
 
 const TABS = [
@@ -39,7 +39,8 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
     OPENROUTER_API_KEY: '',
     GEMINI_API_KEY: '',
     OPENAI_API_KEY: '',
-    ANTHROPIC_API_KEY: ''
+    ANTHROPIC_API_KEY: '',
+    HUGGINGFACE_API_KEY: ''
   })
 
   useEffect(() => {
@@ -48,7 +49,8 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
         OPENROUTER_API_KEY: values[0],
         GEMINI_API_KEY: values[1],
         OPENAI_API_KEY: values[2],
-        ANTHROPIC_API_KEY: values[3]
+        ANTHROPIC_API_KEY: values[3],
+        HUGGINGFACE_API_KEY: values[4]
       })
     })
   }, [])

@@ -157,6 +157,12 @@ declare global {
         toggle: (id: string) => Promise<boolean | null>
         test: (id: string) => Promise<{ ok: boolean; message: string }>
       }
+      hf: {
+        models: () => Promise<{ ok: boolean; error?: string; total: number; models: { id: string; providers: string[]; recommended: boolean }[] }>
+        getModel: () => Promise<string>
+        setModel: (id: string) => Promise<boolean>
+        testModel: (id: string) => Promise<{ ok: boolean; message: string }>
+      }
       connectors: {
         active: (load?: boolean) => Promise<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>
         list: () => Promise<

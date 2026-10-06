@@ -77,6 +77,12 @@ const api = {
     fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
     importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
   },
+  hf: {
+    models: (): Promise<{ ok: boolean; error?: string; total: number; models: { id: string; providers: string[]; recommended: boolean }[] }> => ipcRenderer.invoke('hf:models'),
+    getModel: (): Promise<string> => ipcRenderer.invoke('hf:getModel'),
+    setModel: (id: string): Promise<boolean> => ipcRenderer.invoke('hf:setModel', id),
+    testModel: (id: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('hf:testModel', id)
+  },
   connectors: {
     list: () => ipcRenderer.invoke('connectors:list'),
     active: (load?: boolean) => ipcRenderer.invoke('connectors:active', load),
