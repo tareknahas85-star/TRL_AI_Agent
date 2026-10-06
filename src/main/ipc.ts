@@ -15,6 +15,7 @@ import { registerAccountsHandlers } from './accounts-ipc'
 import { registerAttachHandlers } from './attach'
 import { registerExtrasHandlers } from './extras'
 import { registerHfHandlers } from './hf'
+import { registerFreeProbeHandlers } from './freeprobe'
 import { notifyDone } from '../core/telegram'
 import { registerConnectorsHandlers } from './connectors-ipc'
 import { memoryPrompt } from '../core/memory'
@@ -45,6 +46,7 @@ export function registerIpcHandlers(): void {
   registerAttachHandlers()
   registerExtrasHandlers()
   registerHfHandlers()
+  registerFreeProbeHandlers()
   void ensureOllama().then(() => setTimeout(() => void warmLocalMaster(), 500))
 
   type Hist = { role: 'user' | 'assistant'; content: string }[]

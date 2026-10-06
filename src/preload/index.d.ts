@@ -163,6 +163,11 @@ declare global {
         setModel: (id: string) => Promise<boolean>
         testModel: (id: string) => Promise<{ ok: boolean; message: string }>
       }
+      freeProbe: {
+        list: () => Promise<{ ok: boolean; error?: string; models: { id: string; ctx: number; created: string }[] }>
+        results: () => Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string }[]>
+        test: (id: string) => Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string } | null>
+      }
       connectors: {
         active: (load?: boolean) => Promise<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>
         list: () => Promise<

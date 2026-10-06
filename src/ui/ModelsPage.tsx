@@ -4,6 +4,7 @@ import type { CustomModelInfo, Tier } from '../preload/index.d'
 import { Settings } from './Settings'
 import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
+import { FreeProbePanel } from './FreeProbePanel'
 import { Chip, Empty, Modal, PageShell, TIER_LABEL, Toggle, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
 const BUILTIN: { tier: Tier; models: string[] }[] = [
@@ -175,6 +176,7 @@ export function ModelsPage() {
         <Settings variant="inline" />
       </div>
       <HfPanel />
+      <FreeProbePanel />
       <div className="mt-3"><CatalogPanel /></div>
 
       <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>

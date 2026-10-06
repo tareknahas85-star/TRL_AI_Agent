@@ -83,7 +83,12 @@ const api = {
     setModel: (id: string): Promise<boolean> => ipcRenderer.invoke('hf:setModel', id),
     testModel: (id: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('hf:testModel', id)
   },
-  connectors: {
+  freeProbe: {
+      list: (): Promise<{ ok: boolean; error?: string; models: { id: string; ctx: number; created: string }[] }> => ipcRenderer.invoke('freeprobe:list'),
+      results: (): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string }[]> => ipcRenderer.invoke('freeprobe:results'),
+      test: (id: string): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string } | null> => ipcRenderer.invoke('freeprobe:test', id)
+    },
+      connectors: {
     list: () => ipcRenderer.invoke('connectors:list'),
     active: (load?: boolean) => ipcRenderer.invoke('connectors:active', load),
     connect: (id: string) => ipcRenderer.invoke('connectors:connect', id),
