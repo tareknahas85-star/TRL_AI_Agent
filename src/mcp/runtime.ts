@@ -123,6 +123,10 @@ export type McpToolInfo = { fullName: string; server: string; name: string; desc
 // Per-server cache: a server that failed to answer (cold start under load) is NOT cached, so the next call retries it.
 const toolCache = new Map<string, { at: number; tools: McpToolInfo[] }>()
 const TTL = 10 * 60 * 1000
+// A failed server is not retried for a while, and one request never waits more than WAIT_MS for cold starters (they keep starting in the background).
+const failedAt = new Map<string, number>()
+const FAIL_TTL = 5 * 60 * 1000
+const WAIT_MS = 15000
 
 const safe = (s: string): string => s.replace(/[^a-zA-Z0-9_-]/g, '_')
 
@@ -131,10 +135,12 @@ export async function listMcpTools(): Promise<McpToolInfo[]> {
   const active = cfg.servers.filter((s) => s.enabled !== false)
   const stale = active.filter((s) => {
     const hit = toolCache.get(s.name)
-    return !hit || Date.now() - hit.at > TTL
+    if (hit && Date.now() - hit.at <= TTL) return false
+    const f = failedAt.get(s.name)
+    return !(f && Date.now() - f < FAIL_TTL)
   })
   if (stale.length) {
-    await Promise.all(
+    const work = Promise.all(
       stale.map(async (s) => {
         try {
           const c = await getConn(s)
@@ -149,11 +155,14 @@ export async function listMcpTools(): Promise<McpToolInfo[]> {
             })
           )
           toolCache.set(s.name, { at: Date.now(), tools: mapped })
+          failedAt.delete(s.name)
         } catch (e) {
+          failedAt.set(s.name, Date.now())
           console.warn('[MCP] tools/list failed for', s.name, e instanceof Error ? e.message : e)
         }
       })
     )
+    await Promise.race([work, new Promise((r) => setTimeout(r, WAIT_MS))])
   }
   return active.flatMap((s) => toolCache.get(s.name)?.tools ?? [])
 }
