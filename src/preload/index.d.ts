@@ -257,6 +257,10 @@ declare global {
         move: (id: string, dir: 'up' | 'down') => Promise<boolean>
         reset: () => Promise<number>
       }
+      gemini: {
+        list: () => Promise<{ ok: boolean; error?: string; models: { id: string; added: boolean }[] }>
+        import: (ids: string[]) => Promise<number>
+      }
       hosts: {
         get: () => Promise<Record<string, { value: string; default: string; custom: boolean }>>
         set: (id: string, url: string) => Promise<{ ok: boolean; error?: string; value: string }>

@@ -1,3 +1,4 @@
+import { rp } from './pathbase'
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import fs from 'fs'
 import { addCharts } from './xlsx-chart'
@@ -274,7 +275,7 @@ export function addOfficeTools({ def, ask, runPs, getSignal }: Deps): void {
     { path: str },
     ['path'],
     async (a) => {
-      const p = s(a.path)
+      const p = rp(s(a.path))
       try {
         const t = await readOffice(p)
         return t.length > 40000 ? t.slice(0, 40000) + '\n…[truncated]' : t || '(empty)'
@@ -292,7 +293,7 @@ export function addOfficeTools({ def, ask, runPs, getSignal }: Deps): void {
     { path: str, type: { type: 'string', enum: ['docx', 'xlsx', 'pptx'] }, spec: obj },
     ['path', 'type', 'spec'],
     async (a) => {
-      const p = s(a.path)
+      const p = rp(s(a.path))
       const type = s(a.type) || extOf(p)
       if (!['docx', 'xlsx', 'pptx'].includes(type)) return 'Error: type must be docx, xlsx or pptx'
       const file = extOf(p) === type ? p : p + '.' + type
@@ -320,7 +321,7 @@ export function addOfficeTools({ def, ask, runPs, getSignal }: Deps): void {
     { path: str, ops: { type: 'array', items: obj } },
     ['path', 'ops'],
     async (a) => {
-      const p = s(a.path)
+      const p = rp(s(a.path))
       const ext = extOf(p)
       const ops = asArr(typeof a.ops === 'string' ? parseSpec(a.ops) : a.ops)
       if (!fs.existsSync(p)) return 'Error: file not found: ' + p

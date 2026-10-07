@@ -155,6 +155,10 @@ const api = {
     move: (id: string, dir: 'up' | 'down') => ipcRenderer.invoke('catalog:move', id, dir),
     reset: (): Promise<number> => ipcRenderer.invoke('catalog:reset')
   },
+  gemini: {
+    list: (): Promise<{ ok: boolean; error?: string; models: { id: string; added: boolean }[] }> => ipcRenderer.invoke('gemini:list'),
+    import: (ids: string[]): Promise<number> => ipcRenderer.invoke('gemini:import', ids)
+  },
   hosts: {
     get: (): Promise<Record<string, { value: string; default: string; custom: boolean }>> => ipcRenderer.invoke('hosts:get'),
     set: (id: string, url: string): Promise<{ ok: boolean; error?: string; value: string }> => ipcRenderer.invoke('hosts:set', id, url)

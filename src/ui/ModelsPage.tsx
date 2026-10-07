@@ -63,6 +63,15 @@ export function ModelsPage() {
   }
   const [remote, setRemote] = useState<{ src: CustomModelInfo; list: { id: string; recommended: boolean; added: boolean; free: boolean }[]; sel: Set<string>; all: boolean } | null>(null)
   const [remoteBusy, setRemoteBusy] = useState<string | null>(null)
+  const [gem, setGem] = useState<{ list: { id: string; added: boolean }[]; sel: Set<string> } | null>(null)
+  const [gemMsg, setGemMsg] = useState('')
+  const fetchGem = async (): Promise<void> => {
+    setGemMsg('عم أجلب…')
+    const r = await window.api.gemini.list()
+    if (!r.ok) return setGemMsg('✗ ' + (r.error ?? 'فشل'))
+    setGemMsg('')
+    setGem({ list: r.models, sel: new Set() })
+  }
   const fetchRemote = async (m: CustomModelInfo, all = false): Promise<void> => {
     setRemoteBusy(m.id)
     const r = await window.api.models.fetchRemote(m.id, all)
@@ -245,9 +254,12 @@ export function ModelsPage() {
               <HostField id="gemini" />
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-muted">الموديلات</h3>
-                <button className={ghostBtn + ' border border-outline'} onClick={() => openAdd(GEMINI_BASE)}>+ جديد</button>
+                <div className="flex items-center gap-2">
+                  <button className={ghostBtn + ' border border-outline'} onClick={fetchGem}>جلب</button>
+                  <button className={ghostBtn + ' border border-outline'} onClick={() => openAdd(GEMINI_BASE)}>+ جديد</button>
+                </div>
               </div>
-              <p dir="ltr" className="mb-3 text-start font-mono text-xs text-muted">{GEMINI_BASE}</p>
+              {gemMsg && <p className="mb-2 text-xs text-danger">{gemMsg}</p>}
               {customList(gemModels)}
             </>
           )}
@@ -331,6 +343,26 @@ export function ModelsPage() {
             <div className="flex justify-end gap-2">
               <button className={ghostBtn} onClick={() => setAdding(false)}>إلغاء</button>
               <button className={primaryBtn} disabled={!form.name.trim() || !form.model.trim()} onClick={add}>حفظ</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {gem && (
+        <Modal title="موديلات Gemini" onClose={() => setGem(null)}>
+          <div className="space-y-3">
+            <p className="text-xs text-muted">{gem.list.length} موديل. بتنضاف بنفس مفتاح Gemini المحفوظ؛ الـ pro بطبقة "قوي" والباقي بـ "رخيص".</p>
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {gem.list.map((x) => (
+                <label key={x.id} className="flex items-center gap-2 text-xs">
+                  <input type="checkbox" disabled={x.added} checked={x.added || gem.sel.has(x.id)} onChange={(e) => { const s2 = new Set(gem.sel); if (e.target.checked) s2.add(x.id); else s2.delete(x.id); setGem({ ...gem, sel: s2 }) }} />
+                  <span dir="ltr" className="font-mono">{x.id}</span>
+                  {x.added && <Chip>مضاف</Chip>}
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button className={ghostBtn} onClick={() => setGem(null)}>إلغاء</button>
+              <button className={primaryBtn} disabled={!gem.sel.size} onClick={async () => { await window.api.gemini.import([...gem.sel]); setGem(null); load() }}>ضيف المحدد ({gem.sel.size})</button>
             </div>
           </div>
         </Modal>

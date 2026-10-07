@@ -4,7 +4,8 @@ import { freeUsage } from '../core/model-health'
 import { moveCatalogModel } from '../core/catalog'
 import { deleteMemoryEntry, importMemory, listMemory, memoryPrompt, saveMemoryEntry, toggleMemoryEntry } from '../core/memory'
 import { fetchOpenRouterModels, listCatalog, resetCatalogEnabled, setCatalogEnabled, testOpenRouterKey } from '../core/catalog'
-import { HOST_DEFAULTS, hostsInfo, setHost, type HostId } from '../core/hosts'
+import { HOST_DEFAULTS, hostOf, hostsInfo, setHost, type HostId } from '../core/hosts'
+import { getApiKey } from '../store/secure-store'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled, setFullAccess } from '../computer/control'
 import { addSchedule, listSchedules, removeSchedule, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
@@ -168,6 +169,37 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('catalog:setEnabled', (_e, ids: unknown, on: unknown) =>
     Array.isArray(ids) && typeof on === 'boolean' ? setCatalogEnabled(ids.filter((x): x is string => typeof x === 'string'), on) : 0
   )
+  // ---- Gemini: pull the model list with the saved Gemini key and add the chosen ones as custom models.
+  ipcMain.handle('gemini:list', async () => {
+    const key = getApiKey('GEMINI_API_KEY')
+    if (!key) return { ok: false, error: 'ما في مفتاح Gemini محفوظ', models: [] }
+    try {
+      const r = await fetch(hostOf('gemini') + '/models', { headers: { Authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(20000) })
+      if (!r.ok) return { ok: false, error: r.status === 400 || r.status === 401 || r.status === 403 ? 'المفتاح مرفوض (' + r.status + ')' : 'خطأ ' + r.status, models: [] }
+      const j = (await r.json()) as { data?: { id?: string }[] }
+      const have = new Set(listCustomModelViews().filter((m) => /generativelanguage|googleapis/i.test(m.baseURL ?? '')).map((m) => m.model))
+      const models = (j.data ?? [])
+        .map((m) => String(m.id ?? '').replace(/^models\//, ''))
+        .filter((id) => /^gemini/i.test(id) && !/embed|aqa|imagen|tts|veo|live|image|audio|robotics|computer-use/i.test(id))
+        .sort()
+        .map((id) => ({ id, added: have.has(id) }))
+      return { ok: true, models }
+    } catch (e) {
+      return { ok: false, error: msg(e), models: [] }
+    }
+  })
+  ipcMain.handle('gemini:import', (_e, ids: unknown) => {
+    const key = getApiKey('GEMINI_API_KEY')
+    if (!Array.isArray(ids)) return 0
+    const have = new Set(listCustomModelViews().filter((m) => /generativelanguage|googleapis/i.test(m.baseURL ?? '')).map((m) => m.model))
+    let n = 0
+    for (const id of ids.filter((x): x is string => typeof x === 'string')) {
+      if (have.has(id)) continue
+      addCustomModel({ name: id, model: id, baseURL: hostOf('gemini'), apiKey: key, tier: /pro/i.test(id) ? 'TIER_3_EXPENSIVE' : 'TIER_2_CHEAP' })
+      n++
+    }
+    return n
+  })
   ipcMain.handle('models:add', (_e, m: unknown) => {
     try {
       return { ok: true, model: addCustomModel((m ?? {}) as never) }

@@ -1,3 +1,4 @@
+import { setComputerBase } from '../computer/pathbase'
 import { addComputerTools, computerEnabled } from '../computer/control'
 import { currentSignal } from '../core/progress'
 import { spawn, type ChildProcessWithoutNullStreams } from 'child_process'
@@ -287,6 +288,7 @@ export async function buildToolset(userInput: string, projectPath?: string): Pro
     }
   }
 
+  setComputerBase(projectPath)
   if (computerEnabled()) addComputerTools(defs, handlers, currentSignal)
 
   // Skills: the model can list and load any enabled skill, like Claude does.

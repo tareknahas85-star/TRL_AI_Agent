@@ -1,3 +1,4 @@
+import { rp } from './pathbase'
 import { spawn } from 'child_process'
 import { app, BrowserWindow, dialog } from 'electron'
 import fsp from 'fs/promises'
@@ -268,7 +269,7 @@ export function addComputerTools(
   )
   def('pc_list_dir', 'List files and folders of a directory on the computer (absolute path).', { path: str }, ['path'], async (a) => {
     try {
-      const items = await fsp.readdir(s(a.path), { withFileTypes: true })
+      const items = await fsp.readdir(rp(s(a.path)), { withFileTypes: true })
       return (
         items
           .slice(0, 300)
@@ -280,7 +281,7 @@ export function addComputerTools(
     }
   })
   def('pc_read_file', 'Read a text file from the computer (absolute path, max ~40KB shown).', { path: str }, ['path'], async (a) => {
-    const p = s(a.path)
+    const p = rp(s(a.path))
     if (/\.(ppk|pem|key|pfx|kdbx)$/i.test(p) || /secure-keys|\.ssh|\.env$|credentials/i.test(p))
       return 'Error: reading credential/secret files is blocked.'
     try {
@@ -298,7 +299,7 @@ export function addComputerTools(
     { path: str, content: str, overwrite: { type: 'boolean' } },
     ['path', 'content'],
     async (a) => {
-      const p = s(a.path)
+      const p = rp(s(a.path))
       const exists = fs.existsSync(p)
       if (exists && a.overwrite !== true) return 'Error: file already exists. Pass overwrite:true to replace it (a backup copy is made) or choose a new name.'
       if (!(await ask('بدو يعمل ملف', p + '\n\n' + s(a.content).slice(0, 600)))) return 'Error: the user denied this.'
