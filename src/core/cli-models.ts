@@ -179,7 +179,9 @@ function runClaudeOnce(acct: ClaudeAcct, prompt: string, signal?: AbortSignal, m
               return reject(new Error('claude: ' + m))
             }
             text = j.result.trim()
-            used = Object.keys(j.modelUsage ?? {})[0]
+            // The CLI may list a helper model (e.g. haiku) first; pick the one that did the most work.
+            const mu = (j.modelUsage ?? {}) as Record<string, { outputTokens?: number; costUSD?: number }>
+            used = Object.keys(mu).sort((a, b) => (mu[b]?.costUSD ?? mu[b]?.outputTokens ?? 0) - (mu[a]?.costUSD ?? mu[a]?.outputTokens ?? 0))[0]
           }
         } catch {
           /* plain text */

@@ -117,6 +117,8 @@ export async function transcribe(file: string, confidential = false): Promise<{ 
     }
     lastErr = (r.err || '').split('\n').filter(Boolean).slice(-1)[0] ?? ''
   }
+  if (/ModuleNotFoundError|No module named/i.test(lastErr))
+    return { note: 'Whisper المحلي (faster-whisper) مش منصّب على الجهاز. نصّبو بـ: pip install faster-whisper' }
   return { note: 'فشل التفريغ المحلي: ' + lastErr.slice(0, 160) }
 }
 
