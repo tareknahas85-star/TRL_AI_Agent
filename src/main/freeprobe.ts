@@ -1,6 +1,9 @@
 import { ipcMain } from 'electron'
 import { getApiKey } from '../store/secure-store'
 import { readJson, writeJson } from '../core/json-store'
+import { applyPin, clearPin, lastFreeCheck, markFreeCheck, pinState, pinnedFree, setSuggestion, type Suggestion } from '../core/free-pin'
+import { rankedFreeModels } from '../core/free-best'
+import { freeUsage } from '../core/model-health'
 
 // Free-model probe: lists OpenRouter models that are 100% free, then tests each one for real
 // (valid tool call + Arabic answer + speed). Nothing is switched automatically.
@@ -81,6 +84,69 @@ async function probe(id: string): Promise<ProbeResult> {
   }
 }
 
+const MIN_GAIN = 15 // a different model must beat the current first choice by this many points (out of 100)
+
+// Compares the stored probe results with the current first choice and records a suggestion (never applies it).
+export function evaluate(): Suggestion | null {
+  const results = readJson<ProbeResult[]>(FILE, [])
+  const ok = results.filter((r) => r.ok).sort((a, b) => b.score - a.score || a.secs - b.secs)
+  const best = ok[0]
+  if (!best) return null
+  const current = pinnedFree() ?? rankedFreeModels(1)[0] ?? ''
+  if (!current || best.id === current) {
+    setSuggestionQuiet(null)
+    return null
+  }
+  const cur = results.find((r) => r.id === current)
+  const oldScore = cur?.ok ? cur.score : 0
+  if (cur && cur.ok && best.score - oldScore < MIN_GAIN) {
+    setSuggestionQuiet(null)
+    return null
+  }
+  const prev = pinState().suggestion
+  const s: Suggestion = { model: best.id, current, newScore: best.score, oldScore, at: new Date().toISOString() }
+  if (prev && prev.model === s.model && prev.current === s.current) return prev // already suggested, do not nag
+  setSuggestion(s)
+  return s
+}
+const setSuggestionQuiet = (s: null): void => {
+  if (pinState().suggestion) setSuggestion(s)
+}
+
+// Weekly background check: probes the 6 strongest-looking free models plus the current first choice (~14 requests),
+// then records a suggestion and sends a Telegram message if something clearly better exists.
+let checking = false
+export async function weeklyCheck(): Promise<void> {
+  if (checking) return
+  checking = true
+  try {
+    const u = freeUsage()
+    if (u.limited || u.count > 30) return // keep today's free quota for real work
+    const list = await listFree()
+    if (!list.ok) return
+    const current = pinnedFree() ?? rankedFreeModels(1)[0]
+    const ids = [...new Set([...(current ? [current] : []), ...list.models.slice(0, 6).map((m) => m.id)])].filter((id) => id.endsWith(':free'))
+    for (const id of ids) {
+      const res = await probe(id)
+      const all = readJson<ProbeResult[]>(FILE, []).filter((r) => r.id !== id)
+      writeJson(FILE, [res, ...all].slice(0, 100))
+      await new Promise((r) => setTimeout(r, 3500))
+    }
+    markFreeCheck()
+    evaluate()
+  } finally {
+    checking = false
+  }
+}
+
+export function startFreeWatch(): void {
+  const tick = (): void => {
+    if (Date.now() - lastFreeCheck() > 7 * 24 * 3600 * 1000) void weeklyCheck()
+  }
+  setTimeout(tick, 5 * 60 * 1000) // 5 min after start, so it never slows the launch
+  setInterval(tick, 6 * 3600 * 1000)
+}
+
 export function registerFreeProbeHandlers(): void {
   ipcMain.handle('freeprobe:list', () => listFree())
   ipcMain.handle('freeprobe:results', () => readJson<ProbeResult[]>(FILE, []))
@@ -90,5 +156,26 @@ export function registerFreeProbeHandlers(): void {
     const all = readJson<ProbeResult[]>(FILE, []).filter((r) => r.id !== id)
     writeJson(FILE, [res, ...all].slice(0, 100))
     return res
+  })
+  ipcMain.handle('freeprobe:status', () => {
+    const s = pinState()
+    return { pinned: s.pinned ?? null, since: s.since ?? null, suggestion: s.suggestion ?? null, lastCheck: s.lastCheck, current: pinnedFree() ?? rankedFreeModels(1)[0] ?? '' }
+  })
+  ipcMain.handle('freeprobe:evaluate', () => evaluate())
+  ipcMain.handle('freeprobe:apply', (_e, id: unknown) => {
+    if (typeof id === 'string' && id.endsWith(':free')) applyPin(id)
+    return true
+  })
+  ipcMain.handle('freeprobe:dismiss', () => {
+    setSuggestionQuiet(null)
+    return true
+  })
+  ipcMain.handle('freeprobe:unpin', () => {
+    clearPin()
+    return true
+  })
+  ipcMain.handle('freeprobe:checkNow', async () => {
+    await weeklyCheck()
+    return true
   })
 }

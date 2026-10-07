@@ -167,6 +167,12 @@ declare global {
         list: () => Promise<{ ok: boolean; error?: string; models: { id: string; ctx: number; created: string }[] }>
         results: () => Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string }[]>
         test: (id: string) => Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string } | null>
+        status: () => Promise<{ pinned: string | null; since: string | null; suggestion: { model: string; current: string; newScore: number; oldScore: number; at: string } | null; lastCheck: number; current: string }>
+        evaluate: () => Promise<unknown>
+        apply: (id: string) => Promise<boolean>
+        dismiss: () => Promise<boolean>
+        unpin: () => Promise<boolean>
+        checkNow: () => Promise<boolean>
       }
       connectors: {
         active: (load?: boolean) => Promise<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>

@@ -5,6 +5,7 @@ import { catalogModelsForTier } from './catalog'
 import { freeOnly } from './spend'
 import { currentMode } from './progress'
 import { rankedFreeModels } from './free-best'
+import { pinnedFree } from './free-pin'
 import { CUSTOM_PREFIX } from './custom-models'
 
 // Built-in tiers plus the user's enabled custom models (custom ones are tried first inside their tier).
@@ -12,7 +13,8 @@ const tier = (t: 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'): string[] 
   const base = [...customModelsForTier(t, false), ...(catalogModelsForTier(t) ?? MODEL_TIERS[t]), ...customModelsForTier(t, true)]
   if (t !== 'TIER_1_FREE') return base
   // Free tier: the strongest free models OpenRouter currently offers go first (ranked automatically), then the rest.
-  const best = rankedFreeModels(4)
+  const pinned = pinnedFree()
+  const best = [...(pinned ? [pinned] : []), ...rankedFreeModels(4).filter((m) => m !== pinned)]
   return [...best, ...base.filter((m) => !best.includes(m))]
 }
 

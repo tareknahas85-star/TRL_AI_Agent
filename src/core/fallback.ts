@@ -2,6 +2,7 @@ import OpenAI from 'openai'
 import fs from 'fs'
 import { dataFile } from './json-store'
 import { bumpFreeCount, modelBlockReason, noteModelFailure } from './model-health'
+import { notePinOutcome } from './free-pin'
 import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, currentSignal } from './progress'
@@ -411,6 +412,7 @@ export async function executeWithFallback(
       }
       if (content) {
         console.log(`[Fallback] Success with: ${model}`)
+        notePinOutcome(model, triedModels)
         // Safety net that does not depend on the model being honest: it claimed an action but used no tool.
         const warn = unverifiedClaimWarning(model, userInput, content, toolsUsed, toolset, toolsRejected && !textMode, false, history)
         if (warn) content = warn + '\n\n' + content

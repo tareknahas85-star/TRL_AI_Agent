@@ -86,7 +86,13 @@ const api = {
   freeProbe: {
       list: (): Promise<{ ok: boolean; error?: string; models: { id: string; ctx: number; created: string }[] }> => ipcRenderer.invoke('freeprobe:list'),
       results: (): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string }[]> => ipcRenderer.invoke('freeprobe:results'),
-      test: (id: string): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string } | null> => ipcRenderer.invoke('freeprobe:test', id)
+      test: (id: string): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string } | null> => ipcRenderer.invoke('freeprobe:test', id),
+      status: (): Promise<{ pinned: string | null; since: string | null; suggestion: { model: string; current: string; newScore: number; oldScore: number; at: string } | null; lastCheck: number; current: string }> => ipcRenderer.invoke('freeprobe:status'),
+      evaluate: (): Promise<unknown> => ipcRenderer.invoke('freeprobe:evaluate'),
+      apply: (id: string): Promise<boolean> => ipcRenderer.invoke('freeprobe:apply', id),
+      dismiss: (): Promise<boolean> => ipcRenderer.invoke('freeprobe:dismiss'),
+      unpin: (): Promise<boolean> => ipcRenderer.invoke('freeprobe:unpin'),
+      checkNow: (): Promise<boolean> => ipcRenderer.invoke('freeprobe:checkNow')
     },
       connectors: {
     list: () => ipcRenderer.invoke('connectors:list'),
