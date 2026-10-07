@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type ReactNode } from 'react'
 import { Loader2, Plug, Plus, Trash2 } from 'lucide-react'
 import type { CustomModelInfo, Tier } from '../preload/index.d'
-import { Settings } from './Settings'
+import { KeyField, type KeyName } from './KeyField'
 import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
 import { FreeProbePanel } from './FreeProbePanel'
-import { Chip, Empty, Modal, PageShell, TIER_LABEL, TabBar, Toggle, cardCls, ghostBtn, inputCls, primaryBtn, useTab } from './components/ui'
+import { Chip, Empty, Modal, PageShell, TIER_LABEL, Toggle, cardCls, ghostBtn, inputCls, primaryBtn, useTab } from './components/ui'
 import { SpendPanel } from './SpendPanel'
 import { ClaudeAccountsPanel } from './ClaudeAccountsPanel'
 
@@ -14,15 +14,27 @@ const BUILTIN: { tier: Tier; models: string[] }[] = [
   { tier: 'TIER_2_CHEAP', models: ['deepseek/deepseek-v4.1-flash', 'google/gemini-3.5-flash-lite', 'openai/gpt-4o-mini'] },
   { tier: 'TIER_3_EXPENSIVE', models: ['anthropic/claude-sonnet-5', 'openai/gpt-4o'] }
 ]
-const MODEL_TABS = [
-  { id: 'sources', label: 'الحسابات والمفاتيح' },
-  { id: 'free', label: 'المجاني والفحص' },
-  { id: 'mine', label: 'موديلاتي (محلي ومخصص)' }
+const PROVIDERS = [
+  { id: 'general', name: 'عام: المجاني والتكلفة' },
+  { id: 'openrouter', name: 'OpenRouter', key: 'OPENROUTER_API_KEY' },
+  { id: 'huggingface', name: 'Hugging Face', key: 'HUGGINGFACE_API_KEY' },
+  { id: 'gemini', name: 'Gemini', key: 'GEMINI_API_KEY' },
+  { id: 'openai', name: 'OpenAI', key: 'OPENAI_API_KEY' },
+  { id: 'anthropic', name: 'Anthropic', key: 'ANTHROPIC_API_KEY' },
+  { id: 'claude', name: 'Claude (اشتراك)' },
+  { id: 'local', name: 'محلي (Ollama / LM Studio)' },
+  { id: 'custom', name: 'موديلات مخصصة' }
 ] as const
+const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier }
 
 export function ModelsPage() {
-  const [tab, pickTab] = useTab('air.models.tab', MODEL_TABS.map((x) => x.id), 'sources')
+  const [prov, pickProv] = useTab('air.models.prov', PROVIDERS.map((x) => x.id), 'openrouter')
+  const [has, setHas] = useState<Record<string, boolean>>({})
+  useEffect(() => {
+    for (const p of PROVIDERS) if ('key' in p) void window.api.getKey(p.key).then((v) => setHas((h) => ({ ...h, [p.key]: !!v.trim() })))
+  }, [])
+  const setKeyHas = (k: KeyName) => (v: boolean): void => setHas((h) => ({ ...h, [k]: v }))
   const [models, setModels] = useState<CustomModelInfo[]>([])
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(empty)
@@ -72,57 +84,30 @@ export function ModelsPage() {
     load()
   }
 
-  return (
-    <PageShell
-      title="الموديلات"
-      subtitle="الراوتر بيجرّب الموديلات حسب الطبقة وبينتقل للتالي إذا فشل واحد. ضيف موديلك الخارجي وحدد طبقته."
-      action={
-        <button className={primaryBtn + ' flex items-center gap-1'} onClick={() => setAdding(true)}>
-          <Plus size={16} /> ضيف موديل
-        </button>
-      }
-    >
-      <TabBar tabs={MODEL_TABS} value={tab} onChange={pickTab} />
-      {tab === 'mine' && (
-        <>
-      <div className="mb-2 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-muted">موديلات محلية (Ollama / LM Studio)</h3>
-        <button className={ghostBtn} onClick={scan} disabled={scanning}>{scanning ? 'عم أفحص…' : 'فحص الموديلات المحلية'}</button>
-      </div>
-      {local !== null && (
-        <div className="mb-6 space-y-2">
-          {local.length === 0 ? (
-            <Empty text="ما لقيت سيرفر محلي شغّال. ثبّت Ollama (أو LM Studio) وشغّله، وحمّل موديل صغير مثل qwen3:1.7b، وبعدين دوس فحص." />
-          ) : (
-            local.map((rt) => (
-              <div key={rt.runtime} className={cardCls}>
-                <div className="mb-2 text-sm font-semibold">{rt.runtime} <span dir="ltr" className="font-mono text-xs text-muted">{rt.baseURL}</span></div>
-                {rt.models.length === 0 ? (
-                  <p className="text-xs text-muted">شغّال بس ما فيه موديلات محمّلة.</p>
-                ) : (
-                  <ul className="space-y-1">
-                    {rt.models.map((m) => {
-                      const added = models.some((x) => x.model === m && x.baseURL === rt.baseURL)
-                      return (
-                        <li key={m} className="flex items-center justify-between gap-3">
-                          <span dir="ltr" className="truncate font-mono text-xs">{m}</span>
-                          <button className={ghostBtn} disabled={added} onClick={() => addLocal(rt.baseURL, m, rt.runtime)}>{added ? 'مضاف' : 'ضيف'}</button>
-                        </li>
-                      )
-                    })}
-                  </ul>
-                )}
-              </div>
-            ))
-          )}
-        </div>
-      )}
-      <h3 className="mb-2 text-sm font-semibold text-muted">موديلاتك المخصصة</h3>
-      {models.length === 0 ? (
+  const isGem = (m: CustomModelInfo): boolean => /generativelanguage|googleapis/i.test(m.baseURL ?? '')
+  const isLocal = (m: CustomModelInfo): boolean => /localhost|127\.0\.0\.1|:11434|:1234/i.test(m.baseURL ?? '')
+  const gemModels = models.filter(isGem)
+  const localModels = models.filter(isLocal)
+  const otherModels = models.filter((m) => !isGem(m) && !isLocal(m))
+  const openAdd = (baseURL = ''): void => {
+    setForm({ ...empty, baseURL })
+    setError('')
+    setAdding(true)
+  }
+  const dot = (id: string): boolean => {
+    const p = PROVIDERS.find((x) => x.id === id)
+    if (p && 'key' in p) return !!has[p.key]
+    if (id === 'custom') return otherModels.length > 0
+    if (id === 'local') return localModels.length > 0
+    return false
+  }
+  const customList = (list: CustomModelInfo[]): ReactNode => (
+    <>
+      {list.length === 0 ? (
         <Empty text="ما في موديلات مخصصة - ضيف موديل خارجي (OpenAI-compatible أو OpenRouter)" />
       ) : (
         <div className="space-y-2">
-          {models.map((m) => {
+          {list.map((m) => {
             const r = results[m.id]
             return (
               <div key={m.id} className={cardCls + ' flex flex-wrap items-center justify-between gap-3'}>
@@ -180,38 +165,147 @@ export function ModelsPage() {
           })}
         </div>
       )}
-        </>
-      )}
-      {tab === 'sources' && (
-        <>
-          <SpendPanel />
-          <div className="mt-3"><ClaudeAccountsPanel /></div>
-          <h3 className="mb-2 mt-6 text-sm font-semibold text-muted">مفاتيح الـ API</h3>
-      <div className={cardCls}>
-        <p className="mb-3 text-xs text-muted">بتنحفظ مشفّرة على جهازك.</p>
-        <Settings variant="inline" />
-      </div>
-      <HfPanel />
-        </>
-      )}
-      {tab === 'free' && (
-        <>
-      <FreeProbePanel />
-      <div className="mt-3"><CatalogPanel /></div>
-      <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>
-      <div className="grid gap-3 md:grid-cols-3">
-        {BUILTIN.map((t) => (
-          <div key={t.tier} className={cardCls}>
-            <Chip cls={TIER_LABEL[t.tier].cls}>{TIER_LABEL[t.tier].label}</Chip>
-            <ul dir="ltr" className="mt-3 space-y-1 text-start font-mono text-xs text-muted">
-              {t.models.map((x) => <li key={x} className="truncate">{x}</li>)}
-            </ul>
-          </div>
-        ))}
-      </div>
-        </>
-      )}
+    </>
+  )
+  const head = (title: string): ReactNode => <h2 className="mb-4 text-lg font-semibold">{title}</h2>
 
+  return (
+    <PageShell title="الموديلات" subtitle="اختار المزوّد من القائمة: المفتاح، الموديلات، والتجربة بمكان واحد.">
+      <div className="flex items-start gap-5">
+        <aside className="w-56 shrink-0 space-y-1">
+          {PROVIDERS.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => pickProv(p.id)}
+              className={'flex w-full items-center justify-between gap-2 rounded-xl px-3 py-2.5 text-start text-sm ' + (prov === p.id ? 'bg-primary/15 font-medium text-primary' : 'hover:bg-surface2')}
+            >
+              <span className="truncate">{p.name}</span>
+              {dot(p.id) && <span className="h-2 w-2 shrink-0 rounded-full bg-success" aria-label="جاهز" />}
+            </button>
+          ))}
+          <button className={ghostBtn + ' mt-2 flex w-full items-center justify-center gap-1 border border-primary text-primary'} onClick={() => openAdd()}>
+            <Plus size={14} /> إضافة
+          </button>
+        </aside>
+
+        <section className="min-w-0 flex-1">
+          {prov === 'general' && (
+            <>
+              {head('عام: المجاني والتكلفة')}
+              <SpendPanel />
+              <p className="mt-3 text-xs text-muted">الراوتر بيجرّب الموديلات حسب الطبقة (مجاني، رخيص، قوي) وبينتقل للتالي إذا فشل واحد.</p>
+            </>
+          )}
+          {prov === 'openrouter' && (
+            <>
+              {head('OpenRouter')}
+              <KeyField name="OPENROUTER_API_KEY" verify={() => window.api.catalog.test()} onChange={setKeyHas('OPENROUTER_API_KEY')} />
+              <CatalogPanel />
+              <FreeProbePanel />
+              <h3 className="mb-2 mt-6 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                {BUILTIN.map((t) => (
+                  <div key={t.tier} className={cardCls}>
+                    <Chip cls={TIER_LABEL[t.tier].cls}>{TIER_LABEL[t.tier].label}</Chip>
+                    <ul dir="ltr" className="mt-3 space-y-1 text-start font-mono text-xs text-muted">
+                      {t.models.map((x) => <li key={x} className="truncate">{x}</li>)}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {prov === 'huggingface' && (
+            <>
+              {head('Hugging Face')}
+              <KeyField
+                name="HUGGINGFACE_API_KEY"
+                onChange={setKeyHas('HUGGINGFACE_API_KEY')}
+                verify={async () => {
+                  const r = await window.api.hf.models()
+                  return { ok: r.ok, message: r.ok ? `المفتاح شغّال، ${r.models.length} موديل بيقبل صور` : (r.error ?? 'فشل') }
+                }}
+              />
+              <HfPanel />
+            </>
+          )}
+          {prov === 'gemini' && (
+            <>
+              {head('Gemini')}
+              <KeyField name="GEMINI_API_KEY" onChange={setKeyHas('GEMINI_API_KEY')} />
+              <div className="mb-2 flex items-center justify-between">
+                <h3 className="text-sm font-semibold text-muted">الموديلات</h3>
+                <button className={ghostBtn + ' border border-outline'} onClick={() => openAdd(GEMINI_BASE)}>+ جديد</button>
+              </div>
+              <p dir="ltr" className="mb-3 text-start font-mono text-xs text-muted">{GEMINI_BASE}</p>
+              {customList(gemModels)}
+            </>
+          )}
+          {prov === 'openai' && (
+            <>
+              {head('OpenAI')}
+              <KeyField name="OPENAI_API_KEY" onChange={setKeyHas('OPENAI_API_KEY')} />
+            </>
+          )}
+          {prov === 'anthropic' && (
+            <>
+              {head('Anthropic')}
+              <KeyField name="ANTHROPIC_API_KEY" onChange={setKeyHas('ANTHROPIC_API_KEY')} />
+            </>
+          )}
+          {prov === 'claude' && (
+            <>
+              {head('Claude (اشتراك)')}
+              <ClaudeAccountsPanel />
+            </>
+          )}
+          {prov === 'local' && (
+            <>
+              {head('محلي (Ollama / LM Studio)')}
+      <div className="mb-2 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-muted">موديلات محلية (Ollama / LM Studio)</h3>
+        <button className={ghostBtn} onClick={scan} disabled={scanning}>{scanning ? 'عم أفحص…' : 'فحص الموديلات المحلية'}</button>
+      </div>
+      {local !== null && (
+        <div className="mb-6 space-y-2">
+          {local.length === 0 ? (
+            <Empty text="ما لقيت سيرفر محلي شغّال. ثبّت Ollama (أو LM Studio) وشغّله، وحمّل موديل صغير مثل qwen3:1.7b، وبعدين دوس فحص." />
+          ) : (
+            local.map((rt) => (
+              <div key={rt.runtime} className={cardCls}>
+                <div className="mb-2 text-sm font-semibold">{rt.runtime} <span dir="ltr" className="font-mono text-xs text-muted">{rt.baseURL}</span></div>
+                {rt.models.length === 0 ? (
+                  <p className="text-xs text-muted">شغّال بس ما فيه موديلات محمّلة.</p>
+                ) : (
+                  <ul className="space-y-1">
+                    {rt.models.map((m) => {
+                      const added = models.some((x) => x.model === m && x.baseURL === rt.baseURL)
+                      return (
+                        <li key={m} className="flex items-center justify-between gap-3">
+                          <span dir="ltr" className="truncate font-mono text-xs">{m}</span>
+                          <button className={ghostBtn} disabled={added} onClick={() => addLocal(rt.baseURL, m, rt.runtime)}>{added ? 'مضاف' : 'ضيف'}</button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+              {customList(localModels)}
+            </>
+          )}
+          {prov === 'custom' && (
+            <>
+              {head('موديلات مخصصة')}
+              <p className="mb-3 text-xs text-muted">أي سيرفر بيدعم واجهة OpenAI (chat/completions): Groq، Together، Mistral، سيرفرك الخاص…</p>
+              {customList(otherModels)}
+            </>
+          )}
+        </section>
+      </div>
       {adding && (
         <Modal title="ضيف موديل خارجي" onClose={() => setAdding(false)}>
           <div className="space-y-3">

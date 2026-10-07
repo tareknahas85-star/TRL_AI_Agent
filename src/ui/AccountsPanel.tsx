@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
-import { Loader2, Plug, PlugZap, RefreshCw, Settings2 } from 'lucide-react'
-import { Chip, Toggle, cardCls, inputCls, primaryBtn, ghostBtn } from './components/ui'
+import { Loader2, Plug, PlugZap, Plus, RefreshCw, Settings2 } from 'lucide-react'
+import { Chip, Modal, Toggle, cardCls, inputCls, primaryBtn, ghostBtn } from './components/ui'
 
 const GOOGLE = 'google-workspace'
 type Status = 'checking' | 'connected' | 'disconnected' | 'needs-setup'
@@ -346,9 +346,61 @@ function ServiceCard({ def }: { def: Def }) {
   )
 }
 
+// Adds a custom connector = a local MCP server (command + args + env). It shows up under Extensions > MCP Servers.
+function AddConnectorModal({ onClose }: { onClose: () => void }) {
+  const [form, setForm] = useState({ name: '', command: '', args: '', env: '' })
+  const [error, setError] = useState('')
+  const [done, setDone] = useState(false)
+  const parseEnv = (t: string): Record<string, string> => {
+    const env: Record<string, string> = {}
+    for (const line of t.split('\n')) {
+      const i = line.indexOf('=')
+      if (i > 0) env[line.slice(0, i).trim()] = line.slice(i + 1).trim()
+    }
+    return env
+  }
+  const add = async (): Promise<void> => {
+    const r = await window.api.mcp.add({
+      name: form.name.trim(),
+      command: form.command.trim(),
+      args: form.args.split(/\s+/).filter(Boolean),
+      env: parseEnv(form.env)
+    })
+    if (!r.ok) return setError(r.error ?? 'خطأ')
+    setDone(true)
+  }
+  return (
+    <Modal title="إضافة موصّل" onClose={onClose}>
+      {done ? (
+        <div className="space-y-3">
+          <p className="text-sm text-success">انضاف الموصّل «{form.name.trim()}».</p>
+          <p className="text-xs text-muted">بتلاقيه بالإضافات ← MCP Servers، من هناك بتفعّله وبتختبره.</p>
+          <div className="flex justify-end">
+            <button className={primaryBtn} onClick={onClose}>تمام</button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <p className="text-xs text-muted">موصّل محلي (سيرفر MCP): الأمر + الوسائط + متغيرات البيئة، مثل claude_desktop_config.json. الموصّلات يلي بتتطلب رابط عن بعد (URL) ما بتنضاف من هون لسا.</p>
+          <input dir="ltr" className={inputCls} placeholder="Name (e.g. notion)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input dir="ltr" className={inputCls} placeholder="Command (e.g. npx)" value={form.command} onChange={(e) => setForm({ ...form, command: e.target.value })} />
+          <input dir="ltr" className={inputCls} placeholder="Args (e.g. -y @modelcontextprotocol/server-memory)" value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} />
+          <textarea dir="ltr" rows={3} className={inputCls + ' font-mono'} placeholder={'Env (KEY=value، سطر لكل متغير)'} value={form.env} onChange={(e) => setForm({ ...form, env: e.target.value })} />
+          {error && <p className="text-sm text-danger">{error}</p>}
+          <div className="flex justify-end gap-2">
+            <button className={ghostBtn} onClick={onClose}>إلغاء</button>
+            <button className={primaryBtn} disabled={!form.name.trim() || !form.command.trim()} onClick={() => void add()}>حفظ</button>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
 export function AccountsPanel() {
   const [defs, setDefs] = useState<Def[] | null>(null)
   const [q, setQ] = useState('')
+  const [adding, setAdding] = useState(false)
   useEffect(() => {
     void window.api.connectors.list().then(setDefs)
   }, [])
@@ -358,7 +410,13 @@ export function AccountsPanel() {
   const device = (defs ?? []).filter((d) => d.group === 'device' && match(d))
   return (
     <section className="mb-6">
-      <h3 className="mb-1 text-base font-semibold">الموصلات</h3>
+      <div className="mb-1 flex items-center justify-between gap-3">
+        <h3 className="text-base font-semibold">الموصلات</h3>
+        <button className={primaryBtn + ' flex items-center gap-1'} onClick={() => setAdding(true)}>
+          <Plus size={16} /> إضافة موصّل
+        </button>
+      </div>
+      {adding && <AddConnectorModal onClose={() => setAdding(false)} />}
       <p className="mb-3 text-xs text-muted">
         دوس «اتصل» على أي خدمة، سجّل الدخول بالمتصفح، وخلص. التطبيق ما بيشوف كلمة السر، وأي إجراء بيغيّر ببياناتك بيطلب موافقتك أول.
       </p>
