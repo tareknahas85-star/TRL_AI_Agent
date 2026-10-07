@@ -22,7 +22,7 @@ export type CustomModelInfo = {
 }
 export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
 export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
-export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
+export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean; skillHint?: { tools: string[] } }
 export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
 export type MasterMemoryView = { projects: ProjectMemoryInfo[]; general: { text: string; at: number }[]; conflicts: { kind: string; detail: string }[] }
 export type ProjectInfo = { id: string; name: string; path: string; confidential?: boolean }
@@ -56,7 +56,7 @@ export type ConversationSummary = {
 export type ConversationFull = Omit<ConversationSummary, 'count'> & { messages: StoredMessage[] }
 
 export type FilePreviewInfo = { ok: boolean; kind?: string; name?: string; size?: number; text?: string; dataUrl?: string; mime?: string; note?: string }
-export type TelegramInfo = { enabled: boolean; chatId: string; minSeconds: number; hasToken: boolean }
+export type TelegramInfo = { enabled: boolean; chatId: string; minSeconds: number; inbound: boolean; hasToken: boolean }
 export type TaskRowInfo = {
   at: number
   convId: string
@@ -201,9 +201,19 @@ declare global {
         export: (csv: string) => Promise<{ ok: boolean; path?: string }>
         budget: (v?: number) => Promise<number>
       }
+      update: {
+        get: () => Promise<{ enabled: boolean; version: string }>
+        set: (enabled: boolean) => Promise<{ enabled: boolean; version: string }>
+        check: () => Promise<{ ok: boolean; current: string; latest?: string; newer?: boolean; url?: string; note?: string }>
+        open: (url: string) => Promise<boolean>
+      }
+      transfer: {
+        export: (sel: { keys: boolean; skills: boolean; memory: boolean; mcp: boolean; conversations: boolean }, password: string) => Promise<{ ok: boolean; error?: string; path?: string; files?: number; skills?: number }>
+        import: (password: string) => Promise<{ ok: boolean; error?: string; files?: number; skills?: number; at?: string }>
+      }
       telegram: {
         get: () => Promise<TelegramInfo>
-        set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string }) => Promise<TelegramInfo>
+        set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string; inbound?: boolean }) => Promise<TelegramInfo>
         clearToken: () => Promise<TelegramInfo>
         detect: () => Promise<{ ok: boolean; chatId?: string; name?: string; error?: string }>
         test: () => Promise<{ ok: boolean; error?: string }>

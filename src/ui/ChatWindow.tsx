@@ -395,6 +395,7 @@ export function ChatWindow({
   }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
   const [picker, setPicker] = useState<{ value: string; label: string; tier: string }[]>([])
   const [needsChoice, setNeedsChoice] = useState(false)
+  const [skillCard, setSkillCard] = useState<{ tools: string[]; request: string; answer: string; name: string; msg: string } | null>(null)
   const [effort, setEffortUi] = useState('auto')
   useEffect(() => {
     window.api.effort.get().then(setEffortUi).catch(() => undefined)
@@ -459,6 +460,7 @@ export function ChatWindow({
     partialRef.current = ''
     setRetryNote('')
     setNeedsChoice(false)
+    setSkillCard(null)
     setLoading(true)
     let next: ChatMessage[] = base
     try {
@@ -467,6 +469,10 @@ export function ChatWindow({
         ? await window.api.retryChat(opts)
         : await window.api.chat(lastUserRef.current, base.slice(0, -1).map((m) => ({ role: m.role, content: m.content })), opts)
       if (r.needsChoice) setNeedsChoice(true)
+      if (r.skillHint && !r.cancelled) {
+        const slug = (lastUserRef.current.match(/[A-Za-z0-9]+/g) ?? []).slice(0, 4).join('-').toLowerCase().slice(0, 40)
+        setSkillCard({ tools: r.skillHint.tools, request: lastUserRef.current, answer: r.content, name: slug || 'task-' + Date.now().toString(36), msg: '' })
+      }
       if (r.cancelled) {
         const partial = streamRef.current.trim() ? streamRef.current : partialRef.current
         if (partial.trim()) {
@@ -650,6 +656,36 @@ export function ChatWindow({
           void addFiles(Array.from(e.dataTransfer.files))
         }}
       >
+        {skillCard && !loading && (
+          <div className="mx-auto mb-2 max-w-3xl rounded-card border border-primary/40 bg-primary/5 p-3 text-xs">
+            <div className="mb-2 font-medium">المهمة كانت من {skillCard.tools.length} خطوات (أدوات). بدك أحفظها كسكيل لتتكرر أسهل؟</div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                dir="ltr"
+                value={skillCard.name}
+                onChange={(e) => setSkillCard({ ...skillCard, name: e.target.value })}
+                placeholder="skill-name"
+                className="w-48 rounded-lg border border-outline bg-bg px-2 py-1"
+              />
+              <button
+                className="rounded-full bg-primary px-3 py-1 text-white"
+                onClick={async () => {
+                  const uniq = [...new Set(skillCard.tools)]
+                  const body = ['# ' + skillCard.request.slice(0, 80), '', 'استعمل هالسكيل لطلبات مشابهة لـ: ' + skillCard.request.slice(0, 300), '', 'الأدوات اللي اشتغلت المرة الماضية بالترتيب: ' + skillCard.tools.join(' ← '), '', 'الأدوات المميزة: ' + uniq.join('، '), '', 'مثال على الناتج:', skillCard.answer.slice(0, 600), '', '(مسودة انحفظت من محادثة؛ عدّلها من صفحة السكيلز.)'].join('\n')
+                  const r = await window.api.skills.create(skillCard.name.trim(), body)
+                  if (r.ok) setSkillCard(null)
+                  else setSkillCard({ ...skillCard, msg: r.error ?? 'فشل الحفظ' })
+                }}
+              >
+                احفظ كسكيل
+              </button>
+              <button className="rounded-full px-3 py-1 text-muted hover:bg-surface2" onClick={() => setSkillCard(null)}>
+                لا، شكراً
+              </button>
+              {skillCard.msg && <span className="text-danger">{skillCard.msg}</span>}
+            </div>
+          </div>
+        )}
         {needsChoice && !loading && (
           <div className="mx-auto mb-2 max-w-3xl rounded-card border border-warning/50 bg-warning/10 p-3 text-xs">
             <div className="mb-2 font-medium">

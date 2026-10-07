@@ -198,9 +198,19 @@ const api = {
     export: (csv: string) => ipcRenderer.invoke('report:export', csv),
     budget: (v?: number) => ipcRenderer.invoke('report:budget', v)
   },
+  update: {
+    get: () => ipcRenderer.invoke('update:get'),
+    set: (enabled: boolean) => ipcRenderer.invoke('update:set', enabled),
+    check: () => ipcRenderer.invoke('update:check'),
+    open: (url: string) => ipcRenderer.invoke('update:open', url)
+  },
+  transfer: {
+    export: (sel: unknown, password: string) => ipcRenderer.invoke('transfer:export', sel, password),
+    import: (password: string) => ipcRenderer.invoke('transfer:import', password)
+  },
   telegram: {
     get: () => ipcRenderer.invoke('telegram:get'),
-    set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string }) => ipcRenderer.invoke('telegram:set', p),
+    set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string; inbound?: boolean }) => ipcRenderer.invoke('telegram:set', p),
     clearToken: () => ipcRenderer.invoke('telegram:clearToken'),
     detect: () => ipcRenderer.invoke('telegram:detect'),
     test: () => ipcRenderer.invoke('telegram:test')

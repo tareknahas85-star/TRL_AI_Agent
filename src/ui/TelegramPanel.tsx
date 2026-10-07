@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import type { TelegramInfo } from '../preload/index.d'
 
 export function TelegramPanel() {
-  const [st, setSt] = useState<TelegramInfo>({ enabled: false, chatId: '', minSeconds: 20, hasToken: false })
+  const [st, setSt] = useState<TelegramInfo>({ enabled: false, chatId: '', minSeconds: 20, inbound: false, hasToken: false })
   const [token, setToken] = useState('')
   const [chatId, setChatId] = useState('')
   const [msg, setMsg] = useState('')
@@ -121,6 +121,21 @@ export function TelegramPanel() {
           />
           ثانية
         </label>
+      </div>
+      <div className="mt-3 rounded-lg border border-outline bg-bg p-3 text-xs">
+        <label className="flex items-center gap-2 font-medium">
+          <input
+            type="checkbox"
+            checked={st.inbound}
+            disabled={!st.hasToken || !st.chatId || !st.enabled}
+            onChange={async (e) => setSt(await window.api.telegram.set({ inbound: e.target.checked }))}
+          />
+          تحكم عن بعد: نفّذ المهام اللي ببعتها من تيليغرام
+        </label>
+        <p className="mt-1 text-muted">
+          بتشتغل بس لرسائلك إنت (نفس الـ Chat ID، محادثة خاصة)، وبالمشروع الفعّال إذا مو سري. بتشتغل كمهمة بدون نوافذ تأكيد، فالأوامر الخطيرة (حذف، فرمتة، ...) بتنرفض. الأوامر: /status /stop /help. إذا مفعّل "وصول كامل"
+          للجهاز، المهام اللي بتجي من تيليغرام بتاخد نفس الصلاحية، فخلّيها مطفية إذا ما بدك.
+        </p>
       </div>
       {msg && <div className="mt-2 text-xs text-muted">{msg}</div>}
     </section>

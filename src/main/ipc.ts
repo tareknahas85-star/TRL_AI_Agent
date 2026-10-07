@@ -7,6 +7,7 @@ import { runCouncil, type CouncilInfo } from '../core/council'
 import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { registerManagementHandlers } from './management'
 import { listProjects } from '../core/workspace'
+import { missingFileClaims, claimsWarning } from '../core/claims'
 import { setScheduleRunner, startScheduler } from '../core/scheduler'
 import { refreshFreeRanking } from '../core/free-best'
 import { buildProjectContext } from '../core/project-context'
@@ -14,9 +15,12 @@ import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
 import { registerAccountsHandlers } from './accounts-ipc'
 import { registerAttachHandlers } from './attach'
 import { registerExtrasHandlers } from './extras'
+import { registerTransferHandlers } from './transfer'
+import { registerUpdateHandlers } from './updates'
 import { registerHfHandlers } from './hf'
 import { registerFreeProbeHandlers, startFreeWatch } from './freeprobe'
 import { notifyDone } from '../core/telegram'
+import { startTelegramInbound, TG_TAB } from '../core/telegram-in'
 import { registerConnectorsHandlers } from './connectors-ipc'
 import { memoryPrompt } from '../core/memory'
 import { runInContext, cancelRun, isUnattended, type RunMode } from '../core/progress'
@@ -45,6 +49,8 @@ export function registerIpcHandlers(): void {
   registerConnectorsHandlers()
   registerAttachHandlers()
   registerExtrasHandlers()
+  registerTransferHandlers()
+  registerUpdateHandlers()
   registerHfHandlers()
   registerFreeProbeHandlers()
   void ensureOllama().then(() => setTimeout(() => void warmLocalMaster(), 500))
@@ -212,9 +218,12 @@ export function registerIpcHandlers(): void {
           const lock = project?.confidential ? ' 🔒' : ''
           const meta = `Model: ${shownModel}${detail && !shownModel.includes(detail) ? ' [' + detail + ']' : ''}${effUsed ? ' · effort ' + effUsed : ''}${lock} | Memory: ${mem ? mem.count + (mem.truncated ? '+' : '') : 0} | Tools: ${result.toolsUsed?.length ? result.toolsUsed.join(',') : '-'} | Skill: ${analysis.skill ?? analysis.need_skill} | ${council ? 'Council: ' + (council.revised ? 'صُحّح بعد مراجعة ' + nm(council.critic) + ' (' + council.issues + ' ملاحظات)' : council.ran ? 'راجعه ' + nm(council.critic) + ' — ' + (council.skipped ?? 'بدون تعديل') : (council.skipped ?? '')) + ' | ' : ''}${saved} | Tried: ${result.triedModels.join(' -> ')} | Stats: ${JSON.stringify(stats)}`
           if (result.modelUsed !== 'none') recordTurn(projectId, userMsg, result.content)
-          notifyDone({ unattended: isUnattended(), confidential: !!project?.confidential, ms: Date.now() - started, model: shownModel, preview: userMsg.split('\n[ملفات مرفقة')[0], failed: result.modelUsed === 'none' })
+          if (o.tabId !== TG_TAB) notifyDone({ unattended: isUnattended(), confidential: !!project?.confidential, ms: Date.now() - started, model: shownModel, preview: userMsg.split('\n[ملفات مرفقة')[0], failed: result.modelUsed === 'none' })
           // needsChoice: nothing answered (free chain exhausted or the picked model failed) -> the UI asks the user what to do.
-          return { content: result.content, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none' }
+          const warn = result.modelUsed === 'none' ? '' : claimsWarning(missingFileClaims(result.content, project?.path))
+          const tl = result.toolsUsed ?? []
+          const skillHint = result.modelUsed !== 'none' && !project?.confidential && o.tabId !== TG_TAB && !o.tabId.startsWith('sched-') && tl.length >= 4 ? { tools: tl } : undefined
+          return { content: result.content + warn, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none', skillHint }
         } catch (e) {
           if (signal.aborted) return { content: '', cancelled: true }
           return { content: 'Error: ' + (e instanceof Error ? e.message : String(e)), failed: retry }
@@ -237,6 +246,10 @@ export function registerIpcHandlers(): void {
   setScheduleRunner(async (prompt, projectId, mode, taskId) => {
     const fake = { send: () => undefined } as unknown as WebContents
     return (await runChat(fake, prompt, false, [], { tabId: 'sched-' + taskId, projectId, mode: mode === 'free' ? { kind: 'free' } : { kind: 'auto' } })) as { content: string; failed?: boolean; meta?: string }
+  })
+  startTelegramInbound(async (text, projectId) => {
+    const fake = { send: () => undefined } as unknown as WebContents
+    return (await runChat(fake, text, false, [], { tabId: TG_TAB, projectId, mode: { kind: 'auto' } })) as { content: string; failed?: boolean }
   })
   startScheduler()
   startFreeWatch()
