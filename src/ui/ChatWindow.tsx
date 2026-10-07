@@ -20,7 +20,9 @@ const TEMPLATES: { label: string; text: string }[] = [
   { label: '📄 مستند Word', text: 'اكتبلي مستند Word رسمي عن:\n\n' },
   { label: '📽️ عرض PowerPoint', text: 'جهزلي عرض PowerPoint عن:\n\n' },
   { label: '📎 لخّص ملف', text: 'لخصلي الملف المرفق بنقاط واضحة وطلعلي القرارات والمهام.\n\n' },
-  { label: '⚙️ سكربت PowerShell', text: 'اكتبلي سكربت PowerShell يعمل التالي:\n\n' }
+  navigator.userAgent.includes('Linux') && !navigator.userAgent.includes('Android')
+    ? { label: '⚙️ سكربت bash', text: 'اكتبلي سكربت bash يعمل التالي:\n\n' }
+    : { label: '⚙️ سكربت PowerShell', text: 'اكتبلي سكربت PowerShell يعمل التالي:\n\n' }
 ]
 
 function Avatar() {

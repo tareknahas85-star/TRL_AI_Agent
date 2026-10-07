@@ -64,7 +64,7 @@ export async function toggleMCPServer(name: string): Promise<boolean | null> {
 }
 
 // Spawn the server and perform an MCP `initialize` handshake over stdio.
-export function testMCPServer(server: MCPServer, timeoutMs = 30000): Promise<{ ok: boolean; message: string }> {
+export function testMCPServer(server: MCPServer, timeoutMs = 90000): Promise<{ ok: boolean; message: string }> {
   return new Promise((resolve) => {
     let done = false
     let buf = ''
@@ -91,7 +91,7 @@ export function testMCPServer(server: MCPServer, timeoutMs = 30000): Promise<{ o
       }
       resolve({ ok, message })
     }
-    const timer = setTimeout(() => finish(false, 'انتهت المهلة (30 ثانية) بدون رد من السيرفر'), timeoutMs)
+    const timer = setTimeout(() => finish(false, `انتهت المهلة (${Math.round(timeoutMs / 1000)} ثانية) بدون رد من السيرفر`), timeoutMs)
     child.on('error', (e) => finish(false, 'ما زبط تشغيل الأمر: ' + e.message))
     child.on('exit', (code) => finish(false, `السيرفر سكّر (code ${code}) ${stderr.trim().slice(0, 200)}`))
     child.stderr.on('data', (d) => (stderr += d.toString()))
