@@ -8,7 +8,7 @@ export function ComputerPanel() {
   }, [])
 
   const isLinux = navigator.userAgent.includes('Linux') && !navigator.userAgent.includes('Android')
-  const unsupported = !navigator.userAgent.includes('Windows') && !isLinux // Windows (full) and Linux (no screen control)
+  const unsupported = !navigator.userAgent.includes('Windows') && !isLinux // Windows and Linux
   const toggle = async (): Promise<void> => setSt(await window.api.computer.set(!st.enabled))
   const reset = async (): Promise<void> => setSt(await window.api.computer.reset())
 
@@ -19,7 +19,7 @@ export function ComputerPanel() {
           <h3 className="text-base font-semibold">التحكم بالجهاز (Computer Control)</h3>
           <p className="mt-1 text-sm text-gray-500">
             {isLinux
-              ? 'يخلي الموديلات تشغّل أوامر bash، تقرأ وتكتب الملفات، تفتح البرامج، وتعمل ملفات Office. ما في تحكم بالشاشة (ضغط وكتابة) على لينكس. مطفي افتراضي.'
+              ? 'يخلي الموديلات تشغّل أوامر bash، تقرأ وتكتب الملفات، تفتح البرامج، وتعمل ملفات Office، وتضغط وتكتب على الشاشة. مطفي افتراضي.'
               : 'يخلي الموديلات تشغّل أوامر PowerShell، تقرأ الملفات، تفتح البرامج، وتضغط وتكتب على الشاشة. مطفي افتراضي وكل إجراء بيطلب موافقتك.'}
           </p>
         </div>
@@ -71,7 +71,8 @@ export function ComputerPanel() {
           <li>الأوامر للقراءة بس (ls, cat, grep...) بتشتغل مباشرة، وغيرها بيسألك.</li>
           <li>بدون الصلاحية الكاملة محجوب: rm، sudo، curl/wget، فرمتة، وتغيير الصلاحيات بالجملة. الإطفاء وإعادة التشغيل محجوبين.</li>
           <li>ما بيتعامل مع كلمات السر ولا بيقرأ ملفات المفاتيح.</li>
-          <li>ما في ضغط ولا كتابة على الشاشة ولا لقطات شاشة على لينكس. تعديل Word وPowerPoint مش متاح (Excel بس)، بس إنشاء الملفات متاح.</li>
+          <li>التحكم بالشاشة بيشتغل بقراءة عناصر النافذة (AT-SPI) والضغط والكتابة بـ ydotool، فلازم تكون الأدوات منصّبة وخدمة ydotoold شغالة. على Wayland ممكن بعض النوافذ ما تنفتح قدام.</li>
+          <li>تعديل Word وPowerPoint مش متاح على لينكس (Excel بس)، بس إنشاء الملفات متاح.</li>
         </ul>
       ) : (
       <ul className="mt-3 list-disc space-y-1 pr-5 text-xs text-gray-500">

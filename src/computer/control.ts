@@ -9,6 +9,7 @@ import { BUILD_ENV_PS } from './build-env'
 import { addOfficeTools } from './office'
 import { isUnattended } from '../core/progress'
 import { findOnPath } from '../core/platform'
+import { addLinuxGuiTools } from './linux-gui'
 
 // ---------- config (master switch, default OFF) ----------
 const cfgFile = (): string => path.join(app.getPath('userData'), 'computer.json')
@@ -31,7 +32,7 @@ export function setAutoApprove(on: boolean): void {
   writeCfg({ autoApprove: !!on })
 }
 
-// Computer Control: Windows (PowerShell, plus screen control) and Linux (bash + files + Office, no screen control).
+// Computer Control: Windows (PowerShell, plus screen control) and Linux (bash + files + Office + screen control via linux-gui.ts).
 const isLinux = process.platform === 'linux'
 const PC_SUPPORTED = process.platform === 'win32' || isLinux
 // Full Access: everything runs without per-action prompts; only destructive commands still need an explicit confirmation click.
@@ -174,7 +175,7 @@ function runPs(script: string, args: unknown = {}, timeoutMs = 60000, signal?: A
   })
 }
 
-// ---------- Linux: bash runner + safety (files, commands, Office; no screen control) ----------
+// ---------- Linux: bash runner + safety (files, commands, Office) ----------
 // Mirrors the Windows rules: BLOCKED never runs without Full Access; DESTRUCTIVE needs a real confirmation even with Full Access.
 const DESTRUCTIVE_SH =
   /(\brm\b|\brmdir\b|\bunlink\b|\bshred\b|\bmkfs|\bwipefs\b|\bfdisk\b|\bparted\b|\bdd\b[^|;]*\bof=|\bsudo\b|\bsu\b|\bpkexec\b|\bdoas\b|\bshutdown\b|\breboot\b|\bpoweroff\b|\bhalt\b|systemctl\s+(poweroff|reboot|halt|suspend|hibernate|kexec)|\bcrontab\s+-r|\bapt(-get)?\s+(remove|purge|autoremove)|\bsnap\s+remove|\bflatpak\s+uninstall|\bchmod\s+-R|\bchown\s+-R|\bgit\s+clean|find\b[^|;]*(-delete\b|-exec\s+rm\b)|>\s*\/dev\/(sd|nvme|mmcblk)|:\(\)\s*\{)/i
@@ -343,7 +344,7 @@ export function addComputerTools(
   if (isLinux)
     def(
       'pc_run',
-      "Run a bash command on the user's Linux computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder (default: the active project folder); optional timeout_seconds (default 120, max 1800) - use a big value for builds/installs. Destructive commands (rm, sudo, shutdown...) and downloads (curl/wget) are blocked unless Full Access is on. There is no screen control on Linux: work with commands, files and the office_* tools.",
+      "Run a bash command on the user's Linux computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder (default: the active project folder); optional timeout_seconds (default 120, max 1800) - use a big value for builds/installs. Destructive commands (rm, sudo, shutdown...) and downloads (curl/wget) are blocked unless Full Access is on. For the screen use pc_windows, pc_ui_snapshot, pc_click, pc_type, pc_keys, pc_scroll and pc_screenshot.",
       { command: str, cwd: str, timeout_seconds: num },
       ['command'],
       async (a) => {
@@ -476,8 +477,11 @@ export function addComputerTools(
     if (isLinux) return openOnLinux(t)
     return runPs('Start-Process -FilePath $A.t; "OK: opened"', { t }, 20000)
   })
-  // Linux: no screen control (UI Automation, mouse/keyboard, screenshots are Windows-only). Everything below is Windows.
-  if (isLinux) return
+  // Linux: screen control via AT-SPI + ydotool (src/computer/linux-gui.ts). Everything below is Windows.
+  if (isLinux) {
+    addLinuxGuiTools({ def, ask, runSh, cwd: () => rp('.'), fullAccessOn, getSignal })
+    return
+  }
   def('pc_focus', 'Bring a window to the foreground by part of its title.', { title: str }, ['title'], async (a) => {
     if (!(await ask('بدو يعمل تركيز على نافذة', s(a.title)))) return 'Error: the user denied this.'
     return runPs(
