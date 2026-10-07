@@ -2,10 +2,21 @@ import { createContext, useContext, useEffect, useLayoutEffect, useState, type R
 
 export type Theme = 'light' | 'dark'
 
-type ThemeContextValue = { theme: Theme; toggleTheme: () => void }
+export type Palette = 'default' | 'syrian'
+
+type ThemeContextValue = { theme: Theme; toggleTheme: () => void; palette: Palette; togglePalette: () => void }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 const STORAGE_KEY = 'theme'
+const PALETTE_KEY = 'palette'
+
+function getInitialPalette(): Palette {
+  try {
+    return localStorage.getItem(PALETTE_KEY) === 'syrian' ? 'syrian' : 'default'
+  } catch {
+    return 'default'
+  }
+}
 
 function getInitialTheme(): Theme {
   try {
@@ -19,6 +30,16 @@ function getInitialTheme(): Theme {
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
   const [theme, setTheme] = useState<Theme>(getInitialTheme)
+  const [palette, setPalette] = useState<Palette>(getInitialPalette)
+
+  useLayoutEffect(() => {
+    document.documentElement.classList.toggle('syrian', palette === 'syrian')
+    try {
+      localStorage.setItem(PALETTE_KEY, palette)
+    } catch {
+      // ignore
+    }
+  }, [palette])
 
   useLayoutEffect(() => {
     const root = document.documentElement
@@ -36,7 +57,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))
 
-  return <ThemeContext.Provider value={{ theme, toggleTheme }}>{children}</ThemeContext.Provider>
+  const togglePalette = () => setPalette((p) => (p === 'syrian' ? 'default' : 'syrian'))
+
+  return <ThemeContext.Provider value={{ theme, toggleTheme, palette, togglePalette }}>{children}</ThemeContext.Provider>
 }
 
 export function useTheme(): ThemeContextValue {

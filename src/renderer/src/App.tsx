@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Bot, Clock, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
+  Bot, Clock, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Palette, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
   Sun, Trash2, User, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
@@ -148,7 +148,7 @@ const readSaved = (): { tabs: Omit<Tab, 'initial'>[]; active: string | null } | 
 }
 
 function Shell() {
-  const { theme, toggleTheme } = useTheme()
+  const { theme, toggleTheme, palette, togglePalette } = useTheme()
   const [activeNav, setActiveNav] = useState<Nav>('chat')
   const [convs, setConvs] = useState<ConversationSummary[]>([])
   const [projects, setProjects] = useState<ProjectInfo[]>([])
@@ -502,6 +502,10 @@ function Shell() {
           <button onClick={toggleTheme} className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
             <span>{theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}</span>
+          </button>
+          <button onClick={togglePalette} className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2">
+            <Palette size={18} />
+            <span>{palette === 'syrian' ? 'الألوان الافتراضية' : 'الهوية السورية'}</span>
           </button>
           <button
             onClick={() => {

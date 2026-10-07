@@ -58,3 +58,62 @@
     outline-offset: 2px;
   }
 }
+
+/* الهوية السورية: ألوان وخط بس (خيار اختياري). المصدر: syrian.zone/syid */
+@font-face {
+  font-family: 'Hayyakum Allah';
+  src: url('./assets/fonts/HayyakumAllah-Light.woff2') format('woff2');
+  font-weight: 300;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hayyakum Allah';
+  src: url('./assets/fonts/HayyakumAllah-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hayyakum Allah';
+  src: url('./assets/fonts/HayyakumAllah-Medium.woff2') format('woff2');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Hayyakum Allah';
+  src: url('./assets/fonts/HayyakumAllah-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+:root.syrian {
+  --bg: 237 235 224;
+  --surface: 247 246 238;
+  --surface2: 227 224 208;
+  --outline: 205 198 172;
+  --fg: 22 22 22;
+  --muted: 94 88 75;
+  --primary: 5 66 57;
+  --success: 47 107 79;
+  --warning: 125 104 60;
+  --danger: 107 31 42;
+  --bubble: 217 212 184;
+}
+:root.syrian.dark {
+  --bg: 0 38 35;
+  --surface: 3 52 48;
+  --surface2: 5 66 57;
+  --outline: 29 91 82;
+  --fg: 237 235 224;
+  --muted: 185 167 121;
+  --primary: 66 129 119;
+  --success: 111 179 159;
+  --warning: 212 190 133;
+  --danger: 224 112 126;
+  --bubble: 11 79 69;
+}
+:root.syrian body {
+  font-family: 'Hayyakum Allah', 'Noto Sans Arabic', Roboto, 'Segoe UI', Tahoma, system-ui, sans-serif;
+}

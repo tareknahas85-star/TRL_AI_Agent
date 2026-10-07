@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, Mic, Paperclip, Play, RotateCcw, Square, X } from 'lucide-react'
 import { Markdown } from './Markdown'
+import { useTheme } from './ThemeContext'
+import eagle from '../renderer/src/assets/syria-eagle.svg'
 import { CostDashboard } from './CostDashboard'
 import { Chip } from './components/ui'
 import { FileChips } from './FileChips'
@@ -22,6 +24,13 @@ const TEMPLATES: { label: string; text: string }[] = [
 ]
 
 function Avatar() {
+  const { palette } = useTheme()
+  if (palette === 'syrian')
+    return (
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: '#054239' }}>
+        <img src={eagle} alt="" className="h-6 w-6" draggable={false} />
+      </div>
+    )
   return (
     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-white">
       <Bot size={18} />
