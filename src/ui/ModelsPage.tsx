@@ -4,6 +4,8 @@ import type { CustomModelInfo, Tier } from '../preload/index.d'
 import { KeyField, type KeyName } from './KeyField'
 import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
+import { CapIcons, guessCaps, type Caps } from './Caps'
+import { HostField } from './HostField'
 import { FreeProbePanel } from './FreeProbePanel'
 import { Chip, Empty, Modal, PageShell, TIER_LABEL, Toggle, cardCls, ghostBtn, inputCls, primaryBtn, useTab } from './components/ui'
 import { SpendPanel } from './SpendPanel'
@@ -35,6 +37,10 @@ export function ModelsPage() {
     for (const p of PROVIDERS) if ('key' in p) void window.api.getKey(p.key).then((v) => setHas((h) => ({ ...h, [p.key]: !!v.trim() })))
   }, [])
   const setKeyHas = (k: KeyName) => (v: boolean): void => setHas((h) => ({ ...h, [k]: v }))
+  const [capMap, setCapMap] = useState<Record<string, Caps>>({})
+  useEffect(() => {
+    void window.api.catalog.list().then((c) => setCapMap(Object.fromEntries(c.models.map((x) => [x.id, { vision: x.vision, tools: x.tools, reasoning: x.reasoning }]))))
+  }, [])
   const [models, setModels] = useState<CustomModelInfo[]>([])
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(empty)
@@ -116,6 +122,7 @@ export function ModelsPage() {
                     <span className="font-semibold">{m.name}</span>
                     <Chip cls={TIER_LABEL[m.tier].cls}>{TIER_LABEL[m.tier].label}</Chip>
                     {m.hasKey && <Chip>مفتاح محفوظ</Chip>}
+                    <CapIcons caps={capMap[m.model] ?? guessCaps(m.model)} />
                   </div>
                   <div dir="ltr" className="truncate text-start font-mono text-xs text-muted">
                     {m.model} · {m.baseURL || 'openrouter.ai'}
@@ -200,6 +207,7 @@ export function ModelsPage() {
             <>
               {head('OpenRouter')}
               <KeyField name="OPENROUTER_API_KEY" verify={() => window.api.catalog.test()} onChange={setKeyHas('OPENROUTER_API_KEY')} />
+              <HostField id="openrouter" />
               <CatalogPanel />
               <FreeProbePanel />
               <h3 className="mb-2 mt-6 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>
@@ -208,7 +216,7 @@ export function ModelsPage() {
                   <div key={t.tier} className={cardCls}>
                     <Chip cls={TIER_LABEL[t.tier].cls}>{TIER_LABEL[t.tier].label}</Chip>
                     <ul dir="ltr" className="mt-3 space-y-1 text-start font-mono text-xs text-muted">
-                      {t.models.map((x) => <li key={x} className="truncate">{x}</li>)}
+                      {t.models.map((x) => <li key={x} className="flex items-center justify-between gap-2"><span className="truncate">{x}</span><CapIcons caps={capMap[x]} /></li>)}
                     </ul>
                   </div>
                 ))}
@@ -226,6 +234,7 @@ export function ModelsPage() {
                   return { ok: r.ok, message: r.ok ? `المفتاح شغّال، ${r.models.length} موديل بيقبل صور` : (r.error ?? 'فشل') }
                 }}
               />
+              <HostField id="huggingface" />
               <HfPanel />
             </>
           )}
@@ -233,6 +242,7 @@ export function ModelsPage() {
             <>
               {head('Gemini')}
               <KeyField name="GEMINI_API_KEY" onChange={setKeyHas('GEMINI_API_KEY')} />
+              <HostField id="gemini" />
               <div className="mb-2 flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-muted">الموديلات</h3>
                 <button className={ghostBtn + ' border border-outline'} onClick={() => openAdd(GEMINI_BASE)}>+ جديد</button>

@@ -3,7 +3,8 @@ import { freeOnly, setFreeOnly } from '../core/spend'
 import { freeUsage } from '../core/model-health'
 import { moveCatalogModel } from '../core/catalog'
 import { deleteMemoryEntry, importMemory, listMemory, memoryPrompt, saveMemoryEntry, toggleMemoryEntry } from '../core/memory'
-import { fetchOpenRouterModels, listCatalog, setCatalogEnabled, testOpenRouterKey } from '../core/catalog'
+import { fetchOpenRouterModels, listCatalog, resetCatalogEnabled, setCatalogEnabled, testOpenRouterKey } from '../core/catalog'
+import { HOST_DEFAULTS, hostsInfo, setHost, type HostId } from '../core/hosts'
 import { BrowserWindow, dialog, ipcMain } from 'electron'
 import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled, setFullAccess } from '../computer/control'
 import { addSchedule, listSchedules, removeSchedule, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
@@ -148,6 +149,11 @@ export function registerManagementHandlers(): void {
       : 0
   )
   ipcMain.handle('catalog:list', () => listCatalog())
+  ipcMain.handle('catalog:reset', () => resetCatalogEnabled())
+  ipcMain.handle('hosts:get', () => hostsInfo())
+  ipcMain.handle('hosts:set', (_e, id: unknown, url: unknown) =>
+    typeof id === 'string' && id in HOST_DEFAULTS && typeof url === 'string' ? setHost(id as HostId, url) : { ok: false, error: 'bad input', value: '' }
+  )
   ipcMain.handle('catalog:move', (_e, id: unknown, dir: unknown) =>
     typeof id === 'string' && (dir === 'up' || dir === 'down') ? moveCatalogModel(id, dir) : false
   )

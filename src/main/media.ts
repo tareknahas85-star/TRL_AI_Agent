@@ -1,3 +1,4 @@
+import { hostOf } from '../core/hosts'
 import { nativeImage } from 'electron'
 import { spawn } from 'child_process'
 import fsp from 'fs/promises'
@@ -5,7 +6,6 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import { getApiKey } from '../store/secure-store'
-import { OPENROUTER_MODELS_API } from '../core/config'
 import { scoreFree } from '../core/free-best'
 import { bumpFreeCount } from '../core/model-health'
 import { readJson, dataFile } from '../core/json-store'
@@ -182,7 +182,7 @@ let visionCache: { at: number; ids: string[] } | null = null
 async function freeVisionModels(): Promise<string[]> {
   if (visionCache && Date.now() - visionCache.at < 6 * 3600 * 1000) return visionCache.ids
   try {
-    const r = await fetch(OPENROUTER_MODELS_API, { signal: AbortSignal.timeout(15000) })
+    const r = await fetch(hostOf('openrouter') + '/models', { signal: AbortSignal.timeout(15000) })
     const j = (await r.json()) as { data?: OrModel[] }
     const ids = (j.data ?? [])
       .filter((m) => m.id.endsWith(':free') && m.architecture?.input_modalities?.includes('image'))
@@ -202,7 +202,7 @@ async function describeOpenRouter(dataUrl: string): Promise<{ text: string; mode
   const ids = (await freeVisionModels()).slice(0, 4)
   for (const model of ids) {
     try {
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const r = await fetch(`${hostOf('openrouter')}/chat/completions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
         body: JSON.stringify({
@@ -245,7 +245,7 @@ async function describeHuggingFace(dataUrl: string): Promise<{ text: string; mod
   const chosen = hfChosen()
   for (const model of [...new Set([chosen, ...HF_DEFAULT_MODELS].filter(Boolean))]) {
     try {
-      const r = await fetch('https://router.huggingface.co/v1/chat/completions', {
+      const r = await fetch(`${hostOf('huggingface')}/chat/completions`, {
         method: 'POST',
         headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
         body: JSON.stringify({

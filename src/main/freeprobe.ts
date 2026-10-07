@@ -1,3 +1,4 @@
+import { hostOf } from '../core/hosts'
 import { ipcMain } from 'electron'
 import { getApiKey } from '../store/secure-store'
 import { readJson, writeJson } from '../core/json-store'
@@ -13,7 +14,7 @@ const FILE = 'free-probe.json'
 
 export async function listFree(): Promise<{ ok: boolean; error?: string; models: FreeModel[] }> {
   try {
-    const r = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(20000) })
+    const r = await fetch(`${hostOf('openrouter')}/models`, { signal: AbortSignal.timeout(20000) })
     if (!r.ok) return { ok: false, error: 'خطأ ' + r.status, models: [] }
     const j = (await r.json()) as { data?: { id: string; context_length?: number; created?: number; pricing?: Record<string, string>; architecture?: { input_modalities?: string[]; output_modalities?: string[] }; supported_parameters?: string[] }[] }
     const models = (j.data ?? [])
@@ -30,7 +31,7 @@ export async function listFree(): Promise<{ ok: boolean; error?: string; models:
 
 async function chat(key: string, body: unknown): Promise<{ status: number; json?: Record<string, unknown>; text: string; secs: number }> {
   const t0 = Date.now()
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const r = await fetch(`${hostOf('openrouter')}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
     body: JSON.stringify(body),

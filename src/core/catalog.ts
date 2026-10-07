@@ -1,5 +1,6 @@
+import { hostOf } from './hosts'
 import { readJson, writeJson } from './json-store'
-import { MODEL_TIERS, OPENROUTER_MODELS_API } from './config'
+import { MODEL_TIERS } from './config'
 import { getApiKey } from '../store/secure-store'
 
 export type CatalogTier = 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'
@@ -10,6 +11,8 @@ export type CatalogModel = {
   pricePerM: number // USD per 1M tokens (avg of prompt+completion); 0 = free
   context: number
   vision: boolean
+  tools?: boolean
+  reasoning?: boolean
   enabled: boolean
 }
 type CatalogFile = { fetchedAt: number; models: CatalogModel[] }
@@ -70,7 +73,7 @@ export async function testOpenRouterKey(): Promise<{ ok: boolean; message: strin
   const key = getApiKey('OPENROUTER_API_KEY')
   if (!key) return { ok: false, message: 'ما في مفتاح OpenRouter محفوظ. ضيفو أول.' }
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/auth/key', {
+    const res = await fetch(`${hostOf('openrouter')}/auth/key`, {
       headers: { Authorization: `Bearer ${key}` }
     })
     if (res.status === 401 || res.status === 403) return { ok: false, message: `المفتاح مرفوض (HTTP ${res.status})` }
@@ -93,12 +96,13 @@ type ApiModel = {
   context_length?: number
   pricing?: { prompt?: string; completion?: string }
   architecture?: { input_modalities?: string[]; output_modalities?: string[] }
+  supported_parameters?: string[]
 }
 
 export async function fetchOpenRouterModels(): Promise<{ ok: boolean; message: string; added: number; total: number }> {
   const key = getApiKey('OPENROUTER_API_KEY')
   try {
-    const res = await fetch(OPENROUTER_MODELS_API, key ? { headers: { Authorization: `Bearer ${key}` } } : undefined)
+    const res = await fetch(hostOf('openrouter') + '/models', key ? { headers: { Authorization: `Bearer ${key}` } } : undefined)
     if (!res.ok) return { ok: false, message: `فشل السحب (HTTP ${res.status})`, added: 0, total: 0 }
     const j = (await res.json()) as { data?: ApiModel[] }
     const prev = load()
@@ -123,6 +127,8 @@ export async function fetchOpenRouterModels(): Promise<{ ok: boolean; message: s
         pricePerM: Number.isFinite(pricePerM) ? pricePerM : 0,
         context: m.context_length ?? 0,
         vision: (m.architecture?.input_modalities ?? []).includes('image'),
+        tools: (m.supported_parameters ?? []).includes('tools'),
+        reasoning: (m.supported_parameters ?? []).some((x) => x === 'reasoning' || x === 'include_reasoning'),
         // Manual control: keep the user's choice; brand-new models start disabled,
         // except that the very first pull enables the built-in defaults.
         enabled: old ? old.enabled : firstPull && BUILTIN.has(m.id)
@@ -133,4 +139,16 @@ export async function fetchOpenRouterModels(): Promise<{ ok: boolean; message: s
   } catch (e) {
     return { ok: false, message: 'ما قدرت اتصل: ' + (e instanceof Error ? e.message : String(e)), added: 0, total: 0 }
   }
+}
+
+// Back to the defaults: only the built-in models enabled, order untouched.
+export function resetCatalogEnabled(): number {
+  const c = load()
+  let n = 0
+  for (const m of c.models) {
+    const want = BUILTIN.has(m.id)
+    if (m.enabled !== want) { m.enabled = want; n++ }
+  }
+  writeJson(FILE, c)
+  return n
 }

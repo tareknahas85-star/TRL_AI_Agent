@@ -1,3 +1,4 @@
+import { hostOf } from './hosts'
 import OpenAI from 'openai'
 import { readJson, writeJson, newId } from './json-store'
 import { getSecret, setSecret } from '../store/secure-store'
@@ -82,7 +83,7 @@ export function clientForCustomModel(m: CustomModel): { client: OpenAI; modelId:
   const key = getSecret(`model:${m.id}`) || (m.baseURL ? '' : process.env.OPENROUTER_API_KEY || '')
   return {
     client: new OpenAI({
-      baseURL: m.baseURL || 'https://openrouter.ai/api/v1',
+      baseURL: m.baseURL || hostOf('openrouter'),
       // Some local/OpenAI-compatible servers need no key; the SDK still requires a non-empty string.
       apiKey: key || 'not-needed'
     }),

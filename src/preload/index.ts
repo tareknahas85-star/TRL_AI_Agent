@@ -152,7 +152,12 @@ const api = {
     test: () => ipcRenderer.invoke('catalog:test'),
     fetch: () => ipcRenderer.invoke('catalog:fetch'),
     setEnabled: (ids: string[], on: boolean) => ipcRenderer.invoke('catalog:setEnabled', ids, on),
-    move: (id: string, dir: 'up' | 'down') => ipcRenderer.invoke('catalog:move', id, dir)
+    move: (id: string, dir: 'up' | 'down') => ipcRenderer.invoke('catalog:move', id, dir),
+    reset: (): Promise<number> => ipcRenderer.invoke('catalog:reset')
+  },
+  hosts: {
+    get: (): Promise<Record<string, { value: string; default: string; custom: boolean }>> => ipcRenderer.invoke('hosts:get'),
+    set: (id: string, url: string): Promise<{ ok: boolean; error?: string; value: string }> => ipcRenderer.invoke('hosts:set', id, url)
   },
   schedules: {
     list: () => ipcRenderer.invoke('schedules:list'),

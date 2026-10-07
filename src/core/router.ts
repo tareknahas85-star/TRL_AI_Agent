@@ -1,4 +1,5 @@
-import { MODEL_TIERS, OPENROUTER_MODELS_API } from './config'
+import { hostOf } from './hosts'
+import { MODEL_TIERS } from './config'
 import type { Analysis } from './master'
 import { customModelsForTier } from './custom-models'
 import { catalogModelsForTier } from './catalog'
@@ -45,7 +46,7 @@ export function getTierForAnalysis(analysis: Analysis): string[] {
 
 export async function fetchFreeModels(): Promise<string[]> {
   try {
-    const res = await fetch(OPENROUTER_MODELS_API)
+    const res = await fetch(hostOf('openrouter') + '/models')
     if (!res.ok) throw new Error(`HTTP ${res.status}`)
     const json = (await res.json()) as { data?: { id: string }[] }
     return (json.data ?? []).map((m) => m.id).filter((id) => id.endsWith(':free'))

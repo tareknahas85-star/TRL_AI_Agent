@@ -1,3 +1,4 @@
+import { CapIcons } from './Caps'
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Loader2, PlugZap, DownloadCloud, ArrowUp, ArrowDown } from 'lucide-react'
 import { Chip, TIER_LABEL, Toggle, cardCls, ghostBtn, inputCls } from './components/ui'
@@ -9,6 +10,8 @@ type CModel = {
   pricePerM: number
   context: number
   vision: boolean
+  tools?: boolean
+  reasoning?: boolean
   enabled: boolean
 }
 
@@ -94,6 +97,7 @@ export function CatalogPanel() {
           <div className="mb-3 flex flex-wrap gap-2 text-xs">
             <button className={ghostBtn} onClick={() => setMany(shown.map((m) => m.id), true)}>تفعيل المعروض ({shown.length})</button>
             <button className={ghostBtn} onClick={() => setMany(shown.map((m) => m.id), false)}>إلغاء تفعيل المعروض</button>
+            <button className={ghostBtn} onClick={async () => { if (confirm('ترجّع التفعيل للإعدادات الافتراضية (الموديلات المدمجة بس)؟')) { await window.api.catalog.reset(); load() } }}>إعادة ضبط</button>
             {fetchedAt > 0 && <span className="self-center text-muted">آخر سحب: {new Date(fetchedAt).toLocaleString()}</span>}
           </div>
           <p className="mb-2 text-xs text-muted">المفعّلة بتظهر فوق، والأسهم بتغيّر ترتيب التجربة داخل نفس الطبقة (الأعلى بيجرَّب أول).</p>
@@ -106,7 +110,7 @@ export function CatalogPanel() {
                     <Chip cls={TIER_LABEL[m.tier].cls}>{TIER_LABEL[m.tier].label}</Chip>
                     {m.pricePerM > 0 && <Chip>${m.pricePerM.toFixed(2)}/M</Chip>}
                     {m.context > 0 && <Chip>{Math.round(m.context / 1000)}K</Chip>}
-                    {m.vision && <Chip>صور</Chip>}
+                    <CapIcons caps={{ vision: m.vision, tools: m.tools, reasoning: m.reasoning }} />
                   </div>
                 </div>
                 <div className="flex items-center gap-1">

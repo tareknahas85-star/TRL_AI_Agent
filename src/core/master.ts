@@ -1,3 +1,4 @@
+import { hostOf } from './hosts'
 import OpenAI from 'openai'
 import { MASTER_MODELS } from './config'
 import { skillCatalog } from '../skills/loader'
@@ -85,14 +86,14 @@ let clientKey: string | undefined
 // Created lazily, and re-created if the key changes (e.g. saved from the Settings screen).
 function getClient(): OpenAI {
   const apiKey = process.env.OPENROUTER_API_KEY
-  if (!client || clientKey !== apiKey) {
+  if (!client || clientKey !== apiKey + hostOf('openrouter')) {
     client = new OpenAI({
-      baseURL: 'https://openrouter.ai/api/v1',
+      baseURL: hostOf('openrouter'),
       apiKey,
       timeout: 25000, // fail fast so the next maestro model gets a turn
       maxRetries: 0
     })
-    clientKey = apiKey
+    clientKey = apiKey + hostOf('openrouter')
   }
   return client
 }

@@ -1,3 +1,4 @@
+import { hostOf } from '../core/hosts'
 import { ipcMain } from 'electron'
 import { getApiKey } from '../store/secure-store'
 import { readJson, writeJson } from '../core/json-store'
@@ -15,7 +16,7 @@ export async function hfVisionModels(): Promise<{ ok: boolean; error?: string; t
   const key = getApiKey('HUGGINGFACE_API_KEY')
   if (!key) return { ok: false, error: 'ما في مفتاح Hugging Face', total: 0, models: [] }
   try {
-    const r = await fetch('https://router.huggingface.co/v1/models', { headers: { authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(20000) })
+    const r = await fetch(`${hostOf('huggingface')}/models`, { headers: { authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(20000) })
     if (!r.ok) return { ok: false, error: r.status === 401 ? 'المفتاح مرفوض (401)' : 'خطأ ' + r.status, total: 0, models: [] }
     const j = (await r.json()) as { data?: { id: string; architecture?: { input_modalities?: string[] }; providers?: { provider: string }[] }[] }
     const all = j.data ?? []
@@ -34,7 +35,7 @@ async function hfTestModel(model: string): Promise<{ ok: boolean; message: strin
   if (!key) return { ok: false, message: 'ما في مفتاح' }
   const t0 = Date.now()
   try {
-    const r = await fetch('https://router.huggingface.co/v1/chat/completions', {
+    const r = await fetch(`${hostOf('huggingface')}/chat/completions`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
       body: JSON.stringify({

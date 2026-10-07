@@ -1,5 +1,5 @@
+import { hostOf } from './hosts'
 import { readJson, writeJson } from './json-store'
-import { OPENROUTER_MODELS_API } from './config'
 
 // OpenRouter keeps adding strong experimental free models. This ranks the currently available ":free" models
 // (size, context, tool support, freshness, family) so the free tier always starts with the strongest one.
@@ -60,7 +60,7 @@ export async function refreshFreeRanking(): Promise<{ ok: boolean; top: string[]
   if (busy) return { ok: false, top: [] }
   busy = true
   try {
-    const res = await fetch(OPENROUTER_MODELS_API, { signal: AbortSignal.timeout(15000) })
+    const res = await fetch(hostOf('openrouter') + '/models', { signal: AbortSignal.timeout(15000) })
     if (!res.ok) return { ok: false, top: [] }
     const j = (await res.json()) as { data?: ApiModel[] }
     const free = (j.data ?? []).filter((m) => m.id.endsWith(':free') && (m.architecture?.output_modalities ?? ['text']).join() === 'text')

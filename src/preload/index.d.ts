@@ -246,6 +246,8 @@ declare global {
             pricePerM: number
             context: number
             vision: boolean
+            tools?: boolean
+            reasoning?: boolean
             enabled: boolean
           }[]
         }>
@@ -253,6 +255,11 @@ declare global {
         fetch: () => Promise<{ ok: boolean; message: string; added: number; total: number }>
         setEnabled: (ids: string[], on: boolean) => Promise<number>
         move: (id: string, dir: 'up' | 'down') => Promise<boolean>
+        reset: () => Promise<number>
+      }
+      hosts: {
+        get: () => Promise<Record<string, { value: string; default: string; custom: boolean }>>
+        set: (id: string, url: string) => Promise<{ ok: boolean; error?: string; value: string }>
       }
       claudeAcct: {
         get: () => Promise<{ cfg: { active: 'work' | 'personal'; auto: boolean }; work: { installed: boolean; loggedIn: boolean; email?: string; plan?: string }; personal: { installed: boolean; loggedIn: boolean; email?: string; plan?: string } }>

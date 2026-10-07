@@ -1,3 +1,4 @@
+import { hostOf } from './hosts'
 import OpenAI from 'openai'
 import fs from 'fs'
 import { dataFile } from './json-store'
@@ -92,7 +93,7 @@ export async function executeWithFallback(
   opts: { requireTools?: boolean; escalate?: boolean } = {}
 ): Promise<FallbackResult> {
   const openai = new OpenAI({
-    baseURL: 'https://openrouter.ai/api/v1',
+    baseURL: hostOf('openrouter'),
     apiKey: process.env.OPENROUTER_API_KEY,
     dangerouslyAllowBrowser: true,
     timeout: 90000, // don't hang on a stuck free model; move on to the next one
@@ -114,7 +115,7 @@ export async function executeWithFallback(
       return {
         client: new OpenAI({
           apiKey: process.env.GEMINI_API_KEY,
-          baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/'
+          baseURL: hostOf('gemini')
         }),
         modelId: bare
       }
