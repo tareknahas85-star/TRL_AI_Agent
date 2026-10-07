@@ -7,7 +7,8 @@ export function ComputerPanel() {
     void window.api.computer.get().then(setSt)
   }, [])
 
-  const unsupported = !navigator.userAgent.includes('Windows') // PowerShell-based: Windows only for now
+  const isLinux = navigator.userAgent.includes('Linux') && !navigator.userAgent.includes('Android')
+  const unsupported = !navigator.userAgent.includes('Windows') && !isLinux // Windows (full) and Linux (no screen control)
   const toggle = async (): Promise<void> => setSt(await window.api.computer.set(!st.enabled))
   const reset = async (): Promise<void> => setSt(await window.api.computer.reset())
 
@@ -17,8 +18,9 @@ export function ComputerPanel() {
         <div>
           <h3 className="text-base font-semibold">التحكم بالجهاز (Computer Control)</h3>
           <p className="mt-1 text-sm text-gray-500">
-            يخلي الموديلات تشغّل أوامر PowerShell، تقرأ الملفات، تفتح البرامج، وتضغط وتكتب على الشاشة. مطفي افتراضي وكل إجراء
-            بيطلب موافقتك.
+            {isLinux
+              ? 'يخلي الموديلات تشغّل أوامر bash، تقرأ وتكتب الملفات، تفتح البرامج، وتعمل ملفات Office. ما في تحكم بالشاشة (ضغط وكتابة) على لينكس. مطفي افتراضي.'
+              : 'يخلي الموديلات تشغّل أوامر PowerShell، تقرأ الملفات، تفتح البرامج، وتضغط وتكتب على الشاشة. مطفي افتراضي وكل إجراء بيطلب موافقتك.'}
           </p>
         </div>
         <button
@@ -35,9 +37,13 @@ export function ComputerPanel() {
       )}
       <div className={'mt-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2 text-sm ' + (st.fullAccess ? 'bg-red-50 text-red-900 dark:bg-red-950 dark:text-red-200' : 'bg-gray-50 dark:bg-gray-800')}>
         <span>
-          {st.fullAccess
-            ? '⚠ الصلاحية الكاملة شغالة: التيرمينال، تثبيت وتنزيل، الخدمات، الريجستري، الإطفاء، والتحكم بالماوس والكيبورد بدون أسئلة. الأوامر المدمّرة (حذف، فرمتة، حذف ريجستري) بتطلب تأكيدك كل مرة.'
-            : 'الصلاحية الكاملة: بتفتح التيرمينال والتحكم بالجهاز وأدوات النظام بدون ما يسألك عن كل خطوة. الأوامر المدمّرة بتضل بتطلب تأكيدك.'}
+          {isLinux
+            ? st.fullAccess
+              ? '⚠ الصلاحية الكاملة شغالة: أوامر bash، تنزيل (curl/wget)، وتشغيل سكربتات بدون أسئلة. الأوامر المدمّرة (rm، sudo، فرمتة، إطفاء) بتطلب تأكيدك كل مرة.'
+              : 'الصلاحية الكاملة: بتخلي bash يشتغل بدون ما يسألك عن كل خطوة. الأوامر المدمّرة بتضل بتطلب تأكيدك.'
+            : st.fullAccess
+              ? '⚠ الصلاحية الكاملة شغالة: التيرمينال، تثبيت وتنزيل، الخدمات، الريجستري، الإطفاء، والتحكم بالماوس والكيبورد بدون أسئلة. الأوامر المدمّرة (حذف، فرمتة، حذف ريجستري) بتطلب تأكيدك كل مرة.'
+              : 'الصلاحية الكاملة: بتفتح التيرمينال والتحكم بالجهاز وأدوات النظام بدون ما يسألك عن كل خطوة. الأوامر المدمّرة بتضل بتطلب تأكيدك.'}
         </span>
         <button
           onClick={async () => setSt(await window.api.computer.setFull(!st.fullAccess))}
@@ -60,12 +66,21 @@ export function ComputerPanel() {
           )}
         </div>
       )}
+      {isLinux ? (
+        <ul className="mt-3 list-disc space-y-1 pr-5 text-xs text-gray-500">
+          <li>الأوامر للقراءة بس (ls, cat, grep...) بتشتغل مباشرة، وغيرها بيسألك.</li>
+          <li>بدون الصلاحية الكاملة محجوب: rm، sudo، curl/wget، فرمتة، وتغيير الصلاحيات بالجملة. الإطفاء وإعادة التشغيل محجوبين.</li>
+          <li>ما بيتعامل مع كلمات السر ولا بيقرأ ملفات المفاتيح.</li>
+          <li>ما في ضغط ولا كتابة على الشاشة ولا لقطات شاشة على لينكس. تعديل Word وPowerPoint مش متاح (Excel بس)، بس إنشاء الملفات متاح.</li>
+        </ul>
+      ) : (
       <ul className="mt-3 list-disc space-y-1 pr-5 text-xs text-gray-500">
         <li>الأوامر للقراءة بس (Get-*, dir...) بتشتغل مباشرة، وغيرها بيسألك.</li>
         <li>بدون الصلاحية الكاملة محجوب: الحذف، حذف الريجستري، التنزيل، وتغيير سياسات النظام. الإطفاء وإعادة التشغيل والسكون بأداة الطاقة وبتسألك قبل التنفيذ.</li>
         <li>ما بيتعامل مع نوافذ UAC وكلمات السر وأمان ويندوز، ولا بيقرأ ملفات المفاتيح.</li>
         <li>يشتغل بشجرة عناصر الواجهة (UI Automation) فيمشي مع أي موديل نصي.</li>
       </ul>
+      )}
     </div>
   )
 }

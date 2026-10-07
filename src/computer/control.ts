@@ -8,6 +8,7 @@ import type OpenAI from 'openai'
 import { BUILD_ENV_PS } from './build-env'
 import { addOfficeTools } from './office'
 import { isUnattended } from '../core/progress'
+import { findOnPath } from '../core/platform'
 
 // ---------- config (master switch, default OFF) ----------
 const cfgFile = (): string => path.join(app.getPath('userData'), 'computer.json')
@@ -30,16 +31,19 @@ export function setAutoApprove(on: boolean): void {
   writeCfg({ autoApprove: !!on })
 }
 
+// Computer Control: Windows (PowerShell, plus screen control) and Linux (bash + files + Office, no screen control).
+const isLinux = process.platform === 'linux'
+const PC_SUPPORTED = process.platform === 'win32' || isLinux
 // Full Access: everything runs without per-action prompts; only destructive commands still need an explicit confirmation click.
-export const fullAccessOn = (): boolean => process.platform === 'win32' && readCfg().fullAccess === true
+export const fullAccessOn = (): boolean => PC_SUPPORTED && readCfg().fullAccess === true
 export function setFullAccess(on: boolean): void {
-  if (process.platform !== 'win32') return
+  if (!PC_SUPPORTED) return
   // Turning Full Access on also switches Computer Control on (it is useless without it).
   writeCfg(on ? { fullAccess: true, enabled: true } : { fullAccess: false })
 }
 
 export function computerEnabled(): boolean {
-  if (process.platform !== 'win32') return false // PowerShell-based: Windows only for now
+  if (!PC_SUPPORTED) return false
   try {
     return JSON.parse(fs.readFileSync(cfgFile(), 'utf-8')).enabled === true
   } catch {
@@ -47,7 +51,7 @@ export function computerEnabled(): boolean {
   }
 }
 export function setComputerEnabled(on: boolean): void {
-  if (process.platform !== 'win32') return
+  if (!PC_SUPPORTED) return
   writeCfg({ enabled: !!on })
   if (!on) sessionAllowAll = false
 }
@@ -170,6 +174,94 @@ function runPs(script: string, args: unknown = {}, timeoutMs = 60000, signal?: A
   })
 }
 
+// ---------- Linux: bash runner + safety (files, commands, Office; no screen control) ----------
+// Mirrors the Windows rules: BLOCKED never runs without Full Access; DESTRUCTIVE needs a real confirmation even with Full Access.
+const DESTRUCTIVE_SH =
+  /(\brm\b|\brmdir\b|\bunlink\b|\bshred\b|\bmkfs|\bwipefs\b|\bfdisk\b|\bparted\b|\bdd\b[^|;]*\bof=|\bsudo\b|\bsu\b|\bpkexec\b|\bdoas\b|\bshutdown\b|\breboot\b|\bpoweroff\b|\bhalt\b|systemctl\s+(poweroff|reboot|halt|suspend|hibernate|kexec)|\bcrontab\s+-r|\bapt(-get)?\s+(remove|purge|autoremove)|\bsnap\s+remove|\bflatpak\s+uninstall|\bchmod\s+-R|\bchown\s+-R|\bgit\s+clean|find\b[^|;]*(-delete\b|-exec\s+rm\b)|>\s*\/dev\/(sd|nvme|mmcblk)|:\(\)\s*\{)/i
+const BLOCKED_SH = new RegExp(DESTRUCTIVE_SH.source + '|\\bcurl\\b|\\bwget\\b|\\baria2c\\b|\\beval\\b|\\bcrontab\\b', 'i')
+const SAFE_SH =
+  /^\s*(ls|cat|pwd|echo|whoami|hostname|uname|df|du|ps|head|tail|wc|grep|rg|find|stat|file|which|type|date|id|uptime|free|lscpu|lsblk|realpath|readlink|basename|dirname|sort|uniq|cut|tr|git\s+(status|log|diff|branch|show|remote)|node\s+(-v|--version)|npm\s+(-v|--version)|python3?\s+(-V|--version))\b/
+function isReadOnlySh(cmd: string): boolean {
+  if (/[;>`&<]|\$\(|\bfind\b[^|]*-(exec|ok|delete|fprint)|\btee\b/.test(cmd)) return false
+  return cmd.split('|').every((seg) => SAFE_SH.test(seg))
+}
+
+function runSh(script: string, cwd: string, timeoutMs = 60000, signal?: AbortSignal): Promise<string> {
+  if (cwd && !fs.existsSync(cwd)) return Promise.resolve('Error: folder not found: ' + cwd)
+  return new Promise((resolve) => {
+    const p = spawn('bash', ['-lc', script], { cwd: cwd || undefined, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
+    let out = ''
+    let err = ''
+    let done = false
+    const killGroup = (): void => {
+      try {
+        if (p.pid) process.kill(-p.pid, 'SIGKILL')
+      } catch {
+        try {
+          p.kill('SIGKILL')
+        } catch {
+          /* already gone */
+        }
+      }
+    }
+    const finish = (s: string): void => {
+      if (done) return
+      done = true
+      clearTimeout(t)
+      resolve(s)
+    }
+    const t = setTimeout(() => {
+      killGroup()
+      finish((out + '\n[timeout after ' + timeoutMs / 1000 + 's]').trim())
+    }, timeoutMs)
+    signal?.addEventListener('abort', () => {
+      killGroup()
+      finish('[cancelled]')
+    })
+    p.stdout?.on('data', (d) => (out += d.toString('utf-8')))
+    p.stderr?.on('data', (d) => (err += d.toString('utf-8')))
+    // A child it started can keep the pipes open long after the command ended: finish on exit.
+    p.on('exit', () => {
+      setTimeout(() => {
+        try {
+          p.stdout?.destroy()
+          p.stderr?.destroy()
+        } catch {
+          /* ignore */
+        }
+      }, 1500)
+    })
+    p.on('close', (code) => {
+      const e = err.trim()
+      const tail = code ? `\n[exit code ${code}]` : ''
+      finish((out.trim() + (e ? '\n[stderr] ' + e.slice(0, 1500) : '') + tail).trim() || '(no output)')
+    })
+    p.on('error', (e) => finish('Error: ' + e.message))
+  })
+}
+
+// pc_open on Linux: http(s) URL or an existing file/folder -> xdg-open; a bare application name on PATH -> started detached.
+function openOnLinux(t: string): Promise<string> {
+  const isUrl = /^https?:\/\//i.test(t)
+  const target = isUrl ? t : rp(t)
+  let cmd = 'xdg-open'
+  let args = [target]
+  if (!isUrl && !fs.existsSync(target)) {
+    const exe = /\s/.test(t) ? null : findOnPath(t)
+    if (!exe) return Promise.resolve('Error: pass an http(s) URL, an existing file/folder path, or a bare application name that is installed (no arguments).')
+    cmd = exe
+    args = []
+  }
+  return new Promise((resolve) => {
+    const c = spawn(cmd, args, { detached: true, stdio: 'ignore' })
+    c.once('error', (e) => resolve('Error: ' + e.message))
+    c.once('spawn', () => {
+      c.unref()
+      resolve('OK: opened')
+    })
+  })
+}
+
 const WIN32 = `
 Add-Type -TypeDefinition @"
 using System; using System.Text; using System.Runtime.InteropServices;
@@ -248,6 +340,26 @@ export function addComputerTools(
   const str = { type: 'string' }
   const num = { type: 'number' }
 
+  if (isLinux)
+    def(
+      'pc_run',
+      "Run a bash command on the user's Linux computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder (default: the active project folder); optional timeout_seconds (default 120, max 1800) - use a big value for builds/installs. Destructive commands (rm, sudo, shutdown...) and downloads (curl/wget) are blocked unless Full Access is on. There is no screen control on Linux: work with commands, files and the office_* tools.",
+      { command: str, cwd: str, timeout_seconds: num },
+      ['command'],
+      async (a) => {
+        const cmd = s(a.command).trim()
+        if (!cmd) return 'Error: empty command'
+        if (fullAccessOn()) {
+          if (DESTRUCTIVE_SH.test(cmd) && !(await confirmAlways('أمر مدمّر (حذف/فرمتة/sudo/إطفاء)', (a.cwd ? '[' + s(a.cwd) + '] ' : '') + cmd)))
+            return 'Error: this destructive command was not confirmed by the user.'
+        } else if (BLOCKED_SH.test(cmd)) return 'Error: blocked by safety policy (delete/sudo/shutdown/download). Ask the user to turn on Full Access in Settings or do it himself.'
+        if (!isReadOnlySh(cmd) && !(await ask('بدو ينفذ أمر bash', (a.cwd ? '[' + s(a.cwd) + '] ' : '') + cmd))) return 'Error: the user denied this command.'
+        const secs = Math.min(1800, Math.max(60, Number(a.timeout_seconds) || 120))
+        const out = await runSh(cmd, a.cwd ? rp(s(a.cwd)) : rp('.'), secs * 1000, getSignal?.())
+        return out.length > 5500 ? '…[start of output cut]\n' + out.slice(-5500) : out
+      }
+    )
+  if (!isLinux)
   def(
     'pc_run',
     "Run a PowerShell command on the user's Windows computer and return its output (the END of the output is kept when it is long). Optional cwd = working folder; optional timeout_seconds (default 120, max 1800) - use a big value for builds. JAVA_HOME / ANDROID_HOME are set up automatically, and 'gradlew assembleDebug' works even when the project has no wrapper (it falls back to the Gradle installed on this machine and steps into a nested Gradle folder). Read-only commands (Get-*, dir, ...) run directly; anything else asks the user for approval. " + (fullAccessOn() ? "FULL ACCESS is ON: every command runs (terminal, installs, downloads, services, registry), except destructive ones (delete/format/registry delete/user changes) which pop a confirmation the user must click. Use pc_power for shutdown/restart/sleep/lock." : "Deleting files, shutdown, registry deletion and downloads are blocked here (use pc_power for shutdown/restart/sleep/lock, it asks the user).") + "",
@@ -318,6 +430,7 @@ export function addComputerTools(
       }
     }
   )
+  if (!isLinux)
   def(
     'pc_power',
     'Power actions on the computer: action = shutdown | restart | sleep | hibernate | lock | logoff | cancel. shutdown/restart wait delay_seconds (default 30, 0-600) so it can be aborted with action "cancel". Asks the user to confirm unless Full Access is on.',
@@ -343,6 +456,7 @@ export function addComputerTools(
     }
   )
   addOfficeTools({ def, ask, runPs, getSignal })
+  if (!isLinux)
   def('pc_windows', 'List the open windows (title + process).', {}, [], async () =>
     runPs(
       'Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -First 40 ProcessName,Id,MainWindowTitle | Format-Table -AutoSize | Out-String -Width 200',
@@ -352,13 +466,18 @@ export function addComputerTools(
   )
   def('pc_open', 'Open an application, file or http(s) URL (e.g. "notepad", "calc", "https://example.com"). Asks for approval.', { target: str }, ['target'], async (a) => {
     const t = s(a.target).trim()
+    if (isLinux && !fullAccessOn() && (/[;&|`]|\.(sh|desktop|appimage|deb|run|py|js)$/i.test(t) || /^(bash|sh|zsh|fish|dash|sudo|su|xterm|gnome-terminal|konsole|x-terminal-emulator|terminator|kitty|alacritty|tilix)$/i.test(t)))
+      return 'Error: this target is not allowed (terminals/scripts are blocked).'
     if (!t || (!fullAccessOn() && (/[;&|`]|\.(bat|cmd|ps1|vbs|js|msi|reg|scr)$/i.test(t) || /^(powershell|pwsh|cmd|wt|windowsterminal|regedit|mmc)(\.exe)?$/i.test(t))))
       return 'Error: this target is not allowed (terminals/scripts are blocked).'
     if (/\.(wav|mp3|mp4|m4a|avi|mkv|mov|webm|ogg|flac)$/i.test(t))
       return 'Error: media files are not opened automatically (it pops a player/app chooser on the user PC). Just tell the user the file path.'
     if (!(await ask('بدو يفتح', t))) return 'Error: the user denied this.'
+    if (isLinux) return openOnLinux(t)
     return runPs('Start-Process -FilePath $A.t; "OK: opened"', { t }, 20000)
   })
+  // Linux: no screen control (UI Automation, mouse/keyboard, screenshots are Windows-only). Everything below is Windows.
+  if (isLinux) return
   def('pc_focus', 'Bring a window to the foreground by part of its title.', { title: str }, ['title'], async (a) => {
     if (!(await ask('بدو يعمل تركيز على نافذة', s(a.title)))) return 'Error: the user denied this.'
     return runPs(

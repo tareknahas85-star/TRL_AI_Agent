@@ -317,7 +317,7 @@ export function addOfficeTools({ def, ask, runPs, getSignal }: Deps): void {
     'Edit an EXISTING Office file in place (a timestamped .bak copy is made first). ops = list of operations. ' +
       'docx: {replace:{find,with}} | {append:"paragraph text"}. pptx: {replace:{find,with}} | {add_slide:{title,bullets:[..]}}. ' +
       'xlsx: {set:{sheet?,cell:"B2",value|formula}} | {append_row:{sheet?,values:[..]}} | {replace:{find,with}} | {add_sheet:{name,rows}}. ' +
-      'Word/PowerPoint editing uses the installed Office. Asks for approval.',
+      'Word/PowerPoint editing uses the installed Office (Windows only; on Linux only .xlsx can be edited). Asks for approval.',
     { path: str, ops: { type: 'array', items: obj } },
     ['path', 'ops'],
     async (a) => {
@@ -327,6 +327,8 @@ export function addOfficeTools({ def, ask, runPs, getSignal }: Deps): void {
       if (!fs.existsSync(p)) return 'Error: file not found: ' + p
       if (!ops.length) return 'Error: ops is empty'
       if (!['docx', 'xlsx', 'pptx'].includes(ext)) return 'Error: only .docx .xlsx .pptx are supported'
+      if (process.platform !== 'win32' && ext !== 'xlsx')
+        return 'Error: Word/PowerPoint files cannot be edited on Linux (needs Microsoft Office). Only .xlsx can be edited here; use office_create to make a new file instead.'
       if (!(await ask('بدو يعدّل ملف Office', p + '\n' + JSON.stringify(ops).slice(0, 700)))) return 'Error: the user denied this.'
       try {
         const bak = backupOf(p)

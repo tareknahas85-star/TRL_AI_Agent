@@ -487,8 +487,11 @@ export function calculateSavedCost(modelUsed: string, analysis: Analysis): strin
 export const VERIFY_HINT =
   "\n\nVERIFY BEFORE FINISHING: after creating any file (video, audio, Excel, Word, program), re-check its real properties with a tool (e.g. duration/size via ffprobe or python, row counts, run the tests) and compare them to what the user asked. If anything differs (e.g. video 3s instead of 5s), say so explicitly in the final answer — never claim success for something you did not verify."
 
-const PC_HINT =
+const PC_HINT_LINUX =
+  "\n\nCOMPUTER CONTROL (Linux): pc_run runs bash commands, pc_read_file / pc_write_file / pc_list_dir handle files, pc_open opens a file or URL with xdg-open, and the office_* tools create Word/Excel/PowerPoint files (only .xlsx can be edited). There is NO screen control on Linux (no click, type, screenshot). Prefer pc_run and file tools. Some actions ask the user for approval; if he denies, stop and say so. Never try to bypass a block or security prompts. Keep going until the task is done, then summarize briefly in the user's language."
+const PC_HINT_WIN =
   "\n\nCOMPUTER CONTROL: you can operate the user's Windows PC with the pc_* tools. Work step by step: (1) pc_windows / pc_ui_snapshot to see the screen, (2) act with pc_open / pc_click / pc_type / pc_keys, (3) call pc_ui_snapshot again to verify the result before continuing. Prefer pc_run (PowerShell) or file tools over clicking when they can do the job. Some actions ask the user for approval; if he denies, stop and say so. Never try to bypass a block, UAC, passwords or security prompts. Keep going until the task is done, then summarize briefly in the user's language."
+const PC_HINT = process.platform === 'linux' ? PC_HINT_LINUX : PC_HINT_WIN
 
 
 const TOOL_ERR = /^Error|BUILD FAILED|FAILURE: Build failed|is not recognized as|Cannot find path|\[timeout after|exit code:? [1-9]|denied/im
@@ -505,7 +508,7 @@ function attemptFailure(calls: { key: string; out: string }[], capHit: boolean, 
   return ''
 }
 const AGENT_HINT =
-  '\n\nAGENT MODE (always on): you are an autonomous engineer on the user\'s own computer, like Claude Desktop. The user wants results, not questions. Rules: (1) Do the work with your tools; never ask for permission or details you can find yourself (list files, read them, check tools/env first). (2) Use the project folder as cwd for commands. (3) For builds/installs/tests pass timeout_seconds (e.g. 1500). "gradlew assembleDebug" works even without a wrapper; JAVA_HOME and ANDROID_HOME are set automatically. (4) If a command fails, read the error, fix the cause (edit the source with pc_write_file or a PowerShell edit), and retry until it works or you hit a real blocker. (5) Before saying it is done, VERIFY with a tool (Test-Path / file size / test output) and report the real path. (6) If a skill from use_skill matches the task, load it first. (7) If something truly cannot be done, say exactly what and why in one short message.'
+  '\n\nAGENT MODE (always on): you are an autonomous engineer on the user\'s own computer, like Claude Desktop. The user wants results, not questions. Rules: (1) Do the work with your tools; never ask for permission or details you can find yourself (list files, read them, check tools/env first). (2) Use the project folder as cwd for commands. (3) For builds/installs/tests pass timeout_seconds (e.g. 1500). "gradlew assembleDebug" works even without a wrapper; JAVA_HOME and ANDROID_HOME are set automatically. (4) If a command fails, read the error, fix the cause (edit the source with pc_write_file or a shell edit), and retry until it works or you hit a real blocker. (5) Before saying it is done, VERIFY with a tool (Test-Path or ls / file size / test output) and report the real path. (6) If a skill from use_skill matches the task, load it first. (7) If something truly cannot be done, say exactly what and why in one short message.'
 // ---- Honesty about tools -------------------------------------------------------------------------------------------
 // A model can only change anything outside the chat (create/save files, run commands, build) by calling a tool.
 // Models that get no tools (or whose provider rejects them) used to answer as if they had done the work.
