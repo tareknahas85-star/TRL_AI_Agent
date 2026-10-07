@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
 import { X } from 'lucide-react'
 
 export function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
@@ -50,7 +50,19 @@ export const primaryBtn =
 export const ghostBtn = 'rounded-full px-3 py-2 text-sm hover:bg-surface2 disabled:opacity-40'
 export const cardCls = 'rounded-card border border-outline bg-surface p-4 shadow-card'
 
+// A page placed inside a hub (tabs) must not draw its own title / scroll area again.
+export const EmbedCtx = createContext(false)
+
 export function PageShell({ title, subtitle, action, children }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode }) {
+  const embedded = useContext(EmbedCtx)
+  if (embedded) {
+    return (
+      <div>
+        {action && <div className="mb-3 flex justify-end">{action}</div>}
+        {children}
+      </div>
+    )
+  }
   return (
     <div className="min-h-0 flex-1 overflow-y-auto">
       <div className="mx-auto w-full max-w-5xl px-6 py-6">
@@ -67,6 +79,55 @@ export function PageShell({ title, subtitle, action, children }: { title: string
   )
 }
 
+export function TabBar<T extends string>({ tabs, value, onChange }: { tabs: readonly { id: T; label: string }[]; value: T; onChange: (id: T) => void }) {
+  return (
+    <div className="mb-4 flex flex-wrap gap-2">
+      {tabs.map((t) => (
+        <button
+          key={t.id}
+          onClick={() => onChange(t.id)}
+          className={'rounded-full px-4 py-1.5 text-sm ' + (value === t.id ? 'bg-primary text-white' : 'border border-outline hover:bg-surface2')}
+        >
+          {t.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
+// Remembers the last tab per page (best-effort, storage may be unavailable).
+export function useTab<T extends string>(key: string, ids: readonly T[], fallback: T): [T, (id: T) => void] {
+  const [tab, setTab] = useState<T>(() => {
+    try {
+      const v = localStorage.getItem(key) as T | null
+      return v && ids.includes(v) ? v : fallback
+    } catch {
+      return fallback
+    }
+  })
+  const pick = (id: T): void => {
+    setTab(id)
+    try {
+      localStorage.setItem(key, id)
+    } catch {
+      /* ignore */
+    }
+  }
+  return [tab, pick]
+}
+
+// One sidebar entry that groups several pages as tabs.
+export function Hub({ title, subtitle, storageKey, tabs }: { title: string; subtitle?: string; storageKey: string; tabs: { id: string; label: string; node: ReactNode }[] }) {
+  const ids = tabs.map((t) => t.id)
+  const [tab, pick] = useTab(storageKey, ids, ids[0])
+  const cur = tabs.find((t) => t.id === tab) ?? tabs[0]
+  return (
+    <PageShell title={title} subtitle={subtitle}>
+      <TabBar tabs={tabs} value={cur.id} onChange={pick} />
+      <EmbedCtx.Provider value={true}>{cur.node}</EmbedCtx.Provider>
+    </PageShell>
+  )
+}
 export function Empty({ text }: { text: string }) {
   return (
     <div className="rounded-card border border-dashed border-outline py-16 text-center text-sm text-muted">{text}</div>

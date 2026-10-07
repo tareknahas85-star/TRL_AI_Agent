@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   Bot, Clock, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
-  Sparkles, Sun, Trash2, User, Wrench, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
+  Sun, Trash2, User, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
 import { ChatWindow } from '../../ui/ChatWindow'
@@ -9,13 +9,13 @@ import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
 import { ProjectsPage } from '../../ui/ProjectsPage'
-import { BarChart3 } from 'lucide-react'
 import { SchedulePage } from '../../ui/SchedulePage'
 import { TasksReportPage } from '../../ui/TasksReportPage'
 import { Settings } from '../../ui/Settings'
 import { SkillsPage } from '../../ui/SkillsPage'
 import { ToolsPage } from '../../ui/ToolsPage'
 import { ThemeProvider, useTheme } from '../../ui/ThemeContext'
+import { Hub } from '../../ui/components/ui'
 import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '../../preload/index.d'
 
 const OWNER = { name: 'Tarek Nahhas', email: 'tareknahas@live.com', github: 'https://github.com/tareknahas85-star' }
@@ -116,17 +116,14 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
   )
 }
 
-type Nav = 'chat' | 'projects' | 'schedule' | 'report' | 'models' | 'skills' | 'mcp' | 'tools' | 'settings'
+type Nav = 'chat' | 'projects' | 'tasks' | 'models' | 'extensions' | 'settings'
 
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
-  { id: 'schedule', label: 'المهام المجدولة', icon: Clock },
-  { id: 'report', label: 'تقرير المهام', icon: BarChart3 },
+  { id: 'tasks', label: 'المهام', icon: Clock },
   { id: 'models', label: 'الموديلات', icon: Cpu },
-  { id: 'skills', label: 'السكيلز', icon: Sparkles },
-  { id: 'mcp', label: 'MCP Servers', icon: Plug },
-  { id: 'tools', label: 'الأدوات', icon: Wrench },
+  { id: 'extensions', label: 'الإضافات', icon: Plug },
   { id: 'settings', label: 'الإعدادات', icon: SettingsIcon }
 ]
 
@@ -579,15 +576,33 @@ function Shell() {
               }}
             />
           ))}
-        {activeNav === 'schedule' && <SchedulePage />}
-          {activeNav === 'report' && <TasksReportPage onOpenConv={(id) => void openConv(id)} />}
+        {activeNav === 'tasks' && (
+            <Hub
+              title="المهام"
+              subtitle="المهام المجدولة وتقرير كل ما اشتغل"
+              storageKey="air.tasks.tab"
+              tabs={[
+                { id: 'schedule', label: 'المجدولة', node: <SchedulePage /> },
+                { id: 'report', label: 'التقرير', node: <TasksReportPage onOpenConv={(id) => void openConv(id)} /> }
+              ]}
+            />
+          )}
       {activeNav === 'projects' && (
           <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} />
         )}
         {activeNav === 'models' && <ModelsPage />}
-        {activeNav === 'skills' && <SkillsPage />}
-        {activeNav === 'mcp' && <MCPPage />}
-        {activeNav === 'tools' && <ToolsPage />}
+        {activeNav === 'extensions' && (
+            <Hub
+              title="الإضافات"
+              subtitle="سيرفرات MCP والسكيلز والأدوات: كل شي بيوسّع قدرات الوكيل"
+              storageKey="air.ext.tab"
+              tabs={[
+                { id: 'mcp', label: 'MCP Servers', node: <MCPPage /> },
+                { id: 'skills', label: 'السكيلز', node: <SkillsPage /> },
+                { id: 'tools', label: 'الأدوات', node: <ToolsPage /> }
+              ]}
+            />
+          )}
         {activeNav === 'settings' && <Settings variant="page" />}
       </main>
       {ctx &&

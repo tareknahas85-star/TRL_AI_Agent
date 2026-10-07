@@ -5,16 +5,24 @@ import { Settings } from './Settings'
 import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
 import { FreeProbePanel } from './FreeProbePanel'
-import { Chip, Empty, Modal, PageShell, TIER_LABEL, Toggle, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
+import { Chip, Empty, Modal, PageShell, TIER_LABEL, TabBar, Toggle, cardCls, ghostBtn, inputCls, primaryBtn, useTab } from './components/ui'
+import { SpendPanel } from './SpendPanel'
+import { ClaudeAccountsPanel } from './ClaudeAccountsPanel'
 
 const BUILTIN: { tier: Tier; models: string[] }[] = [
   { tier: 'TIER_1_FREE', models: ['qwen/qwen3.8-27b:free', 'google/gemma-4-31b-it:free', 'nvidia/nemotron-3-super-120b-a12b:free', 'nvidia/nemotron-3.5-lightning:free'] },
   { tier: 'TIER_2_CHEAP', models: ['deepseek/deepseek-v4.1-flash', 'google/gemini-3.5-flash-lite', 'openai/gpt-4o-mini'] },
   { tier: 'TIER_3_EXPENSIVE', models: ['anthropic/claude-sonnet-5', 'openai/gpt-4o'] }
 ]
+const MODEL_TABS = [
+  { id: 'sources', label: 'الحسابات والمفاتيح' },
+  { id: 'free', label: 'المجاني والفحص' },
+  { id: 'mine', label: 'موديلاتي (محلي ومخصص)' }
+] as const
 const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier }
 
 export function ModelsPage() {
+  const [tab, pickTab] = useTab('air.models.tab', MODEL_TABS.map((x) => x.id), 'sources')
   const [models, setModels] = useState<CustomModelInfo[]>([])
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(empty)
@@ -74,6 +82,9 @@ export function ModelsPage() {
         </button>
       }
     >
+      <TabBar tabs={MODEL_TABS} value={tab} onChange={pickTab} />
+      {tab === 'mine' && (
+        <>
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted">موديلات محلية (Ollama / LM Studio)</h3>
         <button className={ghostBtn} onClick={scan} disabled={scanning}>{scanning ? 'عم أفحص…' : 'فحص الموديلات المحلية'}</button>
@@ -169,16 +180,24 @@ export function ModelsPage() {
           })}
         </div>
       )}
-
-      <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">مفاتيح الـ API</h3>
+        </>
+      )}
+      {tab === 'sources' && (
+        <>
+          <SpendPanel />
+          <div className="mt-3"><ClaudeAccountsPanel /></div>
+          <h3 className="mb-2 mt-6 text-sm font-semibold text-muted">مفاتيح الـ API</h3>
       <div className={cardCls}>
         <p className="mb-3 text-xs text-muted">بتنحفظ مشفّرة على جهازك.</p>
         <Settings variant="inline" />
       </div>
       <HfPanel />
+        </>
+      )}
+      {tab === 'free' && (
+        <>
       <FreeProbePanel />
       <div className="mt-3"><CatalogPanel /></div>
-
       <h3 className="mb-2 mt-8 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>
       <div className="grid gap-3 md:grid-cols-3">
         {BUILTIN.map((t) => (
@@ -190,6 +209,8 @@ export function ModelsPage() {
           </div>
         ))}
       </div>
+        </>
+      )}
 
       {adding && (
         <Modal title="ضيف موديل خارجي" onClose={() => setAdding(false)}>
