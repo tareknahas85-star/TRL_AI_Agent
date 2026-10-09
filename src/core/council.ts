@@ -1,6 +1,6 @@
 import { executeWithFallback, type FallbackResult } from './fallback'
 import { getTierForAnalysis, strongPaidModels } from './router'
-import { isCliModel } from './cli-models'
+import { CLAUDE_CLI_MODELS, claudeCliPath, isCliModel } from './cli-models'
 import type { Analysis } from './master'
 import { emitProgress, setStreamMuted } from './progress'
 
@@ -52,7 +52,8 @@ export async function runCouncil(userInput: string, analysis: Analysis, draft: F
   const strong = pick?.confidential ? strongPaidModels() : null
   const allowed = (m: string): boolean => !strong || strong.includes(m) || isCliModel(m)
   if (pick?.critic && !allowed(pick.critic)) return keep({ ran: false, skipped: '🔒 مشروع سري: الناقد المختار مو من الموديلات المدفوعة القوية المسموحة' })
-  const pool = getTierForAnalysis(analysis).filter((m) => m !== draft.modelUsed && allowed(m))
+  const own = pick?.confidential && claudeCliPath() ? CLAUDE_CLI_MODELS.map((x) => x.id) : []
+  const pool = [...new Set([...getTierForAnalysis(analysis), ...own])].filter((m) => m !== draft.modelUsed && allowed(m))
   // Prefer a critic from a different provider than the author (less correlated mistakes).
   const auto = [...pool.filter((m) => provider(m) !== provider(draft.modelUsed)), ...pool.filter((m) => provider(m) === provider(draft.modelUsed))]
   // A critic picked by the user goes first (even if it is the same model as the author); the automatic ones stay as fallback.

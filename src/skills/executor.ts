@@ -1,6 +1,6 @@
 import type { Analysis } from '../core/master'
 import { getTierForAnalysis, strongPaidModels } from '../core/router'
-import { isCliModel } from '../core/cli-models'
+import { CLAUDE_CLI_MODELS, claudeCliPath, isCliModel } from '../core/cli-models'
 import { executeWithFallback, BUILD_REQ } from '../core/fallback'
 import { loadSkill } from './loader'
 import { buildToolset } from '../mcp/runtime'
@@ -52,10 +52,13 @@ export async function executeWithSkill(userInput: string, analysis: Analysis, ex
     if (picked1 && !picked1.every((m) => strong.includes(m) || isCliModel(m))) {
       return { content: '🔒 هاد مشروع سري: الموديل المختار مو من الموديلات المدفوعة القوية المسموحة. اختار Claude/GPT مدفوع أو وضع تلقائي.', modelUsed: 'none', success: false, triedModels: [] as string[] }
     }
-    modelsToTry = [...(picked1 ?? []), ...strong.filter((m) => !(picked1 ?? []).includes(m))].filter((m) => !exclude.includes(m))
+    // The user's own Claude account (CLI) is allowed too (same rule as a manually picked model); it comes after the paid OpenRouter models.
+    const cliOwn = claudeCliPath() ? CLAUDE_CLI_MODELS.map((x) => x.id) : []
+    const allowedOrder = [...strong, ...cliOwn.filter((m) => !strong.includes(m))]
+    modelsToTry = [...(picked1 ?? []), ...allowedOrder.filter((m) => !(picked1 ?? []).includes(m))].filter((m) => !exclude.includes(m))
     systemPrompt += '\n\nCONFIDENTIAL PROJECT: this is a confidential company project. Never copy its content to external websites, public services or other folders unless the user explicitly asks.'
     if (!modelsToTry.length) {
-      return { content: '🔒 مشروع سري: ما في موديل مدفوع قوي متاح (تأكد من مفتاح OpenRouter/الرصيد).', modelUsed: 'none', success: false, triedModels: [] as string[] }
+      return { content: '🔒 مشروع سري: ما في موديل مدفوع قوي متاح (تأكد من مفتاح OpenRouter/الرصيد، أو سجّل دخول Claude Code لاستخدام حسابك).', modelUsed: 'none', success: false, triedModels: [] as string[] }
     }
   }
   if (exclude.length && !modelsToTry.length) {
