@@ -178,7 +178,7 @@ export function registerIpcHandlers(): void {
           let result = await executeWithSkill(userMsg, analysis, extra, exclude, history, project)
           let council: CouncilInfo | null = null
           if (o.mode.kind === 'council' && result.modelUsed !== 'none' && result.content && !signal.aborted) {
-            const c = await runCouncil(userMsg, analysis, result as never, history, o.mode.author || o.mode.critic ? { critic: o.mode.critic, manual: true } : undefined)
+            const c = await runCouncil(userMsg, analysis, result as never, history, { ...(o.mode.author || o.mode.critic ? { critic: o.mode.critic, manual: true } : {}), confidential: !!project?.confidential })
             result = c.result as typeof result
             council = c.info
           }
