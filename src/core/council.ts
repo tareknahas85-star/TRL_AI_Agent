@@ -1,5 +1,6 @@
 import { executeWithFallback, type FallbackResult } from './fallback'
-import { getTierForAnalysis } from './router'
+import { getTierForAnalysis, strongPaidModels } from './router'
+import { isCliModel } from './cli-models'
 import type { Analysis } from './master'
 import { emitProgress, setStreamMuted } from './progress'
 
@@ -42,17 +43,21 @@ const provider = (m: string): string => (m.includes('/') ? m.split('/')[0] : m.s
 
 // Round 1 of a "council": a second model critiques the draft, then the author revises it.
 // Never throws and never makes the answer worse: any failure returns the original draft.
-export async function runCouncil(userInput: string, analysis: Analysis, draft: FallbackResult, history: Hist, pick?: { critic?: string; manual?: boolean }): Promise<{ result: FallbackResult; info: CouncilInfo }> {
+export async function runCouncil(userInput: string, analysis: Analysis, draft: FallbackResult, history: Hist, pick?: { critic?: string; manual?: boolean; confidential?: boolean }): Promise<{ result: FallbackResult; info: CouncilInfo }> {
   const keep = (info: CouncilInfo): { result: FallbackResult; info: CouncilInfo } => ({ result: draft, info })
   if (!pick?.manual && analysis.complexity === 'simple') return keep({ ran: false, skipped: 'طلب بسيط' })
   if (draft.toolsUsed?.length) return keep({ ran: false, skipped: 'الجواب مبني على أدوات' })
   const t0 = Date.now()
-  const pool = getTierForAnalysis(analysis).filter((m) => m !== draft.modelUsed)
+  // Confidential project: the draft is secret, so the critic must come from the same allowed set as the author (paid strong / own CLI account). Never the free, cheap, custom or local tiers.
+  const strong = pick?.confidential ? strongPaidModels() : null
+  const allowed = (m: string): boolean => !strong || strong.includes(m) || isCliModel(m)
+  if (pick?.critic && !allowed(pick.critic)) return keep({ ran: false, skipped: '🔒 مشروع سري: الناقد المختار مو من الموديلات المدفوعة القوية المسموحة' })
+  const pool = getTierForAnalysis(analysis).filter((m) => m !== draft.modelUsed && allowed(m))
   // Prefer a critic from a different provider than the author (less correlated mistakes).
   const auto = [...pool.filter((m) => provider(m) !== provider(draft.modelUsed)), ...pool.filter((m) => provider(m) === provider(draft.modelUsed))]
   // A critic picked by the user goes first (even if it is the same model as the author); the automatic ones stay as fallback.
   const candidates = [...(pick?.critic ? [pick.critic] : []), ...auto.filter((m) => m !== pick?.critic)].slice(0, 4)
-  if (!candidates.length) return keep({ ran: false, skipped: 'ما في موديل تاني' })
+  if (!candidates.length) return keep({ ran: false, skipped: pick?.confidential ? '🔒 مشروع سري: ما في ناقد مسموح (مدفوع قوي) غير الكاتب — ما انبعت شي لأي موديل تاني' : 'ما في موديل تاني' })
 
   try {
     emitProgress('المجلس: الناقد يراجع المسودة…')
