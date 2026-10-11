@@ -270,6 +270,31 @@ async function describeHuggingFace(dataUrl: string): Promise<{ text: string; mod
   return null
 }
 
+// Gemini (OpenAI-compatible endpoint) as the last fallback. Only when "free only" is OFF, because the key may be a paid one.
+async function describeGemini(dataUrl: string): Promise<{ text: string; model: string } | null> {
+  const key = getApiKey('GEMINI_API_KEY')
+  if (!key || freeOnly()) return null
+  const model = 'gemini-2.5-flash'
+  try {
+    const r = await fetch(`${hostOf('gemini')}/chat/completions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: 'Bearer ' + key },
+      body: JSON.stringify({ model, max_tokens: 2500, messages: [{ role: 'user', content: [{ type: 'text', text: VISION_PROMPT }, { type: 'image_url', image_url: { url: dataUrl } }] }] }),
+      signal: AbortSignal.timeout(75000)
+    })
+    if (!r.ok) {
+      visionLog('gemini/' + model, r.status + ' ' + (await r.text().catch(() => '')))
+      return null
+    }
+    const j = (await r.json()) as { choices?: { message?: { content?: string } }[] }
+    const text = (j.choices?.[0]?.message?.content ?? '').trim()
+    return text.length > 10 ? { text, model } : null
+  } catch (e) {
+    visionLog('gemini/' + model, e instanceof Error ? e.message : String(e))
+    return null
+  }
+}
+
 export async function describeImage(file: string, confidential: boolean): Promise<{ text?: string; note: string }> {
   const dataUrl = await imageDataUrl(file)
   if (!dataUrl) return { note: 'ما قدرت أقرا الصورة (صيغة غير مدعومة أو كبيرة كتير). المسار محفوظ' }
@@ -289,5 +314,7 @@ export async function describeImage(file: string, confidential: boolean): Promis
   if (r) return { text: r.text, note: 'وصف الصورة بموديل رؤية مجاني (' + r.model + ') عبر OpenRouter' }
   const h = await describeHuggingFace(dataUrl)
   if (h) return { text: h.text, note: 'وصف الصورة بموديل Hugging Face (' + h.model + ')' }
+  const g = await describeGemini(dataUrl)
+  if (g) return { text: g.text, note: 'وصف الصورة بـ Gemini (' + g.model + ')' }
   return { note: 'ما لقيت موديل رؤية شغّال هلأ (الكوتا المجانية أو ما في مفتاح). المسار محفوظ. السبب بالتفصيل بملف router.log' }
 }

@@ -6,7 +6,9 @@ import { getPrefs } from '../core/prefs'
 
 export type Fix = { lat: number; lon: number; accuracyM: number | null; source: 'phone-gps' | 'windows-wifi' | 'ip'; note?: string }
 
-let phoneProvider: (() => Promise<{ lat: number; lon: number; accuracyM?: number } | null>) | null = null
+export type PhoneLoc = { lat: number; lon: number; accuracyM?: number } | { error: string }
+// null = no linked phone is online; { error } = the phone answered but could not give a fix (permission denied, timeout...).
+let phoneProvider: (() => Promise<PhoneLoc | null>) | null = null
 // The phone link registers itself here; until then the phone source is simply skipped.
 export function setPhoneLocationProvider(fn: typeof phoneProvider): void {
   phoneProvider = fn
@@ -41,15 +43,19 @@ async function ipFix(): Promise<Fix | null> {
 }
 
 export async function getFix(): Promise<Fix | null> {
+  let phoneNote: string | undefined
   if (phoneProvider) {
     try {
       const p = await phoneProvider()
-      if (p) return { lat: p.lat, lon: p.lon, accuracyM: p.accuracyM ?? null, source: 'phone-gps' }
+      if (p && 'error' in p) phoneNote = `the phone was asked for its GPS but could not answer (${p.error}); tell the user so, and that the location below is NOT from the phone`
+      else if (p) return { lat: p.lat, lon: p.lon, accuracyM: p.accuracyM ?? null, source: 'phone-gps' }
+      else phoneNote = 'no linked phone is online, so the phone GPS was not used'
     } catch {
-      /* fall through */
+      phoneNote = 'the phone GPS request failed'
     }
   }
-  return (await windowsFix()) ?? (await ipFix())
+  const f = (await windowsFix()) ?? (await ipFix())
+  return f ? { ...f, note: [f.note, phoneNote].filter(Boolean).join('; ') || undefined } : null
 }
 
 async function reverse(lat: number, lon: number): Promise<string> {
@@ -93,19 +99,32 @@ function dist(a: { lat: number; lon: number }, b: { lat: number; lon: number }):
 
 type Place = { name: string; type: string; meters: number; lat: number; lon: number; hours?: string; phone?: string }
 
+const OVERPASS_ENDPOINTS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']
+
 async function overpass(lat: number, lon: number, radius: number, tags: string[]): Promise<Place[]> {
   const parts = tags.map((t) => {
     const [k, v] = t.split('=')
     return `nwr["${k}"="${v}"](around:${radius},${lat},${lon});`
   })
   const q = `[out:json][timeout:20];(${parts.join('')});out center 80;`
-  const r = await fetch('https://overpass-api.de/api/interpreter', {
-    method: 'POST',
-    body: 'data=' + encodeURIComponent(q),
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
-    signal: AbortSignal.timeout(25000)
-  })
-  if (!r.ok) throw new Error('Overpass HTTP ' + r.status)
+  // The main public Overpass server often answers 504/429 when busy, so fall back to community mirrors.
+  let r: Response | null = null
+  let lastErr = 'no Overpass server answered'
+  for (const ep of [...OVERPASS_ENDPOINTS, ...OVERPASS_ENDPOINTS]) {
+    if (r) break
+    try {
+      const x = await fetch(ep, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA }, signal: AbortSignal.timeout(20000) })
+      if (x.ok) {
+        r = x
+        break
+      }
+      lastErr = `Overpass HTTP ${x.status} (${new URL(ep).host})`
+      await new Promise((res) => setTimeout(res, 800))
+    } catch (e) {
+      lastErr = `${new URL(ep).host}: ${e instanceof Error ? e.message : String(e)}`
+    }
+  }
+  if (!r) throw new Error(lastErr)
   const j = (await r.json()) as { elements?: { lat?: number; lon?: number; center?: { lat: number; lon: number }; tags?: Record<string, string> }[] }
   const out: Place[] = []
   for (const e of j.elements ?? []) {
@@ -137,6 +156,8 @@ export async function testLocation(): Promise<{ ok: boolean; message: string; so
 }
 
 const fmtM = (m: number): string => (m < 1000 ? m + ' m' : (m / 1000).toFixed(1) + ' km')
+// One tappable link per place: opens Google Maps (the Maps app on the phone, the browser on the PC).
+export const mapLink = (lat: number, lon: number): string => `https://www.google.com/maps/search/?api=1&query=${lat.toFixed(6)},${lon.toFixed(6)}`
 
 export function addPlaceTools(defs: OpenAI.Chat.ChatCompletionTool[], handlers: Map<string, (a: Record<string, unknown>) => Promise<string>>): void {
   defs.push({
@@ -188,8 +209,8 @@ export function addPlaceTools(defs: OpenAI.Chat.ChatCompletionTool[], handlers: 
       let places = cat ? await overpass(lat, lon, radius, cat.tags) : []
       if (!places.length) places = await nominatimSearch(query, lat, lon)
       if (!places.length) return `No places found for "${query}" within ${radius} m of ${lat.toFixed(4)},${lon.toFixed(4)} in OpenStreetMap. Try a bigger radius or a web search.`
-      const lines = places.slice(0, 10).map((p, i) => `${i + 1}. ${p.name} — ${fmtM(p.meters)} — ${p.lat.toFixed(5)},${p.lon.toFixed(5)}${p.hours ? ' — hours: ' + p.hours : ''}${p.phone ? ' — ' + p.phone : ''}`)
-      return `Source: OpenStreetMap (data may be incomplete; verify opening hours). Search centre from ${srcNote}.\n` + lines.join('\n')
+      const lines = places.slice(0, 10).map((p, i) => `${i + 1}. [${p.name}](${mapLink(p.lat, p.lon)}) — ${fmtM(p.meters)}${p.hours ? ' — hours: ' + p.hours : ''}${p.phone ? ' — ' + p.phone : ''}`)
+      return `Source: OpenStreetMap (data may be incomplete; verify opening hours). Search centre from ${srcNote}.\nIMPORTANT: show each place to the user as the markdown link below (name + distance), never as raw coordinates, and say where the search centre came from.\n` + lines.join('\n')
     } catch (e) {
       return 'Error: OpenStreetMap lookup failed: ' + (e instanceof Error ? e.message : String(e))
     }

@@ -35,6 +35,8 @@ function md(text) {
     if (i % 2 === 1) { const body = p.replace(/^[\w+-]*\n/, ''); return '<pre><code>' + esc(body.replace(/\n$/, '')) + '</code></pre>' }
     let h = esc(p)
     h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+    // [name](https://...) -> tappable link (Android hands https links to the Maps app / browser)
+    h = h.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>')
     h = h.replace(/^#{1,4}\s*(.+)$/gm, '<b>$1</b>').replace(/^\s*[-*]\s+/gm, '• ')
     return h.replace(/\n/g, '<br>')
   }).join('')
@@ -79,7 +81,9 @@ function updateDot() {
   const d = $('#dot'); if (!d) return
   d.className = 'dot ' + (S.conn === 'online' ? 'on' : S.conn === 'offline' ? '' : 'wait')
   const t = $('#connTxt'); if (t) t.textContent = ({ online: 'متصل', connecting: 'عم يتصل…', hostdown: 'الكمبيوتر مو متصل', offline: 'غير متصل' })[S.conn] || ''
-  const b = $('#send'); if (b) b.disabled = S.conn !== 'online' && !S.running
+  const b = $('#send'); if (b) b.disabled = false // offline messages go to the queue
+  const qn = getQ().length
+  if (t && qn) t.textContent += ' · ' + qn + ' برسالة بالانتظار'
 }
 function scheduleRetry() {
   if (conn.timer || !S.device) return
@@ -98,7 +102,7 @@ async function connect() {
   const link = new GuestLink({
     sodium, ppk: S.ppk, psk: S.psk, name: S.device.me, mode: 'device', device: { dpk: S.device.dpk, room: S.device.room },
     send: (f) => { if (ws.readyState === 1) ws.send(f) },
-    onReady: () => { conn.retry = 0; setConn('online'); link.send({ k: 'hello' }) },
+    onReady: () => { conn.retry = 0; setConn('online'); link.send({ k: 'hello' }); setTimeout(flushQueue, 400) },
     onMessage: (m) => onHost(m),
     onPeer: (up) => setConn(up ? 'connecting' : 'hostdown')
   })
@@ -153,11 +157,17 @@ function onHost(m) {
 // The computer asked for one GPS fix (only happens when the user asked something like "near me" and enabled the location tools).
 function answerLoc(m) {
   const fail = (why) => sendHost({ k: 'loc.res', id: m.id, err: why })
-  if (!navigator.geolocation) return fail('no geolocation')
+  if (!navigator.geolocation) return fail('no geolocation in this app')
+  const ok = (p) => sendHost({ k: 'loc.res', id: m.id, lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy })
+  const why = (e) => (e && e.code === 1 ? 'location permission denied: allow Location for TRL Agent in Android settings' : e && e.code === 3 ? 'GPS timed out' : e && e.message ? e.message : 'unknown')
+  // High accuracy first (the permission prompt can take a while), then a coarse network fix as a fallback.
   navigator.geolocation.getCurrentPosition(
-    (p) => sendHost({ k: 'loc.res', id: m.id, lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }),
-    (e) => fail(e && e.message ? e.message : 'denied'),
-    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+    ok,
+    (e1) => {
+      if (e1 && e1.code === 1) return fail(why(e1))
+      navigator.geolocation.getCurrentPosition(ok, (e2) => fail(why(e2)), { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 })
+    },
+    { enableHighAccuracy: true, timeout: 25000, maximumAge: 60000 }
   )
 }
 
@@ -197,9 +207,19 @@ async function sendChat() {
   const text = ta.value.trim()
   if (S.running) return stopChat()
   if (!text && !S.atts.length) return
-  if (S.conn !== 'online') return toast('مو متصل بالكمبيوتر')
+  const offline = S.conn !== 'online'
+  if (offline && S.atts.length) return toast('المرفقات بدها اتصال بالكمبيوتر. اكتب النص بس وبينبعت لما يتصل')
   if (S.atts.some((a) => !a.fid)) return toast('استنى لحد ما يخلص رفع الملفات')
   const c = curConv()
+  if (offline) {
+    // Offline: keep the message on the phone and send it, in order, when the computer is reachable again.
+    const qid = rid()
+    c.msgs.push({ role: 'user', content: text, qid, queued: true, at: Date.now() })
+    queueAdd({ id: qid, conv: c.id, text, project: S.project, mode: S.mode, at: Date.now() })
+    ta.value = ''; ta.style.height = 'auto'
+    saveConvs(); toast('انحفظت. بتنبعت لما يتصل الكمبيوتر'); updateDot(); renderMsgs(); renderSend()
+    return
+  }
   const hist = c.msgs.filter((x) => x.content && !x.failed).slice(-12).map((x) => ({ role: x.role === 'user' ? 'user' : 'assistant', content: x.content }))
   const id = rid()
   const attNames = S.atts.map((a) => a.name)
@@ -212,6 +232,29 @@ async function sendChat() {
   if (!sendHost(msg)) { S.pending.delete(id); toast('انقطع الاتصال'); }
   renderMsgs(); renderAtts(); renderStatus(); renderSend()
 }
+// ---------- offline queue ----------
+const QUEUE_TTL = 60 * 60 * 1000 // older than 1 hour: ask before sending
+const getQ = () => lsGet('trl.queue', [])
+const queueAdd = (it) => { const q = getQ(); q.push(it); lsSet('trl.queue', q.slice(-50)) }
+function flushQueue() {
+  const q = getQ()
+  if (!q.length || !conn.link || !conn.link.isReady) return
+  const stale = q.filter((x) => Date.now() - x.at > QUEUE_TTL).length
+  const sendStale = stale ? confirm('في ' + stale + ' رسالة بالانتظار أقدم من ساعة. تبعتها هلأ؟ (إلغاء = بتنحذف)') : false
+  const rest = []
+  for (const it of q) {
+    const c = S.convs.find((x) => x.id === it.conv)
+    const idx = c ? c.msgs.findIndex((x) => x.qid === it.id) : -1
+    const m = idx >= 0 ? c.msgs[idx] : null
+    if (Date.now() - it.at > QUEUE_TTL && !sendStale) { if (m) { m.queued = false; m.expired = true } continue }
+    const hist = c ? c.msgs.slice(0, Math.max(idx, 0)).filter((x) => x.content && !x.failed && !x.queued && !x.expired).slice(-12).map((x) => ({ role: x.role === 'user' ? 'user' : 'assistant', content: x.content })) : []
+    const msg = { k: 'chat', id: it.id, text: it.text, tab: it.conv, project: it.project, mode: it.mode, hist, atts: [], qAge: Math.max(1, Math.round((Date.now() - it.at) / 60000)) }
+    if (sendHost(msg)) { S.pending.set(it.id, { conv: it.conv, buf: '', status: 'عم يرسل…' }); if (m) m.queued = false } else rest.push(it)
+  }
+  lsSet('trl.queue', rest)
+  saveConvs(); updateDot(); renderMsgs(); renderStatus(); renderSend()
+}
+
 function stopChat() { const c = curConv(); sendHost({ k: 'cancel', tab: c.id }) }
 const isRunning = () => [...S.pending.values()].some((p) => p.conv === S.cur)
 
@@ -227,7 +270,7 @@ function renderStatus() {
   el.innerHTML = p ? '<span class="spin"></span> ' + esc(p.status || 'عم يشتغل…') : ''
 }
 function msgHtml(m) {
-  if (m.role === 'user') return '<div class="msg user">' + esc(m.content).replace(/\n/g, '<br>') + (m.atts && m.atts.length ? '<div class="meta">📎 ' + m.atts.map(esc).join(' · ') + '</div>' : '') + '</div>'
+  if (m.role === 'user') return '<div class="msg user">' + esc(m.content).replace(/\n/g, '<br>') + (m.atts && m.atts.length ? '<div class="meta">📎 ' + m.atts.map(esc).join(' · ') + '</div>' : '') + (m.queued ? '<div class="meta">⏳ بانتظار الكمبيوتر…</div>' : '') + (m.expired ? '<div class="meta">⚠️ ما انبعتت (قديمة)</div>' : '') + '</div>'
   const model = (String(m.meta || '').match(/Model: ([^|]+?)(?: \||$)/) || [])[1]
   return '<div class="msg bot' + (m.failed ? ' err' : '') + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta">' + esc(model || m.meta || '') + '</div>' : '') + '</div>'
 }

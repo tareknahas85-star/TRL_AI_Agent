@@ -1,8 +1,8 @@
 # TRL_AI_Agent (وكيل TRL الذكي)
 
-**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.0-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.0-windows-setup.exe)**
+**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.1-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.1-windows-setup.exe)**
 
-**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.0-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.0-android.apk)**
+**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.1-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.1-android.apk)**
 
 **Linux:** paused for now / **لينكس:** متوقّف مؤقتاً، ورح يرجع بوقت لاحق.
 
@@ -183,7 +183,7 @@ phone is only a screen.**
 **Set it up (about 3 minutes)**
 
 1. Install the desktop app and make sure it works (steps above).
-2. Download **`TRL_AI_Agent-5.9.0-android.apk`** from the
+2. Download **`TRL_AI_Agent-5.9.1-android.apk`** from the
    [latest release](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    on your phone and install it (Android asks you to allow installing from this
    source once). It is a debug-signed build, not from the Play Store.
@@ -410,7 +410,7 @@ installers.
 **كيف تجهّزو (حوالي 3 دقايق)**
 
 1. ثبّت برنامج الكمبيوتر وتأكد إنو شغّال (الخطوات فوق).
-2. نزّل **`TRL_AI_Agent-5.9.0-android.apk`** من
+2. نزّل **`TRL_AI_Agent-5.9.1-android.apk`** من
    [آخر إصدار](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    عالتلفون وثبّتو (أندرويد بيطلب منك تسمح بالتثبيت من هالمصدر مرة وحدة). هاد ملف
    تجريبي موقّع debug، مو من متجر Play.

@@ -206,16 +206,18 @@ const broadcast = (m: Json): void => {
 const anyOnline = (): boolean => cfg.devices.some((d) => online(d.id))
 
 // Phone GPS for the get_location tool: the phone is asked for ONE fix, only when a request needs the location (it prompts for the Android permission the first time).
-const pendingLoc = new Map<string, { devId: string; resolve: (v: { lat: number; lon: number; accuracyM?: number } | null) => void }>()
-export function requestPhoneLocation(): Promise<{ lat: number; lon: number; accuracyM?: number } | null> {
+type PhoneLocResult = { lat: number; lon: number; accuracyM?: number } | { error: string }
+const pendingLoc = new Map<string, { devId: string; resolve: (v: PhoneLocResult | null) => void }>()
+export function requestPhoneLocation(): Promise<PhoneLocResult | null> {
   const dev = cfg.devices.find((d) => online(d.id))
   if (!dev) return Promise.resolve(null)
   const id = Math.random().toString(36).slice(2, 12)
   return new Promise((resolve) => {
+    // 40 s: the first request makes Android show the permission prompt and a cold GPS fix can take a while.
     const timer = setTimeout(() => {
       pendingLoc.delete(id)
-      resolve(null)
-    }, 15000)
+      resolve({ error: 'no answer from the phone within 40 seconds (app in the background, or the permission prompt was not accepted)' })
+    }, 40000)
     pendingLoc.set(id, {
       devId: dev.id,
       resolve: (v) => {
@@ -345,7 +347,12 @@ async function handle(dev: Device, m: Json): Promise<void> {
         const lat = Number(m.lat)
         const lon = Number(m.lon)
         const acc = Number(m.acc)
-        p.resolve(Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180 ? { lat, lon, accuracyM: Number.isFinite(acc) ? Math.round(acc) : undefined } : null)
+        const err = str(m.err, 160)
+        p.resolve(
+          Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+            ? { lat, lon, accuracyM: Number.isFinite(acc) ? Math.round(acc) : undefined }
+            : { error: err || 'invalid location from the phone' }
+        )
         return
       }
       case 'unpair':
@@ -414,7 +421,9 @@ async function handle(dev: Device, m: Json): Promise<void> {
         if (proj?.confidential) return void send(dev.id, { k: 'done', id, tab: tabKey, content: '🔒 هاد مشروع سري. ما بنفذ منو من الموبايل. غيّر المشروع أو استعمل البرنامج عالكمبيوتر.', failed: true })
         const fids = Array.isArray(m.atts) ? m.atts.filter((x): x is string => typeof x === 'string').slice(0, 10) : []
         const atts = fids.map((f) => prepared.get(dev.id + ':' + f)).filter((a): a is Attachment => !!a)
-        const toModel = atts.length ? (text + '\n\n[ملفات مرفقة من المستخدم]\n' + atts.map(attBlock).join('\n\n')).slice(0, 70000) : text
+        const qAge = Number(m.qAge)
+        const queuedNote = Number.isFinite(qAge) && qAge > 0 ? `[ملاحظة: هالرسالة انكتبت على الجوال أوفلاين قبل ${Math.min(Math.round(qAge), 9999)} دقيقة وانبعتت لما رجع الاتصال. لا تنفّذ أي أمر مدمّر (حذف، تعديل ملفات، إرسال، دفع) بدون ما تسأل المستخدم أول، حتى لو الرسالة بتطلبو.]\n` : ''
+        const toModel = queuedNote + (atts.length ? (text + '\n\n[ملفات مرفقة من المستخدم]\n' + atts.map(attBlock).join('\n\n')).slice(0, 70000) : text)
         let buf = ''
         let timer: NodeJS.Timeout | null = null
         const flush = (): void => {
