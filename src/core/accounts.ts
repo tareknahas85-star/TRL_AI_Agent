@@ -1,5 +1,7 @@
 import { BrowserWindow, dialog } from 'electron'
 import { readJson, writeJson } from './json-store'
+import { getPrefs, setPrefs } from './prefs'
+import { toolUses } from './learning'
 
 // Connected accounts (Google first). Write access is OFF by default and every write action asks the user first.
 export type Accounts = { googleEmail: string; writeServers: string[]; connected: string[] }
@@ -38,6 +40,32 @@ export function setConnected(id: string, on: boolean): void {
 export const writeAllowed = (server: string): boolean => getAccounts().writeServers.includes(server)
 
 const sessionAllowed = new Set<string>()
+
+const askedGroups = new Set<string>()
+
+/** Learning period: asks once per session (until approved for good) before a tool group is used its first few times. */
+export async function approveNewTool(group: string, tool: string): Promise<boolean> {
+  const pr = getPrefs()
+  if (!pr.askBeforeNewTools || !pr.learningEnabled || pr.approvedTools.includes(group) || askedGroups.has(group)) return true
+  if (toolUses(group) >= 3) return true
+  const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
+  if (!win) return true
+  if (!win.isVisible()) win.show()
+  const r = await dialog.showMessageBox(win, {
+    type: 'question',
+    title: 'أداة جديدة',
+    message: `رح أستعمل ${group} ← ${tool}، موافق؟`,
+    detail: 'هاد السؤال بيطلع بس بأول كم مرة. اختار "موافق دايماً" وما عاد نسأل عن هالأداة.',
+    buttons: ['موافق', 'موافق دايماً', 'لا'],
+    defaultId: 0,
+    cancelId: 2,
+    noLink: true
+  })
+  if (r.response === 2) return false
+  askedGroups.add(group)
+  if (r.response === 1) setPrefs({ approvedTools: [...pr.approvedTools, group] })
+  return true
+}
 
 /** Asks the user before a tool that changes data runs. Returns false when denied. */
 export async function approveWrite(server: string, tool: string, args: Record<string, unknown>): Promise<boolean> {

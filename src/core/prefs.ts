@@ -8,6 +8,8 @@ export type Prefs = {
   onboardingDone: boolean // first-run interests screen answered
   interests: string[] // interest groups the user picked (see connector catalog)
   catalogEnabled: string[] // catalog connectors the user switched on
+  askBeforeNewTools: boolean // ask before the first few uses of a tool group (learning period)
+  approvedTools: string[] // tool groups the user approved for good
 }
 
 const DEFAULTS: Prefs = {
@@ -16,7 +18,9 @@ const DEFAULTS: Prefs = {
   learningPaused: false,
   onboardingDone: false,
   interests: [],
-  catalogEnabled: []
+  catalogEnabled: [],
+  askBeforeNewTools: true,
+  approvedTools: []
 }
 
 export function getPrefs(): Prefs {
@@ -27,7 +31,9 @@ export function getPrefs(): Prefs {
     learningPaused: s.learningPaused === true,
     onboardingDone: s.onboardingDone === true,
     interests: Array.isArray(s.interests) ? s.interests.filter((x) => typeof x === 'string') : [],
-    catalogEnabled: Array.isArray(s.catalogEnabled) ? s.catalogEnabled.filter((x) => typeof x === 'string') : []
+    catalogEnabled: Array.isArray(s.catalogEnabled) ? s.catalogEnabled.filter((x) => typeof x === 'string') : [],
+    askBeforeNewTools: s.askBeforeNewTools !== false,
+    approvedTools: Array.isArray(s.approvedTools) ? s.approvedTools.filter((x) => typeof x === 'string') : []
   }
 }
 

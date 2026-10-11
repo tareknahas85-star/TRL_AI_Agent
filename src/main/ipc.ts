@@ -6,7 +6,7 @@ import { executeWithSkill } from '../skills/executor'
 import { runCouncil, resetCouncilTrace, getLastCouncilTrace, type CouncilInfo } from '../core/council'
 import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { registerManagementHandlers } from './management'
-import { listProjects } from '../core/workspace'
+import { getConversation, listProjects, saveConversation } from '../core/workspace'
 import { missingFileClaims, claimsWarning } from '../core/claims'
 import { setScheduleRunner, startScheduler } from '../core/scheduler'
 import { refreshFreeRanking } from '../core/free-best'
@@ -43,6 +43,28 @@ function isKeyName(k: unknown): k is KeyName {
 }
 
 // The core logic reads keys from process.env, so keys saved in the secure store are copied there.
+// Phone chats are mirrored into the normal conversation list (title starts with the phone icon), one conversation per phone tab.
+const phoneConv = new Map<string, string>()
+function mirrorPhoneChat(tabId: string, projectId: string | null, text: string, r: Record<string, unknown>): void {
+  try {
+    const cur = phoneConv.get(tabId) ? getConversation(phoneConv.get(tabId) as string) : null
+    const at = Date.now()
+    const meta = typeof r.meta === 'string' ? r.meta.split(' | Stats:')[0] : undefined
+    const saved = saveConversation({
+      id: cur?.id,
+      projectId,
+      messages: [
+        ...(cur?.messages ?? []),
+        { role: 'user', content: '📱 ' + text.slice(0, 4000), at },
+        { role: 'assistant', content: String(r.content ?? ''), meta, at }
+      ]
+    })
+    phoneConv.set(tabId, saved.id)
+  } catch {
+    /* mirroring is best effort */
+  }
+}
+
 export function hydrateEnvFromStore(): void {
   for (const k of KEY_NAMES) {
     const v = getApiKey(k)
@@ -274,7 +296,10 @@ export function registerIpcHandlers(): void {
     models: () => pickerModels(),
     run: (a, sink) => {
       const fake = { send: (ch: string, _tab: string, ...args: unknown[]) => sink(ch, args) } as unknown as WebContents
-      return runChat(fake, a.text, false, a.history, { tabId: a.tabId, projectId: a.projectId, mode: parseMode(a.mode) }) as Promise<Record<string, unknown>>
+      return (runChat(fake, a.text, false, a.history, { tabId: a.tabId, projectId: a.projectId, mode: parseMode(a.mode) }) as Promise<Record<string, unknown>>).then((r) => {
+        mirrorPhoneChat(a.tabId, a.projectId, a.text, r)
+        return r
+      })
     }
   })
   registerRemoteHandlers()

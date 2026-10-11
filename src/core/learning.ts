@@ -135,6 +135,11 @@ export function recordTurn(a: { userMsg: string; toolsUsed: string[]; ok: boolea
   save(p)
 }
 
+/** How many times a tool group was used so far (0 when learning is off). */
+export function toolUses(group: string): number {
+  return load().tools[group]?.n ?? 0
+}
+
 // Used by the tool ranking: a small bonus for tool groups the user relies on. Never adds a tool on its own, only breaks ties.
 export function toolPrior(group: string): number {
   const pr = getPrefs()

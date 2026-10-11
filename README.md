@@ -1,8 +1,8 @@
 # TRL_AI_Agent (وكيل TRL الذكي)
 
-**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest/download/TRL_AI_Agent-5.8.0-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest/download/TRL_AI_Agent-5.8.0-windows-setup.exe)**
+**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.8.0-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.8.0-windows-setup.exe)**
 
-**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest/download/TRL_AI_Agent-5.8.0-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest/download/TRL_AI_Agent-5.8.0-android.apk)**
+**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.8.0-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.8.0-android.apk)**
 
 **Linux:** paused for now / **لينكس:** متوقّف مؤقتاً، ورح يرجع بوقت لاحق.
 
@@ -18,7 +18,7 @@ in Arabic first, right to left.
 ### Status
 
 It works, but it is a personal project. Download the installer from the
-[latest release](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest),
+[latest release](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest),
 or build it yourself. The Windows installer is not signed, so the first time
 Windows SmartScreen shows a warning: press **More info**, then **Run anyway**.
 Every release has a `SHA256SUMS.txt` file so you can check your download.
@@ -148,7 +148,7 @@ The app ships with **no keys, no accounts and no personal settings**. Everyone w
 downloads it adds their own. Nothing below needs a developer.
 
 1. **Install.** Download the installer from the
-   [latest release](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest)
+   [latest release](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    and run it. Windows SmartScreen may warn you (the installer is not signed):
    press **More info**, then **Run anyway**.
 2. **Add at least one model.** Open **الموديلات (Models)** in the side bar, pick a
@@ -184,7 +184,7 @@ phone is only a screen.**
 
 1. Install the desktop app and make sure it works (steps above).
 2. Download **`TRL_AI_Agent-5.8.0-android.apk`** from the
-   [latest release](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest)
+   [latest release](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    on your phone and install it (Android asks you to allow installing from this
    source once). It is a debug-signed build, not from the Play Store.
 3. On the computer: **Settings ← General ← Phone app**. Turn on **Enable phone
@@ -259,7 +259,7 @@ installers.
 ### الحالة
 
 يعمل، لكنه مشروع شخصي. حمّل المثبّت من
-[صفحة الإصدار الأخير](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest)،
+[صفحة الإصدار الأخير](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)،
 أو ابنِه بنفسك. مثبّت ويندوز غير موقّع، لذلك يظهر تحذير SmartScreen في المرة الأولى:
 اضغط **More info** ثم **Run anyway**. وفي كل إصدار ملف `SHA256SUMS.txt` لتتأكد من
 سلامة الملف الذي حمّلته.
@@ -380,7 +380,7 @@ installers.
 إعداداتو ومفاتيحو بإيدو. وما بتحتاج تكون مبرمج.
 
 1. **التثبيت.** نزّل المثبّت من
-   [صفحة آخر إصدار](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest)
+   [صفحة آخر إصدار](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    وشغّلو. ممكن يطلعلك تحذير SmartScreen لأنو المثبّت مو موقّع: اضغط **More info** وبعدين
    **Run anyway**.
 2. **ضيف موديل واحد عالأقل.** افتح **الموديلات** من القائمة الجانبية، اختار مزوّد
@@ -411,7 +411,7 @@ installers.
 
 1. ثبّت برنامج الكمبيوتر وتأكد إنو شغّال (الخطوات فوق).
 2. نزّل **`TRL_AI_Agent-5.8.0-android.apk`** من
-   [آخر إصدار](https://github.com/tareknahas85-star/TRL-AI-Agent/releases/latest)
+   [آخر إصدار](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    عالتلفون وثبّتو (أندرويد بيطلب منك تسمح بالتثبيت من هالمصدر مرة وحدة). هاد ملف
    تجريبي موقّع debug، مو من متجر Play.
 3. عالكمبيوتر: **الإعدادات ← عام ← تطبيق الموبايل**. فعّل **الربط مع الموبايل**. وإذا

@@ -8,7 +8,7 @@ import { listSkills, loadSkill } from '../skills/loader'
 import { loadMCPConfig, type MCPServer } from './client'
 import { readFile, listFiles } from '../tools/file-tools'
 import { readState } from '../core/state'
-import { approveWrite, getAccounts } from '../core/accounts'
+import { approveNewTool, approveWrite, getAccounts } from '../core/accounts'
 import { shell } from 'electron'
 import { addPlaceTools } from '../tools/place-tools'
 import { getPrefs } from '../core/prefs'
@@ -391,6 +391,8 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
           }
           if (RISKY.test(info.name) && writeOn.has(info.server) && !(await approveWrite(info.server, info.name, a))) {
             out = 'Error: المستخدم رفض هذا الإجراء. لا تعيد المحاولة، وأخبره أن الإجراء لم يُنفَّذ.'
+          } else if (!(await approveNewTool(info.server, info.name))) {
+            out = 'Error: المستخدم ما وافق يستعمل هالأداة. لا تعيد المحاولة، وأخبره أنها ما اشتغلت.'
           } else out = await callMcpTool(info, a)
         }
       }

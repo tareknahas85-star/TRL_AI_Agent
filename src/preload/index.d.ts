@@ -2,7 +2,7 @@ import { ElectronAPI } from '@electron-toolkit/preload'
 
 export type CheckItemInfo = { id: string; label: string; state: 'ok' | 'fail' | 'skip'; message: string; ms: number }
 export type CheckResultInfo = { kind: string; items: CheckItemInfo[]; ok: number; fail: number; skipped: number; cancelled: boolean }
-export type PrefsInfo = { locationEnabled: boolean; learningEnabled: boolean; learningPaused: boolean; onboardingDone: boolean; interests: string[]; catalogEnabled: string[] }
+export type PrefsInfo = { locationEnabled: boolean; learningEnabled: boolean; learningPaused: boolean; onboardingDone: boolean; interests: string[]; catalogEnabled: string[]; askBeforeNewTools: boolean; approvedTools: string[] }
 export type LearnRing = { id: string; label: string; pct: number; detail: string; editable?: { kind: 'lang' | 'length' | 'tone'; options: { value: string; label: string }[]; current: string } }
 export type LearnViewInfo = {
   enabled: boolean

@@ -208,6 +208,13 @@ export function LearningPanel() {
         </div>
         <div className="flex items-center justify-between gap-3">
           <div>
+            <div className="text-sm font-medium">اسألني قبل أداة جديدة</div>
+            <div className="text-xs text-muted">بيطلع سؤال "رح أستعمل X، موافق؟" بأول كم مرة بتنستعمل فيها أداة، وبتقدر توافق عليها دايماً.</div>
+          </div>
+          <Toggle checked={prefs.askBeforeNewTools} label="اسألني قبل أداة جديدة" onChange={() => void setPref({ askBeforeNewTools: !prefs.askBeforeNewTools })} />
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <div>
             <div className="text-sm font-medium">ابدأ من الصفر</div>
             <div className="text-xs text-muted">بيمسح كل شي تعلّمو (الدائرة، الاهتمامات، الأدوات، الأسلوب).</div>
           </div>
