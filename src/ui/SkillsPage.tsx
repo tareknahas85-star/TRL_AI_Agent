@@ -11,6 +11,7 @@ export function SkillsPage() {
   const [name, setName] = useState('')
   const [content, setContent] = useState(TEMPLATE)
   const [error, setError] = useState('')
+  const [warn, setWarn] = useState<string[]>([])
 
   const load = useCallback(() => window.api.skills.list().then(setSkills), [])
   useEffect(() => {
@@ -18,12 +19,18 @@ export function SkillsPage() {
   }, [load])
 
   const create = async (): Promise<void> => {
+    // Safety lint first: show the warnings once; a second click on "save anyway" goes through.
+    if (warn.length === 0) {
+      const f = await window.api.skills.lint(content)
+      if (f.length > 0) return setWarn(f.map((x) => x.message))
+    }
     const r = await window.api.skills.create(name.trim(), content)
     if (!r.ok) return setError(r.error ?? 'خطأ')
     setAdding(false)
     setName('')
     setContent(TEMPLATE)
     setError('')
+    setWarn([])
     load()
   }
 
@@ -80,11 +87,17 @@ export function SkillsPage() {
         <Modal title="ضيف سكيل" onClose={() => setAdding(false)}>
           <div className="space-y-3">
             <input dir="ltr" className={inputCls} placeholder="skill-name" value={name} onChange={(e) => setName(e.target.value)} />
-            <textarea dir="auto" rows={10} className={inputCls + ' font-mono'} value={content} onChange={(e) => setContent(e.target.value)} />
+            <textarea dir="auto" rows={10} className={inputCls + ' font-mono'} value={content} onChange={(e) => { setContent(e.target.value); setWarn([]) }} />
+            {warn.length > 0 && (
+              <div className="rounded-xl border border-danger p-3 text-xs">
+                <div className="mb-1 font-semibold text-danger">فحص الأمان لقى {warn.length} ملاحظة. اقرا النص مرة تانية قبل ما تحفظ:</div>
+                <ul className="list-disc space-y-1 ps-5">{warn.map((w) => <li key={w}>{w}</li>)}</ul>
+              </div>
+            )}
             {error && <p className="text-sm text-danger">{error}</p>}
             <div className="flex justify-end gap-2">
               <button className={ghostBtn} onClick={() => setAdding(false)}>إلغاء</button>
-              <button className={primaryBtn} disabled={!name.trim() || !content.trim()} onClick={create}>حفظ</button>
+              <button className={primaryBtn} disabled={!name.trim() || !content.trim()} onClick={create}>{warn.length > 0 ? 'احفظ رغم التحذير' : 'حفظ'}</button>
             </div>
           </div>
         </Modal>

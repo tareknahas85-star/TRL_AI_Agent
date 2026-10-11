@@ -148,6 +148,7 @@ declare global {
         get: (name: string) => Promise<SkillInfo | null>
         create: (name: string, content: string) => Promise<{ ok: boolean; skill?: SkillInfo; error?: string }>
         delete: (name: string) => Promise<boolean>
+        lint: (content: string) => Promise<{ id: string; message: string }[]>
         toggle: (name: string) => Promise<boolean | null>
       }
       mcp: {

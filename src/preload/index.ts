@@ -66,6 +66,7 @@ const api = {
     get: (name: string) => ipcRenderer.invoke('skills:get', name),
     create: (name: string, content: string) => ipcRenderer.invoke('skills:create', name, content),
     delete: (name: string) => ipcRenderer.invoke('skills:delete', name),
+    lint: (content: string): Promise<{ id: string; message: string }[]> => ipcRenderer.invoke('skills:lint', content),
     toggle: (name: string) => ipcRenderer.invoke('skills:toggle', name)
   },
   mcp: {

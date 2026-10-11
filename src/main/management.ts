@@ -1,4 +1,5 @@
 import { fetchRemoteModels, importRemoteModels, setCustomModelKey, setCustomModelPosition } from '../core/custom-models'
+import { lintSkill } from '../skills/lint'
 import { freeOnly, setFreeOnly } from '../core/spend'
 import { freeUsage } from '../core/model-health'
 import { moveCatalogModel } from '../core/catalog'
@@ -95,6 +96,7 @@ export function registerManagementHandlers(): void {
       return { ok: false, error: msg(e) }
     }
   })
+  ipcMain.handle('skills:lint', (_e, content: unknown) => (typeof content === 'string' ? lintSkill(content.slice(0, 200000)) : []))
   ipcMain.handle('skills:delete', async (_e, name: unknown) => isValidSkillName(name) && deleteSkill(name))
   ipcMain.handle('skills:toggle', (_e, name: unknown) => (isValidSkillName(name) ? toggleIn('disabledSkills', name) : null))
 
