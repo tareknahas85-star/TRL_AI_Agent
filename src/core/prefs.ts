@@ -10,6 +10,7 @@ export type Prefs = {
   catalogEnabled: string[] // catalog connectors the user switched on
   askBeforeNewTools: boolean // ask before the first few uses of a tool group (learning period)
   approvedTools: string[] // tool groups the user approved for good
+  securityToolsEnabled: boolean // pwned_password_check / virustotal_hash_lookup (off until the user turns them on)
 }
 
 const DEFAULTS: Prefs = {
@@ -20,7 +21,8 @@ const DEFAULTS: Prefs = {
   interests: [],
   catalogEnabled: [],
   askBeforeNewTools: true,
-  approvedTools: []
+  approvedTools: [],
+  securityToolsEnabled: false
 }
 
 export function getPrefs(): Prefs {
@@ -33,7 +35,8 @@ export function getPrefs(): Prefs {
     interests: Array.isArray(s.interests) ? s.interests.filter((x) => typeof x === 'string') : [],
     catalogEnabled: Array.isArray(s.catalogEnabled) ? s.catalogEnabled.filter((x) => typeof x === 'string') : [],
     askBeforeNewTools: s.askBeforeNewTools !== false,
-    approvedTools: Array.isArray(s.approvedTools) ? s.approvedTools.filter((x) => typeof x === 'string') : []
+    approvedTools: Array.isArray(s.approvedTools) ? s.approvedTools.filter((x) => typeof x === 'string') : [],
+    securityToolsEnabled: s.securityToolsEnabled === true
   }
 }
 

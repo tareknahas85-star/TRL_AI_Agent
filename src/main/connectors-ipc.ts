@@ -21,6 +21,7 @@ type Def = {
   kind: 'remote' | 'local' | 'special' | 'token'
   hint: string
   build?: (vals: string[]) => string[] // token kind: optional builder for the server args from the pasted values
+  validate?: (vals: string[]) => string | null // token kind: returns an error message when the pasted values must not be used (e.g. a URL that would receive the key)
   fields?: { env: string; label: string }[] // token kind: values the user pastes once (stored in the MCP config only)
   requires?: string // command that must exist on PATH
   requiresFile?: () => string | null // returns a missing-path message, or null when fine
@@ -79,6 +80,21 @@ const DEFS: Def[] = [
     fields: [ { env: 'BROWSER_USE_API_KEY', label: 'API key' } ],
     hint: 'من cloud.browser-use.com/settings انسخ الـ API key والصقه هون.',
     server: () => npx('browseruse', ['mcp-remote', 'https://api.browser-use.com/v3/mcp', '--header', 'x-browser-use-api-key:${BROWSER_USE_API_KEY}']) },
+  { id: 'composio', title: 'Composio', subtitle: 'بوابة لمئات التطبيقات (Gmail وSlack وNotion...) بحساباتك الشخصية — اختياري', group: 'accounts', kind: 'token',
+    fields: [ { env: 'COMPOSIO_API_KEY', label: 'API key' }, { env: 'COMPOSIO_MCP_URL', label: 'رابط MCP server (من لوحة Composio)' } ],
+    hint: 'الخطة المجانية Hobby (100 ألف استدعاء بالشهر، بدون بطاقة). من لوحة Composio اعمل MCP server للتطبيقات اللي بدك ياها، وانسخ الـ API key ورابط السيرفر. تحذير خصوصية: كل طلب بيمرّ عبر سيرفرات Composio، فاربطو بحساباتك الشخصية بس، وما تربط فيو حساب شغل ولا بيانات عميل. التطبيقات اللي بتربطها بتتصرّف بحسابك، فأي كتابة/إرسال بتحتاج موافقتك.',
+    validate: (v) => { try { const u = new URL(v[1]); return u.protocol === 'https:' && u.hostname === 'backend.composio.dev' ? null : 'الرابط لازم يكون https://backend.composio.dev/... (حتى ما ينبعت المفتاح لمكان غلط)' } catch { return 'الرابط مو صالح' } },
+    build: (v) => ['-y', 'mcp-remote', v[1], '--header', 'x-api-key:${COMPOSIO_API_KEY}'],
+    server: () => npx('composio', ['mcp-remote']) },
+  { id: 'colab', title: 'Google Colab (تجريبي)', subtitle: 'تشغيل كود تقيل أو غير موثوق بجلسة Colab بالمتصفح، بعيد عن جهازك', group: 'device', kind: 'local', requires: 'uvx',
+    hint: 'سيرفر Google الرسمي (googlecolab/colab-mcp). بيربط البرنامج بجلسة Colab مفتوحة بمتصفحك بحسابك الشخصي. لبيانات غير حساسة بس، وما تحط فيها ملفات شغل. تجريبي: بيحتاج ميزة تحديث قائمة الأدوات اللي ممكن ما تكون كاملة عنا، وإذا ما ظهرت أدواتو منعطّلو.',
+    server: () => ({ name: 'colab', command: 'uvx', args: ['git+https://github.com/googlecolab/colab-mcp'], env: {}, enabled: true }) },
+  { id: 'hfspace', title: 'Hugging Face Space (Gradio)', subtitle: 'أداة مجانية من Space عام: تفريغ صوت، OCR، إزالة خلفية...', group: 'accounts', kind: 'token',
+    fields: [ { env: 'HF_SPACE_URL', label: 'رابط الـ Space (https://اسم.hf.space)' } ],
+    hint: 'الصق رابط Space عام فيه Gradio MCP (بيكون مكتوب عالصفحة «Use via API / MCP»). مجاني بحدود الـ Space، وغالباً بيطلب ملفات ترفعها للسيرفر تبعو: ما تستعملو ببيانات حساسة. الرابط لازم ينتهي بـ hf.space.',
+    validate: (v) => { try { const u = new URL(v[0]); return u.protocol === 'https:' && u.hostname.endsWith('.hf.space') ? null : 'الرابط لازم يكون https://....hf.space' } catch { return 'الرابط مو صالح' } },
+    build: (v) => ['-y', 'mcp-remote', v[0].replace(/\/+$/, '') + '/gradio_api/mcp/sse'],
+    server: () => npx('hfspace', ['mcp-remote']) },
   { id: 'deepgram', title: 'Deepgram', subtitle: 'تفريغ صوت وتحليله (Speech-to-Text)', group: 'accounts', kind: 'token',
     fields: [ { env: 'DEEPGRAM_API_KEY', label: 'API key' } ],
     hint: 'من console.deepgram.com اعمل API key والصقه هون. بيشتغل عبر uvx (deepgram-mcp).',
@@ -239,7 +255,7 @@ function microsoftLogin(send: (code: string, url: string) => void, flag: '--logi
 const CATS: Record<string, string> = {
   github: 'dev', linear: 'dev', gcloud: 'cloud', terraform: 'cloud', kubernetes: 'cloud', cloudflare: 'cloud',
   ms365: 'office', notion: 'office', dropbox: 'office', canva: 'media', miro: 'media', deepgram: 'media', assemblyai: 'research',
-  browseruse: 'research', desktopcommander: 'local', filesystem: 'local'
+  browseruse: 'research', composio: 'office', colab: 'dev', hfspace: 'media', desktopcommander: 'local', filesystem: 'local'
 }
 const NEEDS: Record<string, string> = { remote: 'تسجيل دخول بالمتصفح', special: 'تسجيل دخول', token: 'مفتاح API', local: 'أداة محلية' }
 
@@ -277,6 +293,8 @@ export function registerConnectorsHandlers(): void {
     if (!d || d.kind !== 'token' || !d.fields || !Array.isArray(values)) return { ok: false, message: 'طلب مو صالح' }
     const vals = values.map((v) => (typeof v === 'string' ? v.trim() : ''))
     if (vals.length !== d.fields.length || vals.some((v) => v.length < 4)) return { ok: false, message: 'عبّي كل الحقول.' }
+    const bad = d.validate?.(vals)
+    if (bad) return { ok: false, message: bad }
     await ensureServer(d)
     await setServerEnv(d.id, Object.fromEntries(d.fields.map((f, i) => [f.env, vals[i]])))
     if (d.build) await setServerArgs(d.id, d.build(vals))

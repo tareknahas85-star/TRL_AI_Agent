@@ -12,7 +12,9 @@ import { approveNewTool, approveWrite, getAccounts } from '../core/accounts'
 import { shell } from 'electron'
 import { addPlaceTools } from '../tools/place-tools'
 import { getPrefs } from '../core/prefs'
-import { needsLocation } from '../core/guidance'
+import { needsDocTools, needsLocation, needsSecurity } from '../core/guidance'
+import { addDocTools } from '../tools/doc-tools'
+import { addSecurityTools } from '../tools/security-tools'
 import { toolPrior } from '../core/learning'
 import { neededConnectors } from '../core/connector-hints'
 
@@ -325,6 +327,16 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
     else if (!getPrefs().locationEnabled) locNote.push('location tools (get_location, nearby_places) are switched off; tell the user to enable them in Settings > General > Location')
     else addPlaceTools(defs, handlers)
   }
+
+  // Security checks (Pwned Passwords + VirusTotal hash lookup): opt-in, only for security-style requests, never in a confidential project.
+  if (needsSecurity(userInput)) {
+    if (opts.confidential) locNote.push('security tools are not allowed in a confidential project')
+    else if (!getPrefs().securityToolsEnabled) locNote.push('security tools (pwned_password_check, virustotal_hash_lookup) are switched off; tell the user to enable them in Settings > General > Security checks')
+    else addSecurityTools(defs, handlers)
+  }
+
+  // Local PDF/image tools (merge, extract pages, convert/shrink): run on this PC only, so they are fine in confidential projects. Needs PC control because they write files.
+  if (needsDocTools(userInput) && computerEnabled()) addDocTools(defs, handlers, projectPath)
 
   let mcp: McpToolInfo[] = []
   try {

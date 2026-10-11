@@ -18,5 +18,12 @@ const FRESH_RE =
 const LOCATION_RE =
   /قريب مني|قريبة مني|أقرب|اقرب|حولي|حواليي|الطقس عندي|الجو عندي|بمنطقتي|وين أنا|وين انا|موقعي|\b(near me|nearby|closest|around me|my location|where am i)\b/i
 
+const SECURITY_RE =
+  /pwned|breach|leaked password|virustotal|virus total|malware|suspicious file|is this file safe|scan (this|the) file|checksum|sha-?(1|256)|\bmd5\b|تسريب|مسرّب|مسرب|فيروس|ملف مشبوه|ملف آمن|هاش|كلمة (السر|المرور) (مسرّبة|مسربة|مخترقة)|اختُرق|اخترق/i
+
+const DOC_RE = /pdf|ادمج|دمج|قسّم|قسم|اقتطع|استخرج صفحات|ضغط|صغّر|صغر حجم|حوّل|حول (ال)?صورة|صورة|صور\b|\b(merge|split|extract pages|compress|resize|shrink|convert|png|jpe?g|image|photo)\b/i
+
 export const needsFreshInfo = (input: string): boolean => FRESH_RE.test(input)
 export const needsLocation = (input: string): boolean => LOCATION_RE.test(input)
+export const needsDocTools = (input: string): boolean => DOC_RE.test(input)
+export const needsSecurity = (input: string): boolean => SECURITY_RE.test(input)

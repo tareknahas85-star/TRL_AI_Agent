@@ -6,6 +6,7 @@ type StoreSchema = {
   OPENAI_API_KEY: string
   ANTHROPIC_API_KEY: string
   HUGGINGFACE_API_KEY: string
+  VIRUSTOTAL_API_KEY: string
 }
 
 /* eslint-disable @typescript-eslint/no-explicit-any */

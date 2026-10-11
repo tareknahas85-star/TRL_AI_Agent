@@ -35,7 +35,7 @@ import { listCatalog } from '../core/catalog'
 import { CUSTOM_PREFIX, getCustomModel, listCustomModels } from '../core/custom-models'
 import { getApiKey, setApiKey } from '../store/secure-store'
 
-const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY'] as const
+const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY', 'VIRUSTOTAL_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
 
 function isKeyName(k: unknown): k is KeyName {

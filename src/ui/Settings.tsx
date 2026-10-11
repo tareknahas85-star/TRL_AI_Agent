@@ -5,6 +5,7 @@ import { MasterMemoryPanel } from './MasterMemoryPanel'
 import { AccountsPanel } from './AccountsPanel'
 import { ComputerPanel } from './ComputerPanel'
 import { LocationPanel } from './LocationPanel'
+import { SecurityPanel } from './SecurityPanel'
 import { LearningPanel } from './LearningPanel'
 import { TelegramPanel } from './TelegramPanel'
 import { RemotePanel } from './RemotePanel'
@@ -105,6 +106,7 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
           <>
             <ComputerPanel />
             <LocationPanel />
+            <SecurityPanel />
             <TelegramPanel />
             <RemotePanel />
             <TransferPanel />

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Eye, EyeOff, Loader2 } from 'lucide-react'
 import { ghostBtn, inputCls } from './components/ui'
 
-export type KeyName = 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' | 'HUGGINGFACE_API_KEY'
+export type KeyName = 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' | 'HUGGINGFACE_API_KEY' | 'VIRUSTOTAL_API_KEY'
 
 // One API key: hidden by default (eye to reveal), saved as you type (encrypted on this device), optional "verify" button.
 export function KeyField({ name, verify, onChange }: { name: KeyName; verify?: () => Promise<{ ok: boolean; message: string; models?: string[] }>; onChange?: (has: boolean) => void }) {
