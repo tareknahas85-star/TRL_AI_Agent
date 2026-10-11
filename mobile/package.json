@@ -1,0 +1,23 @@
+{
+  "name": "trl-mobile",
+  "version": "5.8.0",
+  "private": true,
+  "description": "TRL_AI_Agent phone app (Capacitor shell over an encrypted link to the desktop app)",
+  "scripts": {
+    "bundle": "node build.mjs",
+    "sync": "npm run bundle && cap sync android",
+    "apk": "npm run sync && cd android && gradlew.bat assembleDebug"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/local-notifications": "^8.3.1",
+    "jsqr": "^1.4.0",
+    "libsodium-wrappers": "^0.7.15"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "esbuild": "^0.25.0"
+  }
+}

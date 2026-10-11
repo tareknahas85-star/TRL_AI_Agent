@@ -1,0 +1,66 @@
+appId: com.myrouter.app
+productName: AI Router OS
+directories:
+  buildResources: build
+  output: release
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{HANDOFF.md,*.tgz,*.tsbuildinfo,.env.example}'
+  - '!{dist-installer,release,out-test,.git}/**'
+extraResources:
+  - from: src/skills/delegate-skills
+    to: skills
+  - from: src/mcp/config.json
+    to: mcp/config.json
+asarUnpack:
+  - resources/**
+win:
+  executableName: my-ai-router
+  target:
+    - nsis
+    - portable
+  icon: build/icon.ico
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  executableName: my-ai-router
+  target:
+    - AppImage
+    - deb
+  maintainer: Tarek Nahhas <tareknahas@live.com>
+  category: Utility
+  icon: build/icon.png
+  executableArgs:
+    - --no-sandbox
+  desktop:
+    entry:
+      Name: TRL_AI_Agent
+      Comment: Multi-model AI agent router with MCP connectors
+      Categories: Utility;Development;
+  artifactName: ${name}-${version}-linux.${ext}
+appImage:
+  artifactName: ${name}-${version}-linux.${ext}
+npmRebuild: false
+publish:
+  provider: generic
+  url: https://example.com/auto-updates

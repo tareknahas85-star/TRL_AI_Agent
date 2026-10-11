@@ -1,0 +1,554 @@
+import sodium from 'libsodium-wrappers'
+import jsQR from 'jsqr'
+import { Capacitor, registerPlugin } from '@capacitor/core'
+import { App as CapApp } from '@capacitor/app'
+import { LocalNotifications } from '@capacitor/local-notifications'
+import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
+import { GuestLink } from '../../src/remote/session'
+
+// ---------- native bridge (with a browser fallback so the UI can be tested without a phone) ----------
+const AirNative = registerPlugin('AirNative', {
+  web: () =>
+    Promise.resolve({
+      async info() { return { model: 'Browser' } },
+      async secureSet({ key, value }) { localStorage.setItem('sec.' + key, value) },
+      async secureGet({ key }) { return { value: localStorage.getItem('sec.' + key) } },
+      async secureDelete({ key }) { localStorage.removeItem('sec.' + key) },
+      async getPendingShare() { return {} },
+      async startKeepAlive() {},
+      async stopKeepAlive() {}
+    })
+})
+
+// ---------- tiny helpers ----------
+const $ = (s, r = document) => r.querySelector(s)
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c])
+const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) } catch { return d } }
+const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)) } catch { /* storage full/blocked */ } }
+const rid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+const fmtDur = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); return s < 60 ? s + ' ث' : Math.floor(s / 60) + ' د ' + (s % 60) + ' ث' }
+
+function md(text) {
+  const parts = String(text ?? '').split(/```/)
+  return parts.map((p, i) => {
+    if (i % 2 === 1) { const body = p.replace(/^[\w+-]*\n/, ''); return '<pre><code>' + esc(body.replace(/\n$/, '')) + '</code></pre>' }
+    let h = esc(p)
+    h = h.replace(/`([^`\n]+)`/g, '<code>$1</code>').replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
+    h = h.replace(/^#{1,4}\s*(.+)$/gm, '<b>$1</b>').replace(/^\s*[-*]\s+/gm, '• ')
+    return h.replace(/\n/g, '<br>')
+  }).join('')
+}
+
+// ---------- state ----------
+let L = null
+const S = {
+  view: 'boot', tab: 'chat', device: null, ppk: '', psk: '',
+  conn: 'offline', host: '', models: [], projects: [], tasks: [], sas: '', pairErr: '',
+  mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
+  convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
+  pending: new Map(), atts: [], recording: null, approval: null, sheet: null, keepAlive: lsGet('trl.keepalive', true)
+}
+const saveConvs = () => { lsSet('trl.convs', S.convs.slice(0, 40).map((c) => ({ ...c, msgs: c.msgs.slice(-120) }))); lsSet('trl.cur', S.cur) }
+const curConv = () => { let c = S.convs.find((x) => x.id === S.cur); if (!c) { c = { id: 'c' + rid(), title: 'محادثة جديدة', msgs: [], at: Date.now() }; S.convs.unshift(c); S.cur = c.id; saveConvs() } return c }
+
+function toast(t) {
+  const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d)
+  setTimeout(() => d.remove(), 2600)
+}
+async function notify(title, body) {
+  if (!document.hidden) return
+  try { await LocalNotifications.schedule({ notifications: [{ id: Math.floor(Math.random() * 2e9), title, body: String(body).slice(0, 160) }] }) } catch { /* no permission */ }
+}
+
+// ---------- connection to the desktop (encrypted; relay only forwards) ----------
+const conn = { ws: null, link: null, timer: null, retry: 0, lastRx: 0, hb: null, gen: 0 }
+const openWs = (url, room, role, ms = 5000) => new Promise((resolve, reject) => {
+  let ws
+  try { ws = new WebSocket(`${url}?room=${encodeURIComponent(room)}&role=${role}`) } catch (e) { return reject(e) }
+  const t = setTimeout(() => { try { ws.close() } catch { /* */ } reject(new Error('timeout')) }, ms)
+  ws.onopen = () => { clearTimeout(t); ws.onerror = null; resolve(ws) }
+  ws.onerror = () => { clearTimeout(t); reject(new Error('ws error')) }
+})
+async function dial(urls, room, role) {
+  for (const u of urls) { try { return await openWs(u, room, role) } catch { /* try next address */ } }
+  throw new Error('no route')
+}
+function setConn(s) { if (S.conn !== s) { S.conn = s; updateDot() } }
+function updateDot() {
+  const d = $('#dot'); if (!d) return
+  d.className = 'dot ' + (S.conn === 'online' ? 'on' : S.conn === 'offline' ? '' : 'wait')
+  const t = $('#connTxt'); if (t) t.textContent = ({ online: 'متصل', connecting: 'عم يتصل…', hostdown: 'الكمبيوتر مو متصل', offline: 'غير متصل' })[S.conn] || ''
+  const b = $('#send'); if (b) b.disabled = S.conn !== 'online' && !S.running
+}
+function scheduleRetry() {
+  if (conn.timer || !S.device) return
+  const wait = Math.min(15000, 800 * 2 ** Math.min(conn.retry++, 5))
+  conn.timer = setTimeout(() => { conn.timer = null; connect() }, wait)
+}
+async function connect() {
+  if (!S.device || conn.ws) return
+  setConn('connecting')
+  const gen = ++conn.gen
+  let ws
+  try { ws = await dial(S.device.urls, S.device.room, 'guest') } catch { setConn('offline'); return scheduleRetry() }
+  if (gen !== conn.gen) { try { ws.close() } catch { /* */ } return }
+  conn.ws = ws
+  conn.lastRx = Date.now()
+  const link = new GuestLink({
+    sodium, ppk: S.ppk, psk: S.psk, name: S.device.me, mode: 'device', device: { dpk: S.device.dpk, room: S.device.room },
+    send: (f) => { if (ws.readyState === 1) ws.send(f) },
+    onReady: () => { conn.retry = 0; setConn('online'); link.send({ k: 'hello' }) },
+    onMessage: (m) => onHost(m),
+    onPeer: (up) => setConn(up ? 'connecting' : 'hostdown')
+  })
+  conn.link = link
+  ws.onmessage = (e) => { conn.lastRx = Date.now(); link.receive(String(e.data)) }
+  ws.onclose = () => { if (conn.ws === ws) { conn.ws = null; conn.link = null } setConn('offline'); scheduleRetry() }
+  setConn('hostdown')
+}
+function dropConn() {
+  conn.gen++
+  clearTimeout(conn.timer); conn.timer = null
+  try { conn.ws && conn.ws.close() } catch { /* */ }
+  conn.ws = null; conn.link = null
+  setConn('offline')
+}
+const sendHost = (m) => (conn.link && conn.link.isReady ? conn.link.send(m) : false)
+function startHeartbeat() {
+  if (conn.hb) return
+  conn.hb = setInterval(() => {
+    if (!conn.ws) return
+    if (conn.link && conn.link.isReady) { sendHost({ k: 'ping' }); if (Date.now() - conn.lastRx > 60000) { try { conn.ws.close() } catch { /* */ } } }
+  }, 20000)
+}
+const wake = () => { if (S.device && !conn.ws) { conn.retry = 0; clearTimeout(conn.timer); conn.timer = null; connect() } }
+
+// ---------- messages from the desktop ----------
+const fileWait = new Map()
+function onHost(m) {
+  switch (m.k) {
+    case 'state':
+      S.models = m.models || []; S.projects = m.projects || []; S.host = m.host || S.host
+      if (Array.isArray(m.urls) && m.urls.length && S.device) { const merged = [...new Set([...m.urls, ...S.device.urls])].slice(0, 8); if (merged.join() !== S.device.urls.join()) { S.device.urls = merged; lsSet('trl.device', S.device) } }
+      if (S.project && S.projects.find((p) => p.id === S.project && p.confidential)) { S.project = null; lsSet('trl.project', null) }
+      if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet() }
+      return
+    case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'tasks') renderPage() } return
+    case 'prog': { const p = S.pending.get(m.id); if (p) { p.status = m.text; renderStatus() } return }
+    case 'stream': {
+      const p = S.pending.get(m.id); if (!p) return
+      if (m.kind === 'reset') p.buf = ''; else p.buf += m.text || ''
+      renderLast(); return
+    }
+    case 'done': return onDone(m)
+    case 'approval': return showApproval(m)
+    case 'approval.cancel': if (S.approval && S.approval.id === m.id) { S.approval = null; renderApproval(); toast('اتجاوب عالكمبيوتر') } return
+    case 'file.ok': case 'file.err': { const w = fileWait.get(m.fid); if (w) { fileWait.delete(m.fid); m.k === 'file.ok' ? w.res(m.att) : w.rej(new Error(m.error || 'فشل')) } return }
+    case 'loc.req': return answerLoc(m)
+    case 'revoked': return wipeDevice('الكمبيوتر شال هالجهاز.')
+    case 'error': toast(m.text || 'خطأ'); return
+  }
+}
+// The computer asked for one GPS fix (only happens when the user asked something like "near me" and enabled the location tools).
+function answerLoc(m) {
+  const fail = (why) => sendHost({ k: 'loc.res', id: m.id, err: why })
+  if (!navigator.geolocation) return fail('no geolocation')
+  navigator.geolocation.getCurrentPosition(
+    (p) => sendHost({ k: 'loc.res', id: m.id, lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }),
+    (e) => fail(e && e.message ? e.message : 'denied'),
+    { enableHighAccuracy: true, timeout: 12000, maximumAge: 60000 }
+  )
+}
+
+function onDone(m) {
+  const p = S.pending.get(m.id)
+  S.pending.delete(m.id)
+  const c = S.convs.find((x) => x.id === (p ? p.conv : m.tab)) || null
+  if (!c) return
+  if (m.cancelled) { c.msgs.push({ role: 'bot', content: p && p.buf ? p.buf : '', meta: 'انلغى', at: Date.now(), cancelled: true }) }
+  else c.msgs.push({ role: 'bot', content: m.content || '', meta: m.meta || '', failed: !!m.failed, at: Date.now() })
+  if (!c.title || c.title === 'محادثة جديدة') { const u = c.msgs.find((x) => x.role === 'user'); if (u) c.title = u.content.slice(0, 40) }
+  saveConvs()
+  if (c.id === S.cur) { renderMsgs(); renderStatus(); renderSend() }
+  notify(m.failed ? 'ما خلصت المهمة' : 'خلص الجواب', m.content || '')
+  try { navigator.vibrate && navigator.vibrate(60) } catch { /* */ }
+}
+
+// ---------- approvals (signed with the phone's identity key) ----------
+function showApproval(m) {
+  S.approval = { id: m.id, title: String(m.title || ''), detail: String(m.detail || ''), danger: !!m.danger, exp: Number(m.exp) || Date.now() + 60000 }
+  renderApproval()
+  notify(m.danger ? 'طلب موافقة (أمر خطير)' : 'طلب موافقة', m.title)
+  try { navigator.vibrate && navigator.vibrate([120, 60, 120]) } catch { /* */ }
+}
+function answerApproval(ok) {
+  const a = S.approval; if (!a) return
+  const hash = approvalHash(L, a.title, a.detail) // the hash of what the user actually saw
+  const sig = L.sign(S.psk, approvalMsg(L, a.id, hash, ok, a.exp))
+  sendHost({ k: 'approve', id: a.id, ok, sig })
+  S.approval = null; renderApproval()
+  toast(ok ? 'تمت الموافقة' : 'تم الرفض')
+}
+
+// ---------- chat ----------
+async function sendChat() {
+  const ta = $('#ta'); if (!ta) return
+  const text = ta.value.trim()
+  if (S.running) return stopChat()
+  if (!text && !S.atts.length) return
+  if (S.conn !== 'online') return toast('مو متصل بالكمبيوتر')
+  if (S.atts.some((a) => !a.fid)) return toast('استنى لحد ما يخلص رفع الملفات')
+  const c = curConv()
+  const hist = c.msgs.filter((x) => x.content && !x.failed).slice(-12).map((x) => ({ role: x.role === 'user' ? 'user' : 'assistant', content: x.content }))
+  const id = rid()
+  const attNames = S.atts.map((a) => a.name)
+  c.msgs.push({ role: 'user', content: text || '(مرفقات)', atts: attNames, at: Date.now() })
+  S.pending.set(id, { conv: c.id, buf: '', status: 'عم يرسل…' })
+  const atts = S.atts.map((a) => a.fid)
+  const msg = { k: 'chat', id, text: text || 'شوف الملفات المرفقة', tab: c.id, project: S.project, mode: S.mode, hist, atts }
+  S.atts = []; ta.value = ''; ta.style.height = 'auto'
+  saveConvs()
+  if (!sendHost(msg)) { S.pending.delete(id); toast('انقطع الاتصال'); }
+  renderMsgs(); renderAtts(); renderStatus(); renderSend()
+}
+function stopChat() { const c = curConv(); sendHost({ k: 'cancel', tab: c.id }) }
+const isRunning = () => [...S.pending.values()].some((p) => p.conv === S.cur)
+
+function renderSend() {
+  S.running = isRunning()
+  const b = $('#send'); if (!b) return
+  b.className = 'send' + (S.running ? ' stop' : ''); b.innerHTML = S.running ? '■' : '➤'; b.disabled = false
+  updateDot()
+}
+function renderStatus() {
+  const el = $('#status'); if (!el) return
+  const p = [...S.pending.values()].find((x) => x.conv === S.cur)
+  el.innerHTML = p ? '<span class="spin"></span> ' + esc(p.status || 'عم يشتغل…') : ''
+}
+function msgHtml(m) {
+  if (m.role === 'user') return '<div class="msg user">' + esc(m.content).replace(/\n/g, '<br>') + (m.atts && m.atts.length ? '<div class="meta">📎 ' + m.atts.map(esc).join(' · ') + '</div>' : '') + '</div>'
+  const model = (String(m.meta || '').match(/Model: ([^|]+?)(?: \||$)/) || [])[1]
+  return '<div class="msg bot' + (m.failed ? ' err' : '') + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta">' + esc(model || m.meta || '') + '</div>' : '') + '</div>'
+}
+function renderMsgs(stick = true) {
+  const el = $('#msgs'); if (!el) return
+  const c = curConv()
+  const p = [...S.pending.values()].find((x) => x.conv === c.id)
+  const empty = !c.msgs.length && !p
+  el.innerHTML = empty ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">اكتب سؤالك أو ابعت ملف. كل شي بيتنفذ على كمبيوترك.</div>' : c.msgs.map(msgHtml).join('') + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">…</span>') + '</div>' : '')
+  if (stick) el.scrollTop = el.scrollHeight
+}
+function renderLast() {
+  const live = $('#live'); const p = [...S.pending.values()].find((x) => x.conv === S.cur)
+  if (!live || !p) return renderMsgs()
+  live.innerHTML = p.buf ? md(p.buf) : '<span class="mut">…</span>'
+  const el = $('#msgs'); if (el && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight
+}
+function renderAtts() {
+  const el = $('#atts'); if (!el) return
+  el.innerHTML = S.atts.map((a, i) => '<div class="att">' + (a.fid ? '📎' : '<span class="spin"></span>') + ' ' + esc(a.name) + (a.pct != null && !a.fid ? ' ' + a.pct + '%' : '') + ' <button data-rm="' + i + '">✕</button></div>').join('')
+}
+
+// ---------- files / voice ----------
+const CH = 128 * 1024
+async function uploadFile(file, entry) {
+  const fid = rid()
+  if (!sendHost({ k: 'file.begin', fid, name: file.name || 'file', size: file.size })) throw new Error('مو متصل')
+  const buf = new Uint8Array(await file.arrayBuffer())
+  for (let o = 0, n = 0; o < buf.length; o += CH, n++) {
+    const part = buf.subarray(o, o + CH)
+    if (!sendHost({ k: 'file.chunk', fid, i: n, d: sodium.to_base64(part, sodium.base64_variants.ORIGINAL) })) throw new Error('انقطع الاتصال')
+    entry.pct = Math.min(99, Math.round(((o + CH) / buf.length) * 100)); renderAtts()
+    while (conn.ws && conn.ws.bufferedAmount > 1_500_000) await sleep(30)
+    if (n % 4 === 3) await sleep(0)
+  }
+  const done = new Promise((res, rej) => { fileWait.set(fid, { res, rej }); setTimeout(() => { if (fileWait.delete(fid)) rej(new Error('انتهت المهلة')) }, 120000) })
+  sendHost({ k: 'file.end', fid, project: S.project })
+  const att = await done
+  return { fid, att }
+}
+async function addFile(file, { voice = false } = {}) {
+  if (file.size > 30 * 1024 * 1024) return toast('الملف أكبر من 30MB')
+  if (S.conn !== 'online') return toast('مو متصل بالكمبيوتر')
+  const entry = { name: file.name || 'file', fid: null, pct: 0 }
+  S.atts.push(entry); renderAtts()
+  try {
+    const r = await uploadFile(file, entry)
+    if (voice) {
+      S.atts = S.atts.filter((x) => x !== entry)
+      const t = (r.att.preview || '').trim(); const ta = $('#ta')
+      if (t && ta) { ta.value = (ta.value ? ta.value + ' ' : '') + t; ta.dispatchEvent(new Event('input')) } else toast(r.att.note || 'ما قدرت أفرّغ الصوت (لازم Whisper عالكمبيوتر)')
+    } else { entry.fid = r.fid; entry.pct = 100 }
+  } catch (e) { S.atts = S.atts.filter((x) => x !== entry); toast('فشل رفع ' + entry.name + ': ' + e.message) }
+  renderAtts()
+}
+async function toggleRec() {
+  if (S.recording) { S.recording.stop(); return }
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    const chunks = []; const mr = new MediaRecorder(stream)
+    mr.ondataavailable = (e) => e.data.size && chunks.push(e.data)
+    mr.onstop = () => { stream.getTracks().forEach((t) => t.stop()); S.recording = null; renderRec(); const blob = new Blob(chunks, { type: mr.mimeType || 'audio/webm' }); if (blob.size > 800) addFile(new File([blob], 'voice-' + Date.now() + '.webm', { type: blob.type }), { voice: true }) }
+    mr.start(); S.recording = mr; renderRec()
+  } catch { toast('ما قدرت أفتح المايك (تأكد من الإذن)') }
+}
+function renderRec() { const b = $('#mic'); if (b) { b.classList.toggle('rec', !!S.recording); b.textContent = S.recording ? '⏹' : '🎙️' } }
+
+// ---------- pairing ----------
+function parseQr(text) {
+  const t = String(text || '').trim()
+  if (!t.startsWith('TRLR1:')) throw new Error('هاد مو QR تبع البرنامج')
+  const b64 = t.slice(6).replace(/-/g, '+').replace(/_/g, '/')
+  const json = new TextDecoder().decode(Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)))
+  const q = JSON.parse(json)
+  if (q.v !== 1 || !Array.isArray(q.u) || !q.room || !q.dpk || !q.s) throw new Error('QR تالف')
+  return q
+}
+async function startPair(text) {
+  let q
+  try { q = parseQr(text) } catch (e) { return pairFail(e.message) }
+  S.view = 'pairing'; S.sas = ''; S.pairErr = ''; render()
+  const id = L.newIdentity()
+  let model = 'Android'
+  try { model = (await AirNative.info()).model || model } catch { /* */ }
+  let ws
+  try { ws = await dial(q.u.length ? q.u : [], q.room, 'guest') } catch { return pairFail('ما قدرت أوصل للكمبيوتر. تأكد إنو التلفون عالـ Wi-Fi نفسو وإنو الربط مفعّل بالبرنامج.') }
+  let done = false
+  const t = setTimeout(() => { if (!done && !S.sas) { try { ws.close() } catch { /* */ } pairFail('البرنامج ما رد. اعمل QR جديد وجرب.') } }, 20000)
+  const g = new GuestLink({
+    sodium, ppk: id.pk, psk: id.sk, name: String(model).slice(0, 50), mode: 'pair', qr: q,
+    send: (f) => { if (ws.readyState === 1) ws.send(f) },
+    onSas: (s) => { S.sas = s; render() },
+    onDenied: () => { done = true; clearTimeout(t); try { ws.close() } catch { /* */ } pairFail('الكمبيوتر رفض الربط.') },
+    onReady: async () => {
+      done = true; clearTimeout(t)
+      const dev = { dpk: q.dpk, room: L.roomOf(q.dpk, id.pk), urls: q.u, name: q.name || 'الكمبيوتر', me: String(model).slice(0, 50) }
+      await AirNative.secureSet({ key: 'psk', value: id.sk })
+      lsSet('trl.device', dev); lsSet('trl.ppk', id.pk)
+      S.device = dev; S.ppk = id.pk; S.psk = id.sk; S.host = dev.name
+      try { ws.close() } catch { /* */ }
+      S.view = 'main'; S.tab = 'chat'; render(); connect()
+      LocalNotifications.requestPermissions().catch(() => {})
+      applyKeepAlive()
+    },
+    onMessage: () => {}
+  })
+  ws.onmessage = (e) => g.receive(String(e.data))
+  ws.onclose = () => { if (!done && S.view === 'pairing' && !S.sas) pairFail('انقطع الاتصال.') }
+}
+function pairFail(msg) { S.view = 'pair'; S.pairErr = msg; render() }
+async function wipeDevice(msg) {
+  dropConn()
+  try { await AirNative.secureDelete({ key: 'psk' }) } catch { /* */ }
+  try { await AirNative.stopKeepAlive() } catch { /* */ }
+  localStorage.removeItem('trl.device'); localStorage.removeItem('trl.ppk')
+  S.device = null; S.ppk = S.psk = ''; S.models = []; S.tasks = []
+  S.view = 'pair'; S.pairErr = msg || ''; render()
+}
+function applyKeepAlive() { try { S.keepAlive ? AirNative.startKeepAlive() : AirNative.stopKeepAlive() } catch { /* */ } }
+
+// ---------- QR scanner ----------
+let scanStream = null
+let scanning = false
+async function openScanner() {
+  S.view = 'scan'; render()
+  const video = $('#vid'); if (!video) return
+  try {
+    scanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 }, height: { ideal: 1080 } }, audio: false })
+    video.srcObject = scanStream; await video.play()
+    try { await scanStream.getVideoTracks()[0].applyConstraints({ advanced: [{ focusMode: 'continuous' }] }) } catch { /* not supported */ }
+  } catch { S.view = 'pair'; S.pairErr = 'ما قدرت أفتح الكاميرا. اسمح بالإذن، أو الصق رمز الـ QR كنص.'; render(); return }
+  scanning = true
+  const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  let bd = null
+  try { if ('BarcodeDetector' in window) bd = new window.BarcodeDetector({ formats: ['qr_code'] }) } catch { bd = null }
+  const hit = (data) => { if (data && data.startsWith('TRLR1:')) { stopScanner(); startPair(data); return true } return false }
+  const tick = async () => {
+    if (!scanning) return
+    if (video.videoWidth) {
+      try {
+        if (bd) { const codes = await bd.detect(video); for (const c of codes) if (hit(c.rawValue)) return }
+      } catch { /* fall through to jsQR */ }
+      if (!scanning) return
+      // full camera resolution (capped at 1280): dense QR modules need the pixels
+      const sc = Math.min(1, 1280 / video.videoWidth); canvas.width = Math.round(video.videoWidth * sc); canvas.height = Math.round(video.videoHeight * sc)
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+      const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
+      const r = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' })
+      if (r && hit(r.data)) return
+    }
+    setTimeout(tick, 150)
+  }
+  tick()
+}
+function stopScanner() { scanning = false; if (scanStream) { scanStream.getTracks().forEach((t) => t.stop()); scanStream = null } }
+
+// ---------- rendering ----------
+function render() {
+  const app = $('#app'); if (!app) return
+  if (S.view !== 'scan') stopScanner()
+  if (S.view === 'boot') { app.innerHTML = '<div class="center"><div class="logo">T</div><div class="spin"></div></div>'; return }
+  if (S.view === 'pair') {
+    app.innerHTML = '<div class="center"><div class="logo">T</div><h1 style="margin:0">TRL Agent</h1>' +
+      '<div class="mut">تحكّم ببرنامجك على الكمبيوتر من التلفون. الاتصال مشفّر من الطرفين.</div>' +
+      (S.pairErr ? '<div class="card" style="border-color:var(--dng);width:100%">' + esc(S.pairErr) + '</div>' : '') +
+      '<div class="card mut" style="width:100%;text-align:start">1) افتح البرنامج عالكمبيوتر ← الإعدادات ← «تطبيق الموبايل» وفعّل الربط.<br>2) دوس «ربط جهاز جديد» بيطلع QR.<br>3) امسحو من هون.</div>' +
+      '<button class="btn" id="scanBtn">📷 مسح QR</button><button class="btn ghost" id="pasteBtn">لصق الرمز كنص</button><div id="pasteBox"></div></div>'
+    return
+  }
+  if (S.view === 'scan') {
+    app.innerHTML = '<div class="center"><div class="scan"><video id="vid" playsinline muted></video></div><div class="mut">وجّه الكاميرا عالـ QR اللي ظاهر بالبرنامج</div><button class="btn ghost" id="scanCancel">رجوع</button></div>'
+    return
+  }
+  if (S.view === 'pairing') {
+    app.innerHTML = '<div class="center"><div class="logo">T</div>' + (S.sas
+      ? '<h2 style="margin:0">تأكد من الرمز</h2><div class="sas">' + esc(S.sas) + '</div><div class="mut">لازم يكون نفس الرمز الظاهر عالكمبيوتر. بعدين دوس «الرمز متطابق» هناك.</div><div class="spin"></div>'
+      : '<div class="mut">عم نتصل بالكمبيوتر وبنأمّن الجلسة…</div><div class="spin"></div>') + '<button class="btn ghost" id="pairCancel">إلغاء</button></div>'
+    return
+  }
+  // main
+  app.innerHTML = '<div class="top"><span id="dot" class="dot"></span><h1><span id="hostName"></span><div class="mut" id="connTxt" style="font-weight:400;font-size:12px"></div></h1>' +
+    '<button class="chip" id="modeBtn"></button><button class="iconbtn" id="newBtn" title="جديدة">＋</button><button class="iconbtn" id="histBtn" title="المحادثات">☰</button></div>' +
+    '<div class="main" id="page"></div><div class="tabs" id="tabs"></div><div id="sheetHost"></div><div id="apprHost"></div>'
+  renderHeader(); renderTabs(); renderPage(); renderApproval(); updateDot()
+}
+const modeLabel = () => {
+  const m = S.mode
+  if (m.kind === 'auto') return 'تلقائي'
+  if (m.kind === 'free') return 'مجاني'
+  if (m.kind === 'council') return 'council'
+  const mm = S.models.find((x) => x.value === m.id); return mm ? mm.label : 'موديل'
+}
+function renderHeader() {
+  const h = $('#hostName'); if (h) h.textContent = S.host || (S.device && S.device.name) || 'TRL'
+  const b = $('#modeBtn'); if (b) b.textContent = '⚙ ' + modeLabel()
+  updateDot()
+}
+function renderTabs() {
+  const t = $('#tabs'); if (!t) return
+  const n = S.tasks.length
+  t.innerHTML = [['chat', '💬', 'الشات'], ['tasks', '📋', 'المهام'], ['settings', '⚙️', 'الإعدادات']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + i + '</span>' + l + (id === 'tasks' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
+}
+function renderPage() {
+  const p = $('#page'); if (!p) return
+  const top = document.querySelector('.top'); if (top) top.style.display = S.tab === 'chat' ? 'flex' : 'none'
+  if (S.tab === 'chat') {
+    p.innerHTML = '<div class="msgs" id="msgs"></div><div class="status" id="status"></div><div class="composer"><div class="atts" id="atts"></div><div class="row">' +
+      '<button class="iconbtn" id="attBtn">📎</button><button class="iconbtn" id="camBtn">📷</button><button class="iconbtn" id="mic">🎙️</button>' +
+      '<textarea id="ta" rows="1" placeholder="اكتب هون…"></textarea><button class="send" id="send">➤</button></div>' +
+      '<input type="file" id="fileIn" multiple hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>'
+    renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
+  } else if (S.tab === 'tasks') {
+    p.innerHTML = '<div class="page"><h2 style="margin:0 0 12px;font-size:18px">المهام الشغّالة هلأ</h2>' + (S.tasks.length
+      ? S.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc(t.label) + '</b> <span class="mut">· ' + fmtDur(Date.now() - t.started) + '</span><div class="mut">' + esc(t.text || 'عم يشتغل…') + '</div></div><button class="chip" data-stop="' + esc(t.tab) + '">إيقاف</button></div>').join('')
+      : '<div class="mut">ما في مهام شغّالة هلأ.</div>') + '</div>'
+  } else {
+    const d = S.device || {}
+    p.innerHTML = '<div class="page"><div class="card"><h3>الاتصال</h3><div class="mut">الكمبيوتر: <b>' + esc(S.host || d.name) + '</b><br>الحالة: ' + esc(({ online: 'متصل ✅', connecting: 'عم يتصل…', hostdown: 'الكمبيوتر مو متصل بالـ relay', offline: 'غير متصل' })[S.conn]) + '<br>العناوين: <span dir="ltr">' + esc((d.urls || []).map((u) => u.replace(/^wss?:\/\//, '').replace('/ws', '')).join(' , ')) + '</span></div></div>' +
+      '<div class="card"><h3>الخلفية</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S.keepAlive ? 'checked' : '') + '> خلّي التطبيق متصل بالخلفية (بيظهر إشعار ثابت) عشان توصلك الموافقات والنتائج</label></div>' +
+      '<div class="card"><h3>الأمان</h3><div class="mut">كل شي بين التلفون والكمبيوتر مشفّر من الطرفين. مفتاح هالجهاز محفوظ بمخزن أندرويد الآمن (Keystore).</div></div>' +
+      '<button class="btn ghost" id="reconBtn" style="margin-bottom:10px">إعادة الاتصال</button><button class="btn danger" id="unpairBtn">إلغاء ربط هالجهاز</button><div class="mut" style="text-align:center;margin-top:14px">TRL Agent 0.1</div></div>'
+  }
+}
+function renderApproval() {
+  const h = $('#apprHost'); if (!h) return
+  const a = S.approval
+  if (!a) { h.innerHTML = ''; return }
+  h.innerHTML = '<div class="appr ' + (a.danger ? 'dng' : '') + '"><div class="box"><h2 style="margin:0 0 6px">' + (a.danger ? '⚠️ أمر خطير' : '🔐 طلب موافقة') + '</h2><div style="margin-bottom:8px">' + esc(a.title) + '</div><pre>' + esc(a.detail) + '</pre><div class="mut" id="apprLeft" style="margin-top:8px"></div><div class="acts"><button class="btn danger" id="apprNo">رفض</button><button class="btn" id="apprYes">سماح</button></div></div></div>'
+  const upd = () => { const e = $('#apprLeft'); if (!e || !S.approval) return; const s = Math.round((S.approval.exp - Date.now()) / 1000); e.textContent = s > 0 ? 'بتنتهي بعد ' + s + ' ثانية' : 'انتهت المهلة'; if (s > 0) setTimeout(upd, 1000) }
+  upd()
+}
+function renderSheet() {
+  const h = $('#sheetHost'); if (!h) return
+  if (!S.sheet) { h.innerHTML = ''; return }
+  if (S.sheet === 'mode') {
+    const m = S.mode; const mods = S.models
+    const opt = (id, v) => '<option value="' + esc(v.value) + '" ' + (id === v.value ? 'selected' : '') + '>' + esc(v.label) + '</option>'
+    h.innerHTML = '<div class="sheet-bg" data-close="1"><div class="sheet" id="sheetBody"><h2>طريقة الشغل</h2><div class="seg">' +
+      [['auto', 'تلقائي'], ['free', 'مجاني'], ['model', 'موديل'], ['council', 'council']].map(([k, l]) => '<button data-mode="' + k + '" class="' + (m.kind === k ? 'act' : '') + '">' + l + '</button>').join('') + '</div>' +
+      '<div class="mut" style="margin-bottom:10px">' + ({ auto: 'يختار أنسب موديل (مجاني أو مدفوع) حسب الطلب.', free: 'موديلات مجانية بس (الأرخص والأأمن).', model: 'موديل محدد بتختاره إنت.', council: 'كاتب ومراجع: جواب أدق بس أبطأ.' })[m.kind] + '</div>' +
+      (m.kind === 'model' ? '<select class="sel" id="selModel"><option value="">— اختر —</option>' + mods.map((v) => opt(m.id, v)).join('') + '</select>' : '') +
+      (m.kind === 'council' ? '<div class="mut">الكاتب</div><select class="sel" id="selAuthor"><option value="">تلقائي</option>' + mods.map((v) => opt(m.author, v)).join('') + '</select><div class="mut">المراجع</div><select class="sel" id="selCritic"><option value="">تلقائي</option>' + mods.map((v) => opt(m.critic, v)).join('') + '</select>' : '') +
+      '<div class="mut" style="margin-top:6px">المشروع</div><select class="sel" id="selProj"><option value="">بدون مشروع</option>' + S.projects.map((p) => '<option value="' + esc(p.id) + '" ' + (S.project === p.id ? 'selected' : '') + (p.confidential ? ' disabled' : '') + '>' + (p.confidential ? '🔒 ' : '') + esc(p.name) + '</option>').join('') + '</select>' +
+      '<button class="btn" data-close="1" style="margin-top:6px">تم</button></div></div>'
+  } else if (S.sheet === 'hist') {
+    h.innerHTML = '<div class="sheet-bg" data-close="1"><div class="sheet" id="sheetBody"><h2>المحادثات</h2>' + (S.convs.length ? S.convs.map((c) => '<div class="opt ' + (c.id === S.cur ? 'sel' : '') + '" data-conv="' + esc(c.id) + '"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.title) + '</div><small>' + new Date(c.at).toLocaleDateString('ar') + ' · ' + c.msgs.length + ' رسالة</small></div><button class="chip" data-delconv="' + esc(c.id) + '">حذف</button></div>').join('') : '<div class="mut">ما في محادثات.</div>') + '</div></div>'
+  }
+}
+
+// ---------- events (delegated) ----------
+document.addEventListener('click', (e) => {
+  const t = e.target.closest('button,[data-conv],[data-close]'); if (!t) return
+  const id = t.id
+  if (t.dataset.close && (t === e.target || t.tagName === 'BUTTON') && t.closest('#sheetHost')) { if (t.classList.contains('sheet-bg') ? e.target === t : true) { S.sheet = null; renderSheet(); renderHeader() } return }
+  if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); renderPage(); return }
+  if (t.dataset.stop) { sendHost({ k: 'stop', tab: t.dataset.stop }); toast('طلبت الإيقاف'); return }
+  if (t.dataset.mode) { const k = t.dataset.mode; S.mode = k === 'model' ? { kind: 'model', id: S.mode.id || '' } : k === 'council' ? { kind: 'council', author: S.mode.author || '', critic: S.mode.critic || '' } : { kind: k }; lsSet('trl.mode', S.mode); renderSheet(); renderHeader(); return }
+  if (t.dataset.delconv) { S.convs = S.convs.filter((c) => c.id !== t.dataset.delconv); if (S.cur === t.dataset.delconv) S.cur = null; saveConvs(); renderSheet(); if (S.tab === 'chat') renderMsgs(); return }
+  if (t.dataset.conv) { S.cur = t.dataset.conv; saveConvs(); S.sheet = null; renderSheet(); S.tab = 'chat'; renderTabs(); renderPage(); return }
+  if (t.dataset.rm) { S.atts.splice(Number(t.dataset.rm), 1); renderAtts(); return }
+  switch (id) {
+    case 'scanBtn': return openScanner()
+    case 'scanCancel': stopScanner(); S.view = 'pair'; render(); return
+    case 'pairCancel': S.view = 'pair'; render(); return
+    case 'pasteBtn': { const b = $('#pasteBox'); if (b) b.innerHTML = '<textarea class="paste" id="pasteTa" placeholder="TRLR1:…"></textarea><button class="btn" id="pasteGo" style="margin-top:8px">اربط</button>'; return }
+    case 'pasteGo': return startPair(($('#pasteTa') || {}).value)
+    case 'modeBtn': S.sheet = 'mode'; renderSheet(); return
+    case 'histBtn': S.sheet = 'hist'; renderSheet(); return
+    case 'newBtn': { S.cur = null; curConv(); S.tab = 'chat'; renderTabs(); renderPage(); return }
+    case 'send': return sendChat()
+    case 'attBtn': return $('#fileIn') && $('#fileIn').click()
+    case 'camBtn': return $('#camIn') && $('#camIn').click()
+    case 'mic': return toggleRec()
+    case 'apprYes': return answerApproval(true)
+    case 'apprNo': return answerApproval(false)
+    case 'reconBtn': dropConn(); setTimeout(wake, 100); return
+    case 'unpairBtn': if (confirm('تلغي ربط هالجهاز؟')) { sendHost({ k: 'unpair' }); setTimeout(() => wipeDevice(''), 250) } return
+  }
+})
+document.addEventListener('change', (e) => {
+  const t = e.target
+  if (t.id === 'fileIn' || t.id === 'camIn') { for (const f of t.files) addFile(f); t.value = ''; return }
+  if (t.id === 'kaChk') { S.keepAlive = t.checked; lsSet('trl.keepalive', S.keepAlive); applyKeepAlive(); return }
+  if (t.id === 'selModel') { S.mode = { kind: 'model', id: t.value }; lsSet('trl.mode', S.mode); renderHeader(); return }
+  if (t.id === 'selAuthor' || t.id === 'selCritic') { S.mode = { kind: 'council', author: ($('#selAuthor') || {}).value || '', critic: ($('#selCritic') || {}).value || '' }; lsSet('trl.mode', S.mode); return }
+  if (t.id === 'selProj') { S.project = t.value || null; lsSet('trl.project', S.project); return }
+})
+document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'ta') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px' } })
+document.addEventListener('keydown', (e) => { if (e.target.id === 'ta' && e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendChat() } })
+document.addEventListener('visibilitychange', () => { if (!document.hidden) wake() })
+window.addEventListener('online', wake)
+setInterval(() => { if (S.view === 'main' && S.tab === 'tasks' && S.tasks.length) renderPage() }, 1000 * 5)
+
+// ---------- share-to-app ----------
+async function handleShare(data) {
+  if (!data || (!data.text && !(data.files && data.files.length))) return
+  if (S.view !== 'main') { S.pendingShare = data; return }
+  S.tab = 'chat'; renderTabs(); renderPage()
+  const ta = $('#ta'); if (ta && data.text) { ta.value = (ta.value ? ta.value + '\n' : '') + data.text; ta.dispatchEvent(new Event('input')) }
+  for (const f of data.files || []) {
+    try { const blob = await (await fetch(Capacitor.convertFileSrc(f.path))).blob(); await addFile(new File([blob], f.name || 'file', { type: f.mime || blob.type })) } catch { toast('ما قدرت أقرا الملف المشارَك') }
+  }
+}
+
+// ---------- boot ----------
+async function boot() {
+  render()
+  await sodium.ready
+  L = lib(sodium)
+  const dev = lsGet('trl.device', null); const ppk = lsGet('trl.ppk', '')
+  let psk = ''
+  try { psk = (await AirNative.secureGet({ key: 'psk' })).value || '' } catch { /* */ }
+  if (dev && ppk && psk) { S.device = dev; S.ppk = ppk; S.psk = psk; S.host = dev.name; S.view = 'main'; curConv(); render(); connect(); startHeartbeat(); applyKeepAlive() }
+  else { S.view = 'pair'; render() }
+  startHeartbeat()
+  try {
+    if (AirNative.addListener) Promise.resolve(AirNative.addListener('shareReceived', (d) => handleShare(d))).catch(() => {})
+    const p = await AirNative.getPendingShare(); if (p && (p.text || (p.files && p.files.length))) handleShare(p)
+  } catch { /* */ }
+  try { CapApp.addListener('resume', () => wake()) } catch { /* */ }
+  if (S.pendingShare && S.view === 'main') { const d = S.pendingShare; S.pendingShare = null; handleShare(d) }
+}
+boot()
+window.__trl = { S, conn }  // handy for debugging

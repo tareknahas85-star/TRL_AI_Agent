@@ -1,0 +1,284 @@
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+import { electronAPI } from '@electron-toolkit/preload'
+
+// Custom APIs for renderer. All core logic (OpenRouter calls, skills, tools, key storage)
+// runs in the main process; the UI only talks to it through these calls.
+type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
+type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
+type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
+
+const api = {
+  chat: (userInput: string, history: { role: 'user' | 'assistant'; content: string }[] | undefined, opts: ChatOpts): Promise<ChatResult> =>
+    ipcRenderer.invoke('chat:send', userInput, history, opts),
+  retryChat: (opts: ChatOpts): Promise<ChatResult> => ipcRenderer.invoke('chat:retry', opts),
+  cancelChat: (tabId: string): Promise<boolean> => ipcRenderer.invoke('chat:cancel', tabId),
+  modelPicker: (): Promise<{ value: string; label: string; tier: string }[]> => ipcRenderer.invoke('models:picker'),
+  check: {
+    run: (kind: 'mcp' | 'tools' | 'connectors' | 'models') => ipcRenderer.invoke('check:run', kind),
+    cancel: (kind: string): Promise<boolean> => ipcRenderer.invoke('check:cancel', kind),
+    onItem: (cb: (kind: string, item: unknown) => void): (() => void) => {
+      const h = (_e: unknown, kind: string, item: unknown): void => cb(kind, item)
+      ipcRenderer.on('check:item', h)
+      return () => ipcRenderer.removeListener('check:item', h)
+    }
+  },
+  prefs: {
+    get: () => ipcRenderer.invoke('prefs:get'),
+    set: (patch: unknown) => ipcRenderer.invoke('prefs:set', patch),
+    testLocation: () => ipcRenderer.invoke('prefs:testLocation')
+  },
+  learn: {
+    get: () => ipcRenderer.invoke('learn:get'),
+    forget: (kind: string, key: string): Promise<boolean> => ipcRenderer.invoke('learn:forget', kind, key),
+    correct: (kind: string, value: string): Promise<boolean> => ipcRenderer.invoke('learn:correct', kind, value),
+    reset: (): Promise<boolean> => ipcRenderer.invoke('learn:reset'),
+    refreshSummary: (): Promise<string> => ipcRenderer.invoke('learn:refreshSummary')
+  },
+  spend: {
+    get: (): Promise<boolean> => ipcRenderer.invoke('spend:get'),
+    set: (on: boolean): Promise<boolean> => ipcRenderer.invoke('spend:set', on)
+  },
+  computer: {
+    get: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:get'),
+    set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:set', on),
+    reset: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:reset'),
+    setAuto: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }> => ipcRenderer.invoke('computer:setAuto', on),
+    setFull: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }> => ipcRenderer.invoke('computer:setFull', on)
+  },
+  onStream: (cb: (tabId: string, kind: 'chunk' | 'reset', text?: string) => void): (() => void) => {
+    const h = (_e: unknown, tabId: string, k: 'chunk' | 'reset', t?: string): void => cb(tabId, k, t)
+    ipcRenderer.on('chat:stream', h)
+    return () => ipcRenderer.removeListener('chat:stream', h)
+  },
+  status: (): Promise<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number; free: { count: number; limit: number; limited: boolean } }> =>
+    ipcRenderer.invoke('status:get'),
+  onProgress: (cb: (tabId: string, text: string) => void): (() => void) => {
+    const h = (_e: unknown, tabId: string, t: string): void => cb(tabId, t)
+    ipcRenderer.on('chat:progress', h)
+    return () => ipcRenderer.removeListener('chat:progress', h)
+  },
+  getKey: (key: string): Promise<string> => ipcRenderer.invoke('keys:get', key),
+  setKey: (key: string, value: string): Promise<boolean> =>
+    ipcRenderer.invoke('keys:set', key, value),
+  skills: {
+    list: () => ipcRenderer.invoke('skills:list'),
+    get: (name: string) => ipcRenderer.invoke('skills:get', name),
+    create: (name: string, content: string) => ipcRenderer.invoke('skills:create', name, content),
+    delete: (name: string) => ipcRenderer.invoke('skills:delete', name),
+    toggle: (name: string) => ipcRenderer.invoke('skills:toggle', name)
+  },
+  mcp: {
+    list: () => ipcRenderer.invoke('mcp:list'),
+    get: (name: string) => ipcRenderer.invoke('mcp:get', name),
+    add: (server: unknown) => ipcRenderer.invoke('mcp:add', server),
+    remove: (name: string) => ipcRenderer.invoke('mcp:remove', name),
+    test: (name: string) => ipcRenderer.invoke('mcp:test', name),
+    toggle: (name: string) => ipcRenderer.invoke('mcp:toggle', name),
+    scan: () => ipcRenderer.invoke('mcp:scan'),
+    scanPlugins: () => ipcRenderer.invoke('plugins:scan'),
+    importPlugins: (ids: string[]) => ipcRenderer.invoke('plugins:import', ids),
+    parse: (text: string) => ipcRenderer.invoke('mcp:parse', text),
+    import: (servers: unknown) => ipcRenderer.invoke('mcp:import', servers)
+  },
+  tools: {
+    list: () => ipcRenderer.invoke('tools:list'),
+    toggle: (name: string) => ipcRenderer.invoke('tools:toggle', name),
+    add: (tool: unknown) => ipcRenderer.invoke('tools:add', tool),
+    remove: (name: string) => ipcRenderer.invoke('tools:remove', name)
+  },
+  models: {
+    list: () => ipcRenderer.invoke('models:list'),
+    detectLocal: () => ipcRenderer.invoke('models:detectLocal'),
+    setPosition: (id: string, last: boolean) => ipcRenderer.invoke('models:setPosition', id, last),
+    setKey: (id: string, key: string) => ipcRenderer.invoke('models:setKey', id, key),
+    add: (m: unknown) => ipcRenderer.invoke('models:add', m),
+    remove: (id: string) => ipcRenderer.invoke('models:remove', id),
+    toggle: (id: string) => ipcRenderer.invoke('models:toggle', id),
+    test: (id: string) => ipcRenderer.invoke('models:test', id),
+    fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
+    importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
+  },
+  providers: {
+    check: (p: 'openai' | 'anthropic' | 'gemini' | 'openrouter'): Promise<{ ok: boolean; message: string; models: string[] }> => ipcRenderer.invoke('provider:check', p)
+  },
+  hf: {
+    models: (): Promise<{ ok: boolean; error?: string; total: number; models: { id: string; providers: string[]; recommended: boolean }[] }> => ipcRenderer.invoke('hf:models'),
+    getModel: (): Promise<string> => ipcRenderer.invoke('hf:getModel'),
+    setModel: (id: string): Promise<boolean> => ipcRenderer.invoke('hf:setModel', id),
+    testModel: (id: string): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('hf:testModel', id)
+  },
+  freeProbe: {
+      list: (): Promise<{ ok: boolean; error?: string; models: { id: string; ctx: number; created: string }[] }> => ipcRenderer.invoke('freeprobe:list'),
+      results: (): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string }[]> => ipcRenderer.invoke('freeprobe:results'),
+      test: (id: string): Promise<{ id: string; ok: boolean; score: number; secs: number; tool: boolean; arabic: boolean | null; note: string; at: string } | null> => ipcRenderer.invoke('freeprobe:test', id),
+      status: (): Promise<{ pinned: string | null; since: string | null; suggestion: { model: string; current: string; newScore: number; oldScore: number; at: string } | null; lastCheck: number; current: string }> => ipcRenderer.invoke('freeprobe:status'),
+      evaluate: (): Promise<unknown> => ipcRenderer.invoke('freeprobe:evaluate'),
+      apply: (id: string): Promise<boolean> => ipcRenderer.invoke('freeprobe:apply', id),
+      dismiss: (): Promise<boolean> => ipcRenderer.invoke('freeprobe:dismiss'),
+      unpin: (): Promise<boolean> => ipcRenderer.invoke('freeprobe:unpin'),
+      checkNow: (): Promise<boolean> => ipcRenderer.invoke('freeprobe:checkNow')
+    },
+      connectors: {
+    list: () => ipcRenderer.invoke('connectors:list'),
+    active: (load?: boolean) => ipcRenderer.invoke('connectors:active', load),
+    connect: (id: string) => ipcRenderer.invoke('connectors:connect', id),
+    setup: (id: string, values: string[]) => ipcRenderer.invoke('connectors:setup', id, values),
+    test: (id: string) => ipcRenderer.invoke('connectors:test', id),
+    disconnect: (id: string) => ipcRenderer.invoke('connectors:disconnect', id),
+    onCode: (cb: (id: string, code: string, url: string) => void) => {
+      const h = (_e: unknown, id: string, code: string, url: string): void => cb(id, code, url)
+      ipcRenderer.on('connectors:code', h)
+      return () => ipcRenderer.removeListener('connectors:code', h)
+    }
+  },
+  app: {
+    about: () => ipcRenderer.invoke('app:about'),
+    show: (): Promise<void> => ipcRenderer.invoke('app:show'),
+    flash: (): Promise<void> => ipcRenderer.invoke('app:flash')
+  },
+  attach: {
+    pick: (projectId?: string | null) => ipcRenderer.invoke('attach:pick', projectId ?? null),
+    prepare: (paths: string[], projectId?: string | null) => ipcRenderer.invoke('attach:prepare', paths, projectId ?? null),
+    savePasted: (name: string, data: ArrayBuffer, projectId?: string | null) => ipcRenderer.invoke('attach:savePasted', name, data, projectId ?? null),
+    pathFor: (file: File): string => {
+      try {
+        return webUtils.getPathForFile(file)
+      } catch {
+        return ''
+      }
+    }
+  },
+  accounts: {
+    get: () => ipcRenderer.invoke('accounts:get'),
+    setEmail: (v: string) => ipcRenderer.invoke('accounts:setEmail', v),
+    setWrite: (server: string, on: boolean) => ipcRenderer.invoke('accounts:setWrite', server, on),
+    google: (action: 'connect' | 'test') => ipcRenderer.invoke('accounts:google', action),
+    googleDisconnect: () => ipcRenderer.invoke('accounts:googleDisconnect'),
+    googleCreds: () => ipcRenderer.invoke('accounts:googleCreds'),
+    googleSetup: (idOrJson: string, secret: string) => ipcRenderer.invoke('accounts:googleSetup', idOrJson, secret)
+  },
+  masterMemory: {
+    get: () => ipcRenderer.invoke('mm:get'),
+    update: (id: string, patch: unknown) => ipcRenderer.invoke('mm:update', id, patch),
+    clearGeneral: () => ipcRenderer.invoke('mm:clearGeneral')
+  },
+  memory: {
+    list: () => ipcRenderer.invoke('memory:list'),
+    save: (e: { id?: string; title: string; content: string; enabled?: boolean }) => ipcRenderer.invoke('memory:save', e),
+    delete: (id: string) => ipcRenderer.invoke('memory:delete', id),
+    toggle: (id: string) => ipcRenderer.invoke('memory:toggle', id),
+    import: (entries: { title: string; content: string }[], source?: string) =>
+      ipcRenderer.invoke('memory:import', entries, source),
+    preview: () => ipcRenderer.invoke('memory:preview')
+  },
+  catalog: {
+    list: () => ipcRenderer.invoke('catalog:list'),
+    test: () => ipcRenderer.invoke('catalog:test'),
+    fetch: () => ipcRenderer.invoke('catalog:fetch'),
+    setEnabled: (ids: string[], on: boolean) => ipcRenderer.invoke('catalog:setEnabled', ids, on),
+    move: (id: string, dir: 'up' | 'down') => ipcRenderer.invoke('catalog:move', id, dir),
+    reset: (): Promise<number> => ipcRenderer.invoke('catalog:reset')
+  },
+  gemini: {
+    list: (): Promise<{ ok: boolean; error?: string; models: { id: string; added: boolean }[] }> => ipcRenderer.invoke('gemini:list'),
+    import: (ids: string[]): Promise<number> => ipcRenderer.invoke('gemini:import', ids)
+  },
+  hosts: {
+    get: (): Promise<Record<string, { value: string; default: string; custom: boolean }>> => ipcRenderer.invoke('hosts:get'),
+    set: (id: string, url: string): Promise<{ ok: boolean; error?: string; value: string }> => ipcRenderer.invoke('hosts:set', id, url)
+  },
+  schedules: {
+    list: () => ipcRenderer.invoke('schedules:list'),
+    add: (t: unknown) => ipcRenderer.invoke('schedules:add', t),
+    update: (id: string, p: unknown) => ipcRenderer.invoke('schedules:update', id, p),
+    remove: (id: string) => ipcRenderer.invoke('schedules:remove', id),
+    run: (id: string) => ipcRenderer.invoke('schedules:run', id)
+  },
+  claudeAcct: {
+    get: () => ipcRenderer.invoke('claudeAcct:get'),
+    set: (p: { active?: string; auto?: boolean }) => ipcRenderer.invoke('claudeAcct:set', p),
+    login: () => ipcRenderer.invoke('claudeAcct:login')
+  },
+  effort: {
+    get: () => ipcRenderer.invoke('effort:get'),
+    set: (v: string) => ipcRenderer.invoke('effort:set', v)
+  },
+  projects: {
+    setConfidential: (id: string, on: boolean) => ipcRenderer.invoke('projects:setConfidential', id, on),
+    list: () => ipcRenderer.invoke('projects:list'),
+    add: (dir: string) => ipcRenderer.invoke('projects:add', dir),
+    pick: () => ipcRenderer.invoke('projects:pick'),
+    remove: (id: string) => ipcRenderer.invoke('projects:remove', id),
+    setActive: (id: string | null) => ipcRenderer.invoke('projects:setActive', id)
+  },
+  files: {
+    exists: (paths: string[]): Promise<boolean[]> => ipcRenderer.invoke('file:exists', paths),
+    preview: (p: string) => ipcRenderer.invoke('file:preview', p),
+    open: (p: string): Promise<{ ok: boolean; error?: string }> => ipcRenderer.invoke('file:open', p),
+    reveal: (p: string): Promise<boolean> => ipcRenderer.invoke('file:reveal', p)
+  },
+  report: {
+    tasks: () => ipcRenderer.invoke('report:tasks'),
+    export: (csv: string) => ipcRenderer.invoke('report:export', csv),
+    budget: (v?: number) => ipcRenderer.invoke('report:budget', v)
+  },
+  update: {
+    get: () => ipcRenderer.invoke('update:get'),
+    set: (enabled: boolean) => ipcRenderer.invoke('update:set', enabled),
+    check: () => ipcRenderer.invoke('update:check'),
+    open: (url: string) => ipcRenderer.invoke('update:open', url)
+  },
+  transfer: {
+    export: (sel: unknown, password: string) => ipcRenderer.invoke('transfer:export', sel, password),
+    import: (password: string) => ipcRenderer.invoke('transfer:import', password)
+  },
+  telegram: {
+    get: () => ipcRenderer.invoke('telegram:get'),
+    set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string; inbound?: boolean }) => ipcRenderer.invoke('telegram:set', p),
+    clearToken: () => ipcRenderer.invoke('telegram:clearToken'),
+    detect: () => ipcRenderer.invoke('telegram:detect'),
+    test: () => ipcRenderer.invoke('telegram:test')
+  },
+  remote: {
+    get: () => ipcRenderer.invoke('remote:get'),
+    set: (p: unknown) => ipcRenderer.invoke('remote:set', p),
+    pairStart: () => ipcRenderer.invoke('remote:pairStart'),
+    pairAnswer: (ok: boolean) => ipcRenderer.invoke('remote:pairAnswer', ok),
+    pairCancel: () => ipcRenderer.invoke('remote:pairCancel'),
+    revoke: (id: string) => ipcRenderer.invoke('remote:revoke', id),
+    benchApprove: (title: string, detail: string) => ipcRenderer.invoke('remote:benchApprove', title, detail),
+    onEvent: (cb: (e: unknown) => void) => {
+      const h = (_e: unknown, ev: unknown): void => cb(ev)
+      ipcRenderer.on('remote:event', h)
+      return () => ipcRenderer.removeListener('remote:event', h)
+    }
+  },
+  conversations: {
+    search: (q: string): Promise<{ id: string; snippet: string }[]> => ipcRenderer.invoke('conv:search', q),
+    exportMd: (id: string): Promise<{ ok: boolean; error?: string; path?: string }> => ipcRenderer.invoke('conv:export', id),
+    list: () => ipcRenderer.invoke('conv:list'),
+    get: (id: string) => ipcRenderer.invoke('conv:get', id),
+    save: (conv: unknown) => ipcRenderer.invoke('conv:save', conv),
+    delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
+    pin: (id: string) => ipcRenderer.invoke('conv:pin', id),
+    setProject: (id: string, projectId: string | null): Promise<boolean> => ipcRenderer.invoke('conv:setProject', id, projectId),
+    rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title)
+  }
+}
+
+// Use `contextBridge` APIs to expose Electron APIs to
+// renderer only if context isolation is enabled, otherwise
+// just add to the DOM global.
+if (process.contextIsolated) {
+  try {
+    contextBridge.exposeInMainWorld('electron', electronAPI)
+    contextBridge.exposeInMainWorld('api', api)
+  } catch (error) {
+    console.error(error)
+  }
+} else {
+  // @ts-ignore (define in dts)
+  window.electron = electronAPI
+  // @ts-ignore (define in dts)
+  window.api = api
+}

@@ -1,0 +1,12 @@
+{
+  "appId": "app.trl.agent",
+  "appName": "TRL Agent",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "http",
+    "cleartext": true
+  },
+  "android": {
+    "allowMixedContent": true
+  }
+}
