@@ -1,4 +1,4 @@
-import { ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { analyzeRequest, warmLocalMaster, type Analysis } from '../core/master'
 import { ensureOllama } from '../core/ollama'
 import { calculateSavedCost } from '../core/fallback'
@@ -60,6 +60,7 @@ function mirrorPhoneChat(tabId: string, projectId: string | null, text: string, 
       ]
     })
     phoneConv.set(tabId, saved.id)
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('conv:changed')
   } catch {
     /* mirroring is best effort */
   }

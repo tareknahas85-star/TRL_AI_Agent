@@ -209,6 +209,7 @@ function Shell() {
   const shownConvs = hits ? convs.filter((c) => c.id in hits) : convs
 
   const loadConvs = useCallback(() => window.api.conversations.list().then(setConvs), [])
+  useEffect(() => window.api.conversations.onChanged(() => void loadConvs()), [loadConvs])
   const loadProjects = useCallback(async () => {
     const d = await window.api.projects.list()
     setProjects(d.projects)

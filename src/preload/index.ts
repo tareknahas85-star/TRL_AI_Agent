@@ -262,7 +262,12 @@ const api = {
     delete: (id: string) => ipcRenderer.invoke('conv:delete', id),
     pin: (id: string) => ipcRenderer.invoke('conv:pin', id),
     setProject: (id: string, projectId: string | null): Promise<boolean> => ipcRenderer.invoke('conv:setProject', id, projectId),
-    rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title)
+    rename: (id: string, title: string) => ipcRenderer.invoke('conv:rename', id, title),
+    onChanged: (cb: () => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('conv:changed', h)
+      return () => ipcRenderer.removeListener('conv:changed', h)
+    }
   }
 }
 

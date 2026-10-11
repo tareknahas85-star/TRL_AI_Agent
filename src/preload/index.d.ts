@@ -351,6 +351,7 @@ declare global {
         pin: (id: string) => Promise<boolean | null>
         setProject: (id: string, projectId: string | null) => Promise<boolean>
         rename: (id: string, title: string) => Promise<boolean>
+        onChanged: (cb: () => void) => () => void
       }
     }
   }
