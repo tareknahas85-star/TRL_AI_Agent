@@ -114,6 +114,7 @@ declare global {
         get: () => Promise<PrefsInfo>
         set: (patch: Partial<PrefsInfo>) => Promise<PrefsInfo>
         testLocation: () => Promise<{ ok: boolean; message: string; source?: string; accuracyM?: number | null; address?: string; note?: string }>
+        testVirusTotal: () => Promise<{ ok: boolean; message: string }>
       }
       learn: {
         get: () => Promise<LearnViewInfo>

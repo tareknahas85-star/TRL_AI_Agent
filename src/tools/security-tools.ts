@@ -72,6 +72,24 @@ export async function vtLookup(hash: string, key: string): Promise<string> {
   }
 }
 
+// Used by the settings button: looks up the standard EICAR test file (VirusTotal always knows it) to prove the saved key works. Nothing is uploaded.
+const EICAR_SHA256 = '275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f'
+export async function testVirusTotalKey(): Promise<{ ok: boolean; message: string }> {
+  const key = getApiKey('VIRUSTOTAL_API_KEY').trim()
+  if (!key) return { ok: false, message: 'ما في مفتاح محفوظ. الصقو بالحقل أول.' }
+  try {
+    const r = await fetch('https://www.virustotal.com/api/v3/files/' + EICAR_SHA256, { headers: { 'x-apikey': key, 'User-Agent': UA }, signal: AbortSignal.timeout(15000) })
+    if (r.status === 401 || r.status === 403) return { ok: false, message: 'VirusTotal رفض المفتاح. تأكد إنو منسوخ كامل من صفحة حسابك (API key).' }
+    if (r.status === 429) return { ok: false, message: 'وصلت حد الاستعمال المجاني (4 بالدقيقة أو 500 باليوم). جرّب بعد دقيقة.' }
+    if (!r.ok) return { ok: false, message: `VirusTotal رد بـ HTTP ${r.status}` }
+    const j = (await r.json()) as { data?: { attributes?: { last_analysis_stats?: Record<string, number> } } }
+    const m = j.data?.attributes?.last_analysis_stats?.malicious ?? 0
+    return { ok: true, message: `المفتاح شغّال. (فحصت ملف الاختبار القياسي EICAR وطلع عليه ${m} محرّك، وهيك لازم يكون.)` }
+  } catch (e) {
+    return { ok: false, message: 'ما قدرت أوصل لـ VirusTotal: ' + (e instanceof Error ? e.message : String(e)) }
+  }
+}
+
 export function addSecurityTools(defs: OpenAI.Chat.ChatCompletionTool[], handlers: Handlers): void {
   defs.push({
     type: 'function',

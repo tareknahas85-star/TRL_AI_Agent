@@ -5,7 +5,7 @@ import { ghostBtn, inputCls } from './components/ui'
 export type KeyName = 'OPENROUTER_API_KEY' | 'GEMINI_API_KEY' | 'OPENAI_API_KEY' | 'ANTHROPIC_API_KEY' | 'HUGGINGFACE_API_KEY' | 'VIRUSTOTAL_API_KEY'
 
 // One API key: hidden by default (eye to reveal), saved as you type (encrypted on this device), optional "verify" button.
-export function KeyField({ name, verify, onChange }: { name: KeyName; verify?: () => Promise<{ ok: boolean; message: string; models?: string[] }>; onChange?: (has: boolean) => void }) {
+export function KeyField({ name, verify, onChange, verifyLabel }: { name: KeyName; verify?: () => Promise<{ ok: boolean; message: string; models?: string[] }>; onChange?: (has: boolean) => void; verifyLabel?: string }) {
   const [val, setVal] = useState('')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -40,7 +40,7 @@ export function KeyField({ name, verify, onChange }: { name: KeyName; verify?: (
         </div>
         {verify && (
           <button className={ghostBtn + ' border border-outline'} disabled={busy || !val.trim()} onClick={() => void check()}>
-            {busy ? <Loader2 size={14} className="animate-spin" /> : 'اختبار وكشف الموديلات'}
+            {busy ? <Loader2 size={14} className="animate-spin" /> : (verifyLabel ?? 'اختبار وكشف الموديلات')}
           </button>
         )}
       </div>

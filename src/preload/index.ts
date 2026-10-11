@@ -25,7 +25,8 @@ const api = {
   prefs: {
     get: () => ipcRenderer.invoke('prefs:get'),
     set: (patch: unknown) => ipcRenderer.invoke('prefs:set', patch),
-    testLocation: () => ipcRenderer.invoke('prefs:testLocation')
+    testLocation: () => ipcRenderer.invoke('prefs:testLocation'),
+    testVirusTotal: (): Promise<{ ok: boolean; message: string }> => ipcRenderer.invoke('prefs:testVirusTotal')
   },
   learn: {
     get: () => ipcRenderer.invoke('learn:get'),

@@ -32,7 +32,7 @@ export function SecurityPanel() {
       </div>
       <div>
         <div className="mb-1 text-xs text-muted">مفتاح VirusTotal (مجاني من حسابك: 4 فحوصات بالدقيقة و500 باليوم). فحص كلمات السر ما بيحتاج مفتاح.</div>
-        <KeyField name="VIRUSTOTAL_API_KEY" />
+        <KeyField name="VIRUSTOTAL_API_KEY" verifyLabel="جرّب المفتاح" verify={() => window.api.prefs.testVirusTotal()} />
       </div>
     </section>
   )
