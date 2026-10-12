@@ -1,21 +1,101 @@
-MIT License
+TRL_AI_Agent Source-Available License, Version 1.0
 
-Copyright (c) 2026 Tarek Nahhas
+Copyright (c) 2026 Tarek Nahhas ("Licensor")
+Contact: tareknahas@live.com
+Official repository: https://github.com/tareknahas85-star/TRL_AI_Agent
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This is a source-available license. It is NOT an open source license.
+If a translation of this license differs from this English text,
+the English text prevails.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+1. DEFINITIONS
 
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+"Software" means the TRL_AI_Agent source code, binaries, documentation
+and related files published by the Licensor in the Official Repository.
+
+"Non-Commercial Use" means use for personal, educational, research,
+hobby or non-profit purposes, where no money or other commercial
+benefit is obtained from the Software or from its use.
+
+"Commercial Use" means any use that is primarily intended for, or
+results in, commercial advantage or monetary compensation. This
+includes, without limitation: selling, renting or sublicensing the
+Software; including it in a paid product or service; offering it as a
+hosted or managed service; or using it as part of the operations of a
+for-profit business.
+
+2. GRANT
+
+Subject to this license, the Licensor grants you a free, worldwide,
+non-exclusive, non-transferable license to:
+
+  a) download, install and run the Software for Non-Commercial Use;
+  b) read and study the source code;
+  c) configure the Software through its own settings, including
+     creating your own agents, prompts and configuration data; and
+  d) submit suggestions, bug reports and code contributions to the
+     Official Repository (see Section 5).
+
+3. RESTRICTIONS
+
+Unless you have the Licensor's prior written permission, you may NOT:
+
+  a) use the Software for Commercial Use;
+  b) modify, adapt, translate or create derivative works of the
+     Software, except for contributions under Section 5;
+  c) copy, publish, redistribute, mirror, rehost or otherwise make the
+     Software available to others, in source or binary form, anywhere
+     other than the Official Repository;
+  d) sell, rent, lease or sublicense the Software;
+  e) remove or alter any copyright, license or attribution notice; or
+  f) claim the Software, or any part of it, as your own work.
+
+Nothing in this license limits the rights that GitHub's Terms of
+Service give to users of a public repository on GitHub (for example,
+viewing and forking within GitHub).
+
+4. THIRD-PARTY COMPONENTS AND SERVICES
+
+The Software includes or depends on third-party components that are
+licensed under their own terms, listed in THIRD_PARTY_NOTICES.txt. This
+license does not apply to them.
+
+The Software can connect to third-party services (for example
+Telegram, Cloudflare, GitHub, Google and OpenRouter). You are solely
+responsible for your own accounts, keys and credentials for those
+services, and for complying with their terms.
+
+5. CONTRIBUTIONS
+
+If you submit a contribution to the Official Repository, you confirm
+that you have the right to do so, and you grant the Licensor a
+perpetual, worldwide, free, non-exclusive, irrevocable license to use,
+modify and distribute it as part of the Software, under this license
+or any other terms the Licensor chooses.
+
+6. COMMERCIAL LICENSING
+
+If you want to use the Software commercially, or want any permission
+this license does not give, contact the Licensor. Permission is only
+valid if given in writing by the Licensor.
+
+7. TERMINATION
+
+This license ends automatically if you breach it. When it ends, you
+must stop using the Software and delete all copies in your possession.
+
+8. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+THE SOFTWARE CAN RUN AUTOMATED AGENTS THAT EXECUTE CODE AND ACT ON YOUR
+BEHALF; YOU USE IT AT YOUR OWN RISK AND ARE RESPONSIBLE FOR REVIEWING
+AND APPROVING ITS ACTIONS.
+
+9. LIMITATION OF LIABILITY
+
+TO THE MAXIMUM EXTENT PERMITTED BY LAW, THE LICENSOR WILL NOT BE
+LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN CONTRACT,
+TORT OR OTHERWISE, ARISING FROM OR IN CONNECTION WITH THE SOFTWARE OR
+ITS USE.

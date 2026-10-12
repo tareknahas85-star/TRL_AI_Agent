@@ -249,6 +249,14 @@ installers.
 
 ---
 
+### License
+
+TRL_AI_Agent is free for personal, educational, research and non-profit use.
+It is **source-available, not open source**. You may not use it commercially,
+modify it, or republish it anywhere except this repository. Want to use it in
+a business? Write to tareknahas@live.com. Full terms are in [LICENSE](LICENSE),
+and the licenses of the libraries it uses are in
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
 ## بالعربي
 
 وكيل ذكاء اصطناعي لسطح المكتب، يعمل على ويندوز ولينكس. تكتب طلبًا واحدًا، فيقرؤه
@@ -469,3 +477,11 @@ npm run build:linux  # بناء AppImage و.deb على أوبونتو / ديبي
 
 Electron وReact وTypeScript وelectron-vite وTailwind CSS وelectron-store وVercel AI SDK، وبروتوكول
 Model Context Protocol (MCP)، وelectron-builder لمثبّتات ويندوز ولينكس.
+
+### الترخيص
+
+البرنامج مجاني للاستعمال الشخصي والتعليمي والبحثي وغير الربحي. هو **مصدره مفتوح
+للقراءة بس، مو Open Source**. ممنوع تبيعو أو تستعملو تجارياً أو تعدّل عليه أو
+تنشرو بأي مكان غير هالريبو. بدك تستعملو بشغل تجاري؟ احكيني على tareknahas@live.com.
+التفاصيل الكاملة بملف [LICENSE](LICENSE)، وتراخيص المكتبات يلي بيستعملها بملف
+[THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).

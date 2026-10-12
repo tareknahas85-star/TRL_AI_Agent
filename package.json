@@ -3,9 +3,9 @@
   "version": "5.9.8",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
-  "author": "example.com",
-  "license": "MIT",
-  "homepage": "https://electron-vite.org",
+  "author": "Tarek Nahhas <tareknahas@live.com>",
+  "license": "SEE LICENSE IN LICENSE",
+  "homepage": "https://github.com/tareknahas85-star/TRL_AI_Agent",
   "scripts": {
     "format": "prettier --write .",
     "lint": "eslint --cache .",
