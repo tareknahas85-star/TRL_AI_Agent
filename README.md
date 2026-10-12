@@ -260,7 +260,7 @@ and the licenses of the libraries it uses are in
 
 ### Contributors
 
-- Tarek Nahhas - author and maintainer
+- Tarek Nahas - author and maintainer
 - AI - co-author
 
 

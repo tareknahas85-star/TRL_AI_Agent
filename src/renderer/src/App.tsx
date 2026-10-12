@@ -24,7 +24,7 @@ import { ThemeProvider, useTheme } from '../../ui/ThemeContext'
 import { Hub } from '../../ui/components/ui'
 import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '../../preload/index.d'
 
-const OWNER = { name: 'Tarek Nahhas', email: 'tareknahas@live.com', github: 'https://github.com/tareknahas85-star' }
+const OWNER = { name: 'Tarek Nahas', email: 'tareknahas@live.com', github: 'https://github.com/tareknahas85-star' }
 
 function AboutBadge({ onSetup }: { onSetup: () => void }) {
   const [open, setOpen] = useState(false)

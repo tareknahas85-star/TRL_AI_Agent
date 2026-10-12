@@ -3,7 +3,7 @@
   "version": "5.10.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
-  "author": "Tarek Nahhas <tareknahas@live.com>",
+  "author": "Tarek Nahas <tareknahas@live.com>",
   "license": "SEE LICENSE IN LICENSE",
   "homepage": "https://github.com/tareknahas85-star/TRL_AI_Agent",
   "scripts": {
