@@ -732,7 +732,7 @@ export function ChatWindow({
         <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
           <span>الموديل:</span>
           <select
-            className={`rounded-full border border-outline bg-surface px-2 py-0.5 ${mode.kind === 'free' ? '' : 'text-warning'}`}
+            className={`rounded-full border border-outline bg-surface px-2 py-0.5 [&_option]:text-fg [&_optgroup]:text-fg ${mode.kind === 'free' ? '' : 'text-warning'}`}
             value={mode.kind === 'model' ? mode.id : mode.kind === 'council' && (mode.author || mode.critic) ? 'council-manual' : mode.kind}
             onChange={(e) => {
               const v = e.target.value
@@ -752,6 +752,18 @@ export function ChatWindow({
               ))}
             </optgroup>
           </select>
+          <input
+            list="model-name-list"
+            className="w-44 rounded-full border border-outline bg-surface px-2 py-0.5 text-fg placeholder:text-muted"
+            placeholder="أو اكتب اسم موديل…"
+            onChange={(e) => {
+              const hit = picker.find((p) => p.value === e.target.value || p.label === e.target.value)
+              if (hit) onModeChange({ kind: 'model', id: hit.value })
+            }}
+          />
+          <datalist id="model-name-list">
+            {picker.map((p) => (<option key={p.value} value={p.label} />))}
+          </datalist>
           <span>التفكير:</span>
           <select
             className="rounded-full border border-outline bg-surface px-2 py-0.5"
