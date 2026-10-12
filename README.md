@@ -1,6 +1,6 @@
 # TRL_AI_Agent (وكيل TRL الذكي)
 
-**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.5-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.5-windows-setup.exe)**
+**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.7-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.7-windows-setup.exe)**
 
 **[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.5-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.9.5-android.apk)**
 

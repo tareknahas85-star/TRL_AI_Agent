@@ -112,6 +112,17 @@ export function listConversations(): ConversationSummary[] {
 export const getConversation = (id: string): Conversation | null =>
   readConvs().find((c) => c.id === id) ?? null
 
+/** عنوان قصير ومفهوم من أول رسالة: أول جملة، بدون كلمات المجاملة، وبيقص عند حدود كلمة. */
+export function smartTitle(text: string): string {
+  let s = String(text ?? '').replace(/```[\s\S]*?```/g, ' ').replace(/https?:\/\/\S+/g, ' ').trim()
+  s = s.split(/[\n.؟?!]/).map((x) => x.trim()).find((x) => x.length > 2) ?? s
+  s = s.replace(/^(?:(?:لو سمحت|من فضلك|ممكن|بدي|بدّي|يا|هاي|هلأ|please|can you|could you|i want to|i need to)\s+)+/i, '').replace(/\s+/g, ' ').trim()
+  if (!s) return 'محادثة جديدة'
+  if (s.length <= 44) return s
+  const cut = s.slice(0, 44)
+  const sp = cut.lastIndexOf(' ')
+  return (sp > 20 ? cut.slice(0, sp) : cut).trim() + '…'
+}
 export function saveConversation(input: {
   id?: string
   messages: StoredMessage[]
@@ -127,7 +138,7 @@ export function saveConversation(input: {
     const first = msgs.find((m) => m.role === 'user')?.content ?? 'محادثة جديدة'
     conv = {
       id: newId(),
-      title: first.replace(/\s+/g, ' ').slice(0, 50),
+      title: smartTitle(first),
       projectId: input.projectId ?? null,
       pinned: false,
       createdAt: now,

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { UsagePanel } from './UsagePanel'
+import { askConfirm } from './components/confirm'
 import { Loader2, Plug, Plus, Trash2 } from 'lucide-react'
 import type { CustomModelInfo, Tier } from '../preload/index.d'
 import { KeyField, type KeyName } from './KeyField'
@@ -168,7 +170,7 @@ export function ModelsPage() {
                     className={ghostBtn + ' text-danger'}
                     aria-label={`حذف ${m.name}`}
                     onClick={async () => {
-                      if (confirm(`بدك تحذف الموديل ${m.name}؟`)) {
+                      if (await askConfirm(`بدك تحذف الموديل ${m.name}؟`)) {
                         await window.api.models.remove(m.id)
                         load()
                       }
@@ -189,6 +191,7 @@ export function ModelsPage() {
 
   return (
     <PageShell title="الموديلات" subtitle="اختار المزوّد من القائمة: المفتاح، الموديلات، والتجربة بمكان واحد." action={<CheckButton c={chk} label="فحص المفاتيح والموديلات" />}>
+      <UsagePanel />
       <CheckPanel c={chk} />
       <div className="flex items-start gap-5">
         <aside className="w-56 shrink-0 space-y-1">

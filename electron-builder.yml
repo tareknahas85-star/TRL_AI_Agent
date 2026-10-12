@@ -28,9 +28,9 @@ win:
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: ${productName}
-  uninstallDisplayName: ${productName}
+  artifactName: TRL_AI_Agent-${version}-setup.${ext}
+  shortcutName: TRL_AI_Agent
+  uninstallDisplayName: TRL_AI_Agent
   createDesktopShortcut: always
 mac:
   entitlementsInherit: build/entitlements.mac.plist

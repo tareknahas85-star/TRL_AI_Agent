@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { askConfirm } from './components/confirm'
 import { Loader2, Plug, PlugZap, Plus, RefreshCw, Settings2 } from 'lucide-react'
 import { CheckButton, CheckPanel, useFullCheck } from './FullCheck'
 import { INTEREST_CATS, InterestsModal } from './InterestsModal'
@@ -133,7 +134,7 @@ function GoogleCard() {
   }
 
   const disconnect = async (): Promise<void> => {
-    if (!confirm('فصل حساب Google؟ بتحتاج تسجل الدخول من جديد لتربطه مرة تانية.')) return
+    if (!await askConfirm('فصل حساب Google؟ بتحتاج تسجل الدخول من جديد لتربطه مرة تانية.')) return
     setBusy('disconnect')
     stopPoll()
     await window.api.accounts.googleDisconnect()
@@ -221,7 +222,7 @@ function GoogleCard() {
             label="السماح بالكتابة: إرسال إيميل، إنشاء مواعيد ومهام، تعديل ملفات… (بيطلب موافقتك قبل كل إجراء)"
             onChange={async () => {
               const next = !write
-              if (next && !confirm('تفعيل الكتابة بيخلي الموديل يقترح إجراءات تغيّر بحسابك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
+              if (next && !await askConfirm('تفعيل الكتابة بيخلي الموديل يقترح إجراءات تغيّر بحسابك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
               const list = await window.api.accounts.setWrite(GOOGLE, next)
               setWrite(list.includes(GOOGLE))
             }}
@@ -238,9 +239,13 @@ type Def = { id: string; title: string; subtitle: string; group: 'accounts' | 'd
 
 const CAT_LABEL: Record<string, string> = { office: 'شغل ومكتب', dev: 'تطوير', cloud: 'سحابة وبنية تحتية', media: 'تصميم ووسائط', research: 'بحث ومعلومات', local: 'أدوات الجهاز' }
 
-function ServiceCard({ def, suggested = false }: { def: Def; suggested?: boolean }) {
+function ServiceCard({ def, suggested = false, onState }: { def: Def; suggested?: boolean; onState?: (id: string, connected: boolean) => void }) {
   const id = def.id
   const [connected, setConnected] = useState(def.connected)
+  useEffect(() => {
+    onState?.(id, connected)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, connected])
   const [write, setWrite] = useState(def.write)
   const [busy, setBusy] = useState<'connect' | 'test' | 'disconnect' | null>(null)
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null)
@@ -266,7 +271,7 @@ function ServiceCard({ def, suggested = false }: { def: Def; suggested?: boolean
   )
 
   const run = async (kind: 'connect' | 'test' | 'disconnect'): Promise<void> => {
-    if (kind === 'disconnect' && !confirm('فصل ' + def.title + '؟')) return
+    if (kind === 'disconnect' && !await askConfirm('فصل ' + def.title + '؟')) return
     setBusy(kind)
     setMsg(null)
     setCode('')
@@ -340,7 +345,7 @@ function ServiceCard({ def, suggested = false }: { def: Def; suggested?: boolean
           label="السماح بالكتابة (بيطلب موافقتك قبل كل إجراء)"
           onChange={async () => {
             const next = !write
-            if (next && !confirm('تفعيل الكتابة بيخلي الموديل يقترح إجراءات تغيّر ببياناتك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
+            if (next && !await askConfirm('تفعيل الكتابة بيخلي الموديل يقترح إجراءات تغيّر ببياناتك (دايماً بعد موافقتك بنافذة). تكمل؟')) return
             const list = await window.api.accounts.setWrite(id, next)
             setWrite(list.includes(id))
           }}
@@ -407,6 +412,8 @@ export function AccountsPanel() {
   const [q, setQ] = useState('')
   const [adding, setAdding] = useState(false)
   const [cat, setCat] = useState('all')
+  const [live, setLive] = useState<Record<string, boolean>>({})
+  const onState = useCallback((id: string, c: boolean): void => setLive((p) => (p[id] === c ? p : { ...p, [id]: c })), [])
   const [interests, setInterests] = useState<string[]>([])
   const [editInterests, setEditInterests] = useState(false)
   const chk = useFullCheck('connectors')
@@ -439,6 +446,19 @@ export function AccountsPanel() {
       <p className="mb-3 text-xs text-muted">
         دوس «اتصل» على أي خدمة، سجّل الدخول بالمتصفح، وخلص. التطبيق ما بيشوف كلمة السر، وأي إجراء بيغيّر ببياناتك بيطلب موافقتك أول.
       </p>
+      {defs && (() => {
+        const total = defs.length
+        const on = defs.filter((d) => (live[d.id] ?? d.connected)).length
+        return (
+          <div className="mb-3 flex items-center gap-3 rounded-card border border-outline bg-surface2 px-3 py-2 text-xs">
+            <span className="font-medium">{on} من {total} موصّل متصل</span>
+            <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-outline">
+              <span className="block h-full rounded-full bg-success" style={{ width: `%` }} />
+            </span>
+            <span className="text-muted">زر «فحص كامل» فوق بيختبرهم كلهم مرة وحدة</span>
+          </div>
+        )
+      })()}
       <input className={inputCls + ' mb-3'} placeholder="دوّر على موصّل…" value={q} onChange={(e) => setQ(e.target.value)} />
       <div className="mb-4 flex flex-wrap items-center gap-2">
         {[['all', 'الكل'], ...(interests.length ? [['suggested', '⭐ مقترحة لك']] : []), ...Object.entries(CAT_LABEL)].map(([id, label]) => (
@@ -456,7 +476,7 @@ export function AccountsPanel() {
           <div className="mb-5 grid gap-3">
             {showGoogle && <GoogleCard />}
             {accounts.map((d) => (
-              <ServiceCard key={d.id} def={d} suggested={sug.has(d.cat)} />
+              <ServiceCard key={d.id} def={d} suggested={sug.has(d.cat)} onState={onState} />
             ))}
           </div>
         </>
@@ -466,7 +486,7 @@ export function AccountsPanel() {
           <h4 className="mb-2 text-sm font-semibold text-muted">أدوات الجهاز</h4>
           <div className="grid gap-3">
             {device.map((d) => (
-              <ServiceCard key={d.id} def={d} suggested={sug.has(d.cat)} />
+              <ServiceCard key={d.id} def={d} suggested={sug.has(d.cat)} onState={onState} />
             ))}
           </div>
         </>

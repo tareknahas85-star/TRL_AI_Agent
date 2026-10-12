@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { askConfirm } from './components/confirm'
 import { RefreshCw, RotateCcw, X } from 'lucide-react'
 import type { LearnViewInfo, PrefsInfo } from '../preload/index.d'
 import { Toggle, cardCls, ghostBtn } from './components/ui'
@@ -221,7 +222,7 @@ export function LearningPanel() {
           <button
             className={ghostBtn + ' flex items-center gap-1 border border-outline text-danger'}
             onClick={async () => {
-              if (!confirm('بدك تمسح كل شي تعلّمو البرنامج عنك؟')) return
+              if (!await askConfirm('بدك تمسح كل شي تعلّمو البرنامج عنك؟')) return
               await window.api.learn.reset()
               void load()
             }}

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { askConfirm } from './components/confirm'
 import { Download, Loader2, Plug, Plus, Trash2 } from 'lucide-react'
 import type { MCPServerInfo } from '../preload/index.d'
 import { CheckBadge, CheckButton, CheckPanel, useFullCheck } from './FullCheck'
@@ -160,7 +161,7 @@ export function MCPPage() {
                           className={ghostBtn + ' text-danger'}
                           aria-label={`حذف ${s.name}`}
                           onClick={async () => {
-                            if (confirm(`بدك تحذف السيرفر ${s.name}؟`)) {
+                            if (await askConfirm(`بدك تحذف السيرفر ${s.name}؟`)) {
                               await window.api.mcp.remove(s.name)
                               load()
                             }

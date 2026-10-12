@@ -386,7 +386,45 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
       function: { name: t.fullName, description: `[${t.server}] ${t.description}`.slice(0, 500), parameters: schema }
     })
   }
-  return {
+  // find_tool: the model describes what it needs in English keywords (it translates Arabic itself) and gets the matching
+  // tools made callable for the rest of this turn. Same safety filters as the shortlist: no deletes, no disabled tools,
+  // and state-changing tools only for servers that have write access.
+  if (mcp.length) {
+    defs.push({
+      type: 'function',
+      function: {
+        name: 'find_tool',
+        description:
+          'Look up more tools when the ones you already have do not cover the request. Describe the capability in ENGLISH keywords (translate the request first), e.g. "gmail search email", "slack send message", "jira create issue". Matching tools become callable right after.',
+        parameters: { type: 'object', properties: { query: { type: 'string', description: 'English keywords for the capability needed' } }, required: ['query'] }
+      }
+    })
+    handlers.set('find_tool', async (a) => {
+      const qw = new Set(String(a.query ?? '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) ?? [])
+      if (!qw.size) return 'Error: give English keywords, e.g. "gmail search email".'
+      const hits = mcp
+        .map((t) => {
+          const hay = `${t.server} ${t.name.replace(/[-_]/g, ' ')} ${t.description}`.toLowerCase()
+          let sc = 0
+          for (const w of qw) if (hay.includes(w)) sc += t.name.toLowerCase().includes(w) || t.server.toLowerCase().includes(w) ? 3 : 1
+          return { t, sc }
+        })
+        .filter((x) => x.sc > 0 && !disabled.includes(x.t.fullName) && !HARD_BLOCK.test(x.t.name))
+        .sort((x, y) => y.sc - x.sc)
+        .slice(0, 8)
+      if (!hits.length) return 'No tool matches these keywords. Try other English words, or tell the user the capability is not connected.'
+      const ok = hits.filter((x) => !RISKY.test(x.t.name) || writeOn.has(x.t.server))
+      const locked = [...new Set(hits.filter((x) => RISKY.test(x.t.name) && !writeOn.has(x.t.server)).map((x) => x.t.server))]
+      for (const { t } of ok) {
+        if (byName.has(t.fullName)) continue
+        byName.set(t.fullName, t)
+        defs.push({ type: 'function', function: { name: t.fullName, description: `[${t.server}] ${t.description}`.slice(0, 500), parameters: t.schema } })
+      }
+      const lines = ok.map((x) => `- ${x.t.fullName}: ${x.t.description.slice(0, 120)}`)
+      if (locked.length) lines.push(`(locked until the user enables write access for: ${locked.join(', ')} — tell him to switch it on in Settings > Connectors)`)
+      return (ok.length ? 'These tools are now callable:\n' : 'Nothing callable.\n') + lines.join('\n')
+    })
+  }  return {
     defs,
     notes,
     call: async (name, args) => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { askConfirm } from './components/confirm'
 import type { RemoteEvent, RemoteInfo } from '../preload/index.d'
 
 const EMPTY: RemoteInfo = { enabled: false, port: 47821, relayUrl: '', approveFromPhone: true, destructiveFromPhone: false, lan: [], listening: false, pairing: null, devices: [] }
@@ -189,7 +190,7 @@ export function RemotePanel() {
                 </div>
                 <button
                   onClick={async () => {
-                    if (confirm('شيل الجهاز «' + d.name + '»؟ ما رح يقدر يتصل إلا بربط جديد.')) setSt(await window.api.remote.revoke(d.id))
+                    if (await askConfirm('شيل الجهاز «' + d.name + '»؟ ما رح يقدر يتصل إلا بربط جديد.')) setSt(await window.api.remote.revoke(d.id))
                   }}
                   className="rounded-full border border-outline px-3 py-1 text-danger hover:bg-surface2"
                 >

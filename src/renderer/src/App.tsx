@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { askConfirm } from '../../ui/components/confirm'
 import {
-  Bot, Clock, Cpu, FolderKanban, FolderOpen, MessageSquare, Moon, Palette, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
+  Bot, Clock, Cpu, ListChecks, FolderKanban, FolderOpen, MessageSquare, Moon, Palette, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
   Sun, Trash2, User, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
@@ -15,6 +16,9 @@ import { Settings } from '../../ui/Settings'
 import { InterestsModal } from '../../ui/InterestsModal'
 import { SkillsPage } from '../../ui/SkillsPage'
 import { ToolsPage } from '../../ui/ToolsPage'
+import { TodoPage } from '../../ui/TodoPage'
+import { CommandPalette } from '../../ui/CommandPalette'
+import { WhatsNew } from '../../ui/WhatsNew'
 import { ThemeProvider, useTheme } from '../../ui/ThemeContext'
 import { Hub } from '../../ui/components/ui'
 import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '../../preload/index.d'
@@ -117,12 +121,13 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
   )
 }
 
-type Nav = 'chat' | 'projects' | 'tasks' | 'models' | 'extensions' | 'settings'
+type Nav = 'chat' | 'projects' | 'tasks' | 'todo' | 'models' | 'extensions' | 'settings'
 
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
   { id: 'tasks', label: 'المهام', icon: Clock },
+  { id: 'todo', label: 'التو دو', icon: ListChecks },
   { id: 'models', label: 'الموديلات', icon: Cpu },
   { id: 'extensions', label: 'الإضافات', icon: Plug },
   { id: 'settings', label: 'الإعدادات', icon: SettingsIcon }
@@ -287,9 +292,16 @@ function Shell() {
   }
   const closeTab = (id: string): void => {
     if (busy[id]) {
-      if (!confirm('هالتبويب عم يشتغل على طلب. تسكيره بيوقف الطلب. تكمل؟')) return
-      void window.api.cancelChat(id)
+      void askConfirm('هالتبويب عم يشتغل على طلب. تسكيره بيوقف الطلب. تكمل؟').then((ok) => {
+        if (!ok) return
+        void window.api.cancelChat(id)
+        doCloseTab(id)
+      })
+      return
     }
+    doCloseTab(id)
+  }
+  const doCloseTab = (id: string): void => {
     const idx = tabs.findIndex((t) => t.id === id)
     let next = tabs.filter((t) => t.id !== id)
     if (!next.length) next = [{ id: newId(), convId: null, initial: [], projectId: null, mode: defaultMode.current, title: 'محادثة جديدة' }]
@@ -362,7 +374,7 @@ function Shell() {
     if (!r || !r.value.trim()) return
     const title = r.value.trim()
     await window.api.conversations.rename(r.id, title)
-    setTabs((ts) => ts.map((t) => (t.convId === r.id && !t.projectId ? { ...t, title: title.slice(0, 30) } : t)))
+    setTabs((ts) => ts.map((t) => (t.convId === r.id && !t.projectId ? { ...t, title: title } : t)))
     void loadConvs()
   }
 
@@ -489,7 +501,7 @@ function Shell() {
                   aria-label="حذف"
                   className="rounded-full p-1 text-muted opacity-0 hover:bg-outline hover:text-danger group-hover:opacity-100"
                   onClick={async () => {
-                    if (!confirm('بدك تحذف هالمحادثة؟')) return
+                    if (!await askConfirm('بدك تحذف هالمحادثة؟')) return
                     await window.api.conversations.delete(c.id)
                     const t = tabs.find((x) => x.convId === c.id)
                     if (t) closeTab(t.id)
@@ -581,7 +593,7 @@ function Shell() {
               onModeChange={(m) => patchTab(t.id, { mode: m })}
               onBusy={(b) => onBusyTab(t.id, b)}
               onSaved={(id, title) => {
-                patchTab(t.id, { convId: id, ...(t.projectId || !title ? {} : { title: title.slice(0, 30) }) })
+                patchTab(t.id, { convId: id, ...(t.projectId || !title ? {} : { title: title }) })
                 loadConvs()
               }}
             />
@@ -600,6 +612,7 @@ function Shell() {
       {activeNav === 'projects' && (
           <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} />
         )}
+        {activeNav === 'todo' && <TodoPage />}
         {activeNav === 'models' && <ModelsPage />}
         {activeNav === 'extensions' && (
             <Hub
@@ -614,6 +627,8 @@ function Shell() {
             />
           )}
         {activeNav === 'settings' && <Settings variant="page" />}
+        <CommandPalette pages={NAV_ITEMS.map((n) => ({ id: n.id, label: n.label }))} convs={convs.map((c) => ({ id: c.id, title: c.title }))} onPage={(id) => setActiveNav(id as Nav)} onOpenConv={(id) => void openConv(id)} onNewChat={() => { newTab(null); setActiveNav('chat') }} />
+        <WhatsNew />
       </main>
       {ctx &&
         (() => {
@@ -679,7 +694,7 @@ function Shell() {
                   className={item + ' text-danger'}
                   onClick={async () => {
                     setCtx(null)
-                    if (!confirm('بدك تحذف هالمحادثة؟')) return
+                    if (!await askConfirm('بدك تحذف هالمحادثة؟')) return
                     await window.api.conversations.delete(c.id)
                     const t = tabs.find((x) => x.convId === c.id)
                     if (t) closeTab(t.id)

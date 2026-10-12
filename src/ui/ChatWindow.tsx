@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { ModelPicker } from './ModelPicker'
 import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, Mic, Paperclip, Play, RotateCcw, Square, X } from 'lucide-react'
 import { Markdown } from './Markdown'
 import { useTheme } from './ThemeContext'
@@ -57,7 +58,7 @@ type Stats = {
 }
 
 // meta looks like: "Model: X | Memory: n | Tools: t | Skill: Y | <saved text> | Tried: a -> b | Stats: {json}"
-function parseMeta(meta: string): { model: string; skill: string; saved: string; tried: string[]; council: string; stats: Stats | null } {
+function parseMeta(meta: string): { model: string; skill: string; saved: string; tried: string[]; council: string; tools: string[]; stats: Stats | null } {
   const si = meta.indexOf(' | Stats: ')
   let stats: Stats | null = null
   if (si >= 0) {
@@ -67,7 +68,7 @@ function parseMeta(meta: string): { model: string; skill: string; saved: string;
       stats = null
     }
   }
-  const out = { model: '', skill: '', saved: '', tried: [] as string[], council: '', stats }
+  const out = { model: '', skill: '', saved: '', tried: [] as string[], council: '', tools: [] as string[], stats }
   for (const p of (si >= 0 ? meta.slice(0, si) : meta).split(' | ')) {
     const idx = p.indexOf(': ')
     const k = idx > 0 ? p.slice(0, idx) : ''
@@ -76,7 +77,8 @@ function parseMeta(meta: string): { model: string; skill: string; saved: string;
     else if (k === 'Skill') out.skill = v
     else if (k === 'Council') out.council = v
     else if (k === 'Tried') out.tried = v.split(' -> ').filter(Boolean)
-    else if (k === 'Memory' || k === 'Tools') continue
+    else if (k === 'Tools') out.tools = v === '-' ? [] : [...new Set(v.split(',').map((x) => x.trim()).filter(Boolean))]
+    else if (k === 'Memory') continue
     else out.saved = p
   }
   return out
@@ -257,6 +259,14 @@ function MetaBar({ meta }: { meta: string }) {
         <span dir="ltr">{m.model}</span>
       </Chip>
       {m.skill && m.skill !== 'none' && <Chip cls="bg-primary/10 text-primary">{m.skill}</Chip>}
+      {m.tools.length > 0 && (
+        <Chip cls="bg-surface2 text-muted">
+          <span title={m.tools.join('، ')} dir="ltr">
+            🔧 {m.tools.slice(0, 3).map((x) => x.replace(/^mcp__/, '').replace(/__/g, ' › ')).join(' · ')}
+            {m.tools.length > 3 ? `  +${m.tools.length - 3}` : ''}
+          </span>
+        </Chip>
+      )}
       {m.council && <Chip cls="bg-primary/10 text-primary">🏛️ {m.council}</Chip>}
       {failed.length > 0 && (
         <Chip cls="bg-warning/15 text-warning">
@@ -731,39 +741,7 @@ export function ChatWindow({
         )}
         <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
           <span>الموديل:</span>
-          <select
-            className={`rounded-full border border-outline bg-surface px-2 py-0.5 [&_option]:text-fg [&_optgroup]:text-fg ${mode.kind === 'free' ? '' : 'text-warning'}`}
-            value={mode.kind === 'model' ? mode.id : mode.kind === 'council' && (mode.author || mode.critic) ? 'council-manual' : mode.kind}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v === 'council-manual') return onModeChange({ kind: 'council', author: picker[0]?.value, critic: (picker[1] ?? picker[0])?.value })
-              onModeChange(v === 'free' ? { kind: 'free' } : v === 'auto' ? { kind: 'auto' } : v === 'council' ? { kind: 'council' } : { kind: 'model', id: v })
-            }}
-          >
-            <option value="free">🆓 تلقائي — مجاني بس</option>
-            <option value="auto">⚡ تلقائي — مع المدفوع</option>
-            <option value="council">🏛️ مجلس الموديلات — مسودة وبعدين نقد وبعدين تصحيح</option>
-            <option value="council-manual" disabled={!picker.length}>🏛️ مجلس — أنا بختار الكاتب والناقد</option>
-            <optgroup label="🎯 موديل محدد">
-              {picker.map((p) => (
-                <option key={p.value} value={p.value}>
-                  {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
-                </option>
-              ))}
-            </optgroup>
-          </select>
-          <input
-            list="model-name-list"
-            className="w-44 rounded-full border border-outline bg-surface px-2 py-0.5 text-fg placeholder:text-muted"
-            placeholder="أو اكتب اسم موديل…"
-            onChange={(e) => {
-              const hit = picker.find((p) => p.value === e.target.value || p.label === e.target.value)
-              if (hit) onModeChange({ kind: 'model', id: hit.value })
-            }}
-          />
-          <datalist id="model-name-list">
-            {picker.map((p) => (<option key={p.value} value={p.label} />))}
-          </datalist>
+          <ModelPicker mode={mode} picker={picker} onModeChange={onModeChange} />
           <span>التفكير:</span>
           <select
             className="rounded-full border border-outline bg-surface px-2 py-0.5"

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { askConfirm } from './components/confirm'
 import { AlertTriangle, Plus, Trash2 } from 'lucide-react'
 import type { ToolInfo } from '../preload/index.d'
 import { CheckBadge, CheckButton, CheckPanel, useFullCheck } from './FullCheck'
@@ -66,7 +67,7 @@ export function ToolsPage() {
                   className={ghostBtn + ' text-danger'}
                   aria-label={`حذف ${t.name}`}
                   onClick={async () => {
-                    if (confirm(`بدك تحذف الأداة ${t.name}؟`)) {
+                    if (await askConfirm(`بدك تحذف الأداة ${t.name}؟`)) {
                       await window.api.tools.remove(t.name)
                       load()
                     }

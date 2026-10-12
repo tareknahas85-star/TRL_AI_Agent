@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { askConfirm } from './components/confirm'
 import { CheckCircle2, FolderOpen, Lock, Plus, Trash2 } from 'lucide-react'
 import type { ProjectInfo } from '../preload/index.d'
 import { Chip, Empty, PageShell, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
@@ -88,7 +89,7 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
                     className={ghostBtn + ' text-danger'}
                     aria-label={`شيل ${p.name}`}
                     onClick={async () => {
-                      if (confirm(`بدك تشيل المشروع ${p.name} من القائمة؟ (ما بينحذف من جهازك)`)) {
+                      if (await askConfirm(`بدك تشيل المشروع ${p.name} من القائمة؟ (ما بينحذف من جهازك)`)) {
                         await window.api.projects.remove(p.id)
                         changed()
                       }

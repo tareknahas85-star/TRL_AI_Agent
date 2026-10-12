@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { askConfirm } from './components/confirm'
 import { Clock, Loader2, Play, Plus, Trash2 } from 'lucide-react'
 import type { ProjectInfo, ScheduleInfo } from '../preload/index.d'
 import { Chip, Empty, Modal, PageShell, Toggle, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
@@ -98,7 +99,7 @@ export function SchedulePage() {
                       className={ghostBtn + ' text-danger'}
                       aria-label={`حذف ${t.name}`}
                       onClick={async () => {
-                        if (confirm(`بدك تحذف المهمة ${t.name}؟`)) {
+                        if (await askConfirm(`بدك تحذف المهمة ${t.name}؟`)) {
                           await window.api.schedules.remove(t.id)
                           void load()
                         }

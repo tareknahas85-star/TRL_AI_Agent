@@ -1,9 +1,10 @@
 {
   "name": "my-ai-router",
-  "version": "5.9.6",
+  "version": "5.9.7",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "example.com",
+  "license": "MIT",
   "homepage": "https://electron-vite.org",
   "scripts": {
     "format": "prettier --write .",
