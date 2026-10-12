@@ -51,7 +51,7 @@ export function TodoPage() {
 
   return (
     <PageShell
-      title="التو دو"
+      title="ملاحظات"
       subtitle="قائمة مهامك الشخصية. محفوظة عندك على الجهاز بس. كل سطر بتلصقو بيصير مهمة لحاله."
       action={
         done > 0 ? (

@@ -127,7 +127,7 @@ const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
   { id: 'tasks', label: 'المهام', icon: Clock },
-  { id: 'todo', label: 'التو دو', icon: ListChecks },
+  { id: 'todo', label: 'ملاحظات', icon: ListChecks },
   { id: 'models', label: 'الموديلات', icon: Cpu },
   { id: 'extensions', label: 'الإضافات', icon: Plug },
   { id: 'settings', label: 'الإعدادات', icon: SettingsIcon }
