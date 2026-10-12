@@ -11,7 +11,13 @@ try {
   npx wrangler secret bulk $tmp
   if ($LASTEXITCODE -ne 0) { throw 'wrangler secret bulk failed' }
 } finally { if (Test-Path $tmp) { Remove-Item $tmp -Force } }
-npx wrangler deploy
+$repo = $env:TRL_REPO
+if (-not $repo -and ((git -C $PSScriptRoot config --get remote.origin.url) -match 'github\.com[:/]([^/]+/[^/.]+?)(\.git)?if ($LASTEXITCODE -ne 0) { throw 'wrangler deploy failed' }
+Set-Clipboard -Value $key
+Write-Host 'Done. MAIL_KEY is on your clipboard: paste it into Apps Script > Project Settings > Script properties (MAIL_KEY), then run: Set-Clipboard -Value $null'
+)) { $repo = $Matches[1] }
+if (-not $repo) { throw 'Cannot detect the GitHub repo. Set $env:TRL_REPO = owner/name.' }
+npx wrangler deploy --var "GH_REPO:$repo"
 if ($LASTEXITCODE -ne 0) { throw 'wrangler deploy failed' }
 Set-Clipboard -Value $key
 Write-Host 'Done. MAIL_KEY is on your clipboard: paste it into Apps Script > Project Settings > Script properties (MAIL_KEY), then run: Set-Clipboard -Value $null'
