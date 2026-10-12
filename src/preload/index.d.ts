@@ -75,6 +75,8 @@ export type FilePreviewInfo = { ok: boolean; kind?: string; name?: string; size?
 export type RemoteDevice = { id: string; name: string; createdAt: number; lastSeen: number; online: boolean }
 export type RemoteInfo = { enabled: boolean; port: number; relayUrl: string; approveFromPhone: boolean; destructiveFromPhone: boolean; lan: string[]; listening: boolean; pairing: { exp: number } | null; devices: RemoteDevice[] }
 export type RemoteEvent = { type: 'sas'; sas: string; name: string } | { type: 'paired'; name: string } | { type: 'pair-end'; reason: string } | { type: 'status' }
+export type AgentInfo = { id: string; name: string; prompt: string; runOn: 'local' | 'cloud' | 'auto' }
+export type GateInfo = { enabled: boolean; url: string; hasKey: boolean }
 export type TelegramInfo = { enabled: boolean; chatId: string; minSeconds: number; inbound: boolean; hasToken: boolean }
 export type TaskRowInfo = {
   at: number
@@ -252,6 +254,17 @@ declare global {
         export: (sel: { keys: boolean; skills: boolean; memory: boolean; mcp: boolean; conversations: boolean }, password: string) => Promise<{ ok: boolean; error?: string; path?: string; files?: number; skills?: number }>
         import: (password: string) => Promise<{ ok: boolean; error?: string; files?: number; skills?: number; at?: string }>
       }
+      security: { status: () => Promise<{ keyStorage: 'os-protected' | 'legacy' | 'memory'; phoneApproval: boolean }> }
+    agents: {
+      list: () => Promise<AgentInfo[]>
+      save: (p: { id?: string; name: string; prompt: string; runOn: string }) => Promise<AgentInfo[]>
+      remove: (id: string) => Promise<AgentInfo[]>
+    }
+    gate: {
+      get: () => Promise<GateInfo>
+      set: (p: { enabled?: boolean; url?: string; key?: string }) => Promise<GateInfo>
+      test: () => Promise<{ ok: boolean; error?: string }>
+    }
       telegram: {
         get: () => Promise<TelegramInfo>
         set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string; inbound?: boolean }) => Promise<TelegramInfo>

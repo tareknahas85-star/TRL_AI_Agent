@@ -11,6 +11,7 @@ import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
 import { ProjectsPage } from '../../ui/ProjectsPage'
 import { SchedulePage } from '../../ui/SchedulePage'
+import { AgentsPage } from '../../ui/AgentsPage'
 import { TasksReportPage } from '../../ui/TasksReportPage'
 import { Settings } from '../../ui/Settings'
 import { InterestsModal } from '../../ui/InterestsModal'
@@ -121,12 +122,13 @@ function AboutBadge({ onSetup }: { onSetup: () => void }) {
   )
 }
 
-type Nav = 'chat' | 'projects' | 'tasks' | 'todo' | 'models' | 'extensions' | 'settings'
+type Nav = 'chat' | 'projects' | 'tasks' | 'agents' | 'todo' | 'models' | 'extensions' | 'settings'
 
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
   { id: 'projects', label: 'المشاريع', icon: FolderKanban },
   { id: 'tasks', label: 'المهام', icon: Clock },
+  { id: 'agents', label: 'وكلاء', icon: Bot },
   { id: 'todo', label: 'ملاحظات', icon: ListChecks },
   { id: 'models', label: 'الموديلات', icon: Cpu },
   { id: 'extensions', label: 'الإضافات', icon: Plug },
@@ -612,6 +614,7 @@ function Shell() {
       {activeNav === 'projects' && (
           <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} />
         )}
+        {activeNav === 'agents' && <AgentsPage />}
         {activeNav === 'todo' && <TodoPage />}
         {activeNav === 'models' && <ModelsPage />}
         {activeNav === 'extensions' && (

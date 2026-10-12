@@ -7,8 +7,10 @@ export function TelegramPanel() {
   const [chatId, setChatId] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const [sec, setSec] = useState<{ keyStorage: string; phoneApproval: boolean } | null>(null)
 
   useEffect(() => {
+    window.api.security.status().then(setSec).catch(() => undefined)
     window.api.telegram.get().then((s) => {
       setSt(s)
       setChatId(s.chatId)
@@ -137,6 +139,17 @@ export function TelegramPanel() {
           للجهاز، المهام اللي بتجي من تيليغرام بتاخد نفس الصلاحية، فخلّيها مطفية إذا ما بدك.
         </p>
       </div>
+      {sec && (
+        <div className="mt-3 rounded-lg border border-outline bg-bg p-3 text-xs">
+          <div className="font-medium">حالة الأمان</div>
+          <div className="mt-1 text-muted">
+            تخزين المفاتيح: {sec.keyStorage === 'os-protected' ? 'مشفّر ومحمي بحساب ويندوز ✅' : sec.keyStorage === 'legacy' ? 'مشفّر بمفتاح عادي (النظام ما وفّر حماية)' : '⚠️ بالذاكرة بس (ما عم ينحفظ)'}
+          </div>
+          <div className="text-muted">
+            الموافقة من الموبايل للمهام المجدولة والمتحكم فيها عن بعد: {sec.phoneApproval ? 'شغّالة ✅ (أزرار موافق/رفض عتيليغرام)' : 'مطفية. فعّل التنبيه + التحكم عن بعد فوق.'}
+          </div>
+        </div>
+      )}
       {msg && <div className="mt-2 text-xs text-muted">{msg}</div>}
     </section>
   )

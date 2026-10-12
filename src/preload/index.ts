@@ -234,6 +234,17 @@ const api = {
     export: (sel: unknown, password: string) => ipcRenderer.invoke('transfer:export', sel, password),
     import: (password: string) => ipcRenderer.invoke('transfer:import', password)
   },
+  security: { status: () => ipcRenderer.invoke('security:status') },
+  agents: {
+    list: () => ipcRenderer.invoke('agents:list'),
+    save: (p: { id?: string; name: string; prompt: string; runOn: string }) => ipcRenderer.invoke('agents:save', p),
+    remove: (id: string) => ipcRenderer.invoke('agents:remove', id)
+  },
+  gate: {
+    get: () => ipcRenderer.invoke('gate:get'),
+    set: (p: { enabled?: boolean; url?: string; key?: string }) => ipcRenderer.invoke('gate:set', p),
+    test: () => ipcRenderer.invoke('gate:test')
+  },
   telegram: {
     get: () => ipcRenderer.invoke('telegram:get'),
     set: (p: { enabled?: boolean; chatId?: string; minSeconds?: number; token?: string; inbound?: boolean }) => ipcRenderer.invoke('telegram:set', p),

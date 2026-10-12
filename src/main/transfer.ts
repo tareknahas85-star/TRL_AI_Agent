@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 import crypto from 'crypto'
 import { getSkillsDir } from '../core/paths'
+import { exportKeysFile } from '../store/secure-store'
 
 // Manual settings transfer (Windows <-> Ubuntu). Never automatic. The bundle holds API keys, so it is
 // always encrypted with a password you choose (scrypt + AES-256-GCM). Nothing leaves the machine.
@@ -62,7 +63,12 @@ export function registerTransferHandlers(): void {
       const b: Bundle = { v: 1, at: new Date().toISOString(), files: {}, skills: {} }
       for (const g of Object.keys(GROUPS) as (keyof Sel)[]) {
         if (!sel?.[g]) continue
-        for (const n of GROUPS[g]) if (fs.existsSync(ud(n))) b.files[n] = fs.readFileSync(ud(n)).toString('base64')
+        for (const n of GROUPS[g]) {
+          if (n === 'secure-keys.json') {
+            const kb = exportKeysFile() // keys now live in an OS-protected store; export them in a portable (password-encrypted) form
+            if (kb) b.files[n] = kb.toString('base64')
+          } else if (fs.existsSync(ud(n))) b.files[n] = fs.readFileSync(ud(n)).toString('base64')
+        }
       }
       if (sel?.skills) {
         const dir = getSkillsDir()

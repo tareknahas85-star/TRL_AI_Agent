@@ -1,0 +1,48 @@
+name: agent
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: Task text
+        required: true
+        type: string
+      agent:
+        description: Agent name
+        required: false
+        default: ''
+        type: string
+      prompt:
+        description: Agent system prompt
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agent-run
+  cancel-in-progress: false
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Run agent
+        # Inputs go through env, never interpolated into the script.
+        env:
+          TASK: ${{ inputs.task }}
+          AGENT: ${{ inputs.agent }}
+          PROMPT: ${{ inputs.prompt }}
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
+          GATE_URL: ${{ secrets.GATE_URL }}
+          GATE_KEY: ${{ secrets.GATE_KEY }}
+        run: node runner.mjs

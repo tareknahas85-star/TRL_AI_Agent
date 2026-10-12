@@ -1,3 +1,4 @@
+import { secureStoreMode } from '../store/secure-store'
 import { dialog, ipcMain, nativeImage, shell } from 'electron'
 import fsp from 'fs/promises'
 import path from 'path'
@@ -5,6 +6,8 @@ import { prepareFile } from './attach'
 import { listCatalog } from '../core/catalog'
 import { readJson, writeJson } from '../core/json-store'
 import { getConversation, listConversations } from '../core/workspace'
+import { deleteAgent, listAgents, saveAgent } from '../core/agents'
+import { gateState, setGate, syncAgents, testGate } from '../core/gate'
 import { clearTelegramToken, detectChatId, sendTelegram, setTelegram, telegramState } from '../core/telegram'
 
 // ---------- files created by the model: exists / preview / open / reveal ----------
@@ -167,6 +170,10 @@ export function registerExtrasHandlers(): void {
   ipcMain.handle('report:tasks', () => tasksReport())
 
   ipcMain.handle('telegram:get', () => telegramState())
+ipcMain.handle('security:status', () => {
+  const t = telegramState()
+  return { keyStorage: secureStoreMode(), phoneApproval: t.enabled && t.inbound && t.hasToken && !!t.chatId }
+})
   ipcMain.handle('telegram:set', (_e, p: unknown) => setTelegram((p ?? {}) as never))
   ipcMain.handle('telegram:clearToken', () => {
     clearTelegramToken()
@@ -174,4 +181,18 @@ export function registerExtrasHandlers(): void {
   })
   ipcMain.handle('telegram:detect', () => detectChatId())
   ipcMain.handle('telegram:test', () => sendTelegram('✅ تجربة من TRL_AI_Agent — التنبيه شغّال'))
+  ipcMain.handle('agents:list', () => listAgents())
+  ipcMain.handle('agents:save', (_e, p: unknown) => {
+    const l = saveAgent((p ?? {}) as never)
+    void syncAgents()
+    return l
+  })
+  ipcMain.handle('agents:remove', (_e, id: unknown) => {
+    const l = deleteAgent(String(id))
+    void syncAgents()
+    return l
+  })
+  ipcMain.handle('gate:get', () => gateState())
+  ipcMain.handle('gate:set', (_e, p: unknown) => setGate((p ?? {}) as never))
+  ipcMain.handle('gate:test', () => testGate())
 }

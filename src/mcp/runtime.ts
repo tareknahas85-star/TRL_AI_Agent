@@ -9,12 +9,14 @@ import { loadMCPConfig, type MCPServer } from './client'
 import { readFile, listFiles } from '../tools/file-tools'
 import { readState } from '../core/state'
 import { approveNewTool, approveWrite, getAccounts } from '../core/accounts'
+import { fenceUntrusted } from '../core/untrusted'
 import { shell } from 'electron'
 import { addPlaceTools } from '../tools/place-tools'
 import { getPrefs } from '../core/prefs'
 import { needsDocTools, needsLocation, needsSecurity } from '../core/guidance'
 import { addDocTools } from '../tools/doc-tools'
 import { addSecurityTools } from '../tools/security-tools'
+import { addSandboxTools, needsSandbox } from '../tools/sandbox-tools'
 import { toolPrior } from '../core/learning'
 import { neededConnectors } from '../core/connector-hints'
 
@@ -335,6 +337,9 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
     else addSecurityTools(defs, handlers)
   }
 
+  // Isolated code sandbox (WSL Ubuntu): Windows only, every run needs approval, never in a confidential project.
+  if (needsSandbox(userInput) && !opts.confidential && process.platform === 'win32') addSandboxTools(defs, handlers)
+
   // Local PDF/image tools (merge, extract pages, convert/shrink): run on this PC only, so they are fine in confidential projects. Needs PC control because they write files.
   if (needsDocTools(userInput) && computerEnabled()) addDocTools(defs, handlers, projectPath)
 
@@ -446,7 +451,9 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
           } else out = await callMcpTool(info, a)
         }
       }
-      return out.length > MAX_RESULT ? out.slice(0, MAX_RESULT) + '\n…[truncated]' : out
+      const cut = out.length > MAX_RESULT ? out.slice(0, MAX_RESULT) + '\n…[truncated]' : out
+      // Our own refusals and the tool finder are trusted; everything else came from outside and is fenced as data.
+      return name === 'find_tool' || /^Error: (المستخدم|unknown tool)/.test(out) ? cut : fenceUntrusted(name, cut)
     }
   }
 }

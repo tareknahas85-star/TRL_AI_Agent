@@ -22,3 +22,5 @@ dist-installer/
 *.tsbuildinfo
 mobile/air-final.ps1
 bench/
+.wrangler/
+*.bak*

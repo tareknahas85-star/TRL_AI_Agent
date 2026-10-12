@@ -2,6 +2,7 @@ import { BrowserWindow, dialog } from 'electron'
 import { readJson, writeJson } from './json-store'
 import { getPrefs, setPrefs } from './prefs'
 import { toolUses } from './learning'
+import { askViaTelegram, remoteApprovalAvailable } from './tg-approve'
 
 // Connected accounts (Google first). Write access is OFF by default and every write action asks the user first.
 export type Accounts = { googleEmail: string; writeServers: string[]; connected: string[] }
@@ -48,6 +49,8 @@ export async function approveNewTool(group: string, tool: string): Promise<boole
   const pr = getPrefs()
   if (!pr.askBeforeNewTools || !pr.learningEnabled || pr.approvedTools.includes(group) || askedGroups.has(group)) return true
   if (toolUses(group) >= 3) return true
+  // Unattended run (scheduled task / Telegram request): ask on your phone instead of a PC pop-up nobody sees.
+  if (remoteApprovalAvailable()) return askViaTelegram('أداة جديدة: ' + group + ' ← ' + tool, '')
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   if (!win) return true
   if (!win.isVisible()) win.show()
@@ -70,6 +73,15 @@ export async function approveNewTool(group: string, tool: string): Promise<boole
 /** Asks the user before a tool that changes data runs. Returns false when denied. */
 export async function approveWrite(server: string, tool: string, args: Record<string, unknown>): Promise<boolean> {
   if (sessionAllowed.has(server)) return true
+  if (remoteApprovalAvailable()) {
+    let d = ''
+    try {
+      d = JSON.stringify(args)
+    } catch {
+      d = String(args)
+    }
+    return askViaTelegram('الموديل بدو ينفّذ: ' + server + ' ← ' + tool, d)
+  }
   const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0]
   if (win && !win.isVisible()) win.show()
   let detail = ''
