@@ -1,8 +1,7 @@
 # setup-cloud.ps1 - run it yourself. Secrets are typed hidden and never printed.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-$repo    = 'YOUR-GITHUB-USER/trl-agent-runner'
-$gateUrl = 'https://trl-agent-gate.YOUR-SUBDOMAIN.workers.dev'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'gh CLI not found. Install it: winget install GitHub.cli' }
 gh auth status | Out-Null
@@ -23,7 +22,7 @@ function Read-Hidden($prompt) {
 $tgToken = Read-Hidden 'Telegram bot token'
 $chatId  = (Read-Host 'Telegram chat id (numbers only)').Trim()
 $orKey   = Read-Hidden 'OpenRouter API key'
-$ghPat   = Read-Hidden 'GitHub fine-grained PAT (Actions: read/write on trl-agent-runner)'
+$ghPat   = Read-Hidden 'GitHub fine-grained PAT (Actions: read/write on this repo)'
 if (-not $tgToken -or -not $chatId -or -not $orKey -or -not $ghPat) { throw 'Empty value, aborting.' }
 if ($chatId -notmatch '^-?\d+$') { throw 'Chat id must be numeric.' }
 
@@ -55,12 +54,17 @@ try {
   Write-Host 'Setting runner repo secrets...'
   gh secret set --env-file $tmp2 --repo $repo
   if ($LASTEXITCODE -ne 0) { throw 'gh secret set failed' }
+
+  # 3) Deploy the Worker, pointing it at this repo
+  Write-Host 'Deploying Worker...'
+  npx wrangler deploy --var "GH_REPO:$repo"
+  if ($LASTEXITCODE -ne 0) { throw 'wrangler deploy failed' }
 }
 finally {
   foreach ($f in @($tmp1, $tmp2)) { if (Test-Path $f) { Remove-Item $f -Force } }
 }
 
-# 3) The app needs GATE_KEY too: put it on the clipboard, never on screen
+# 4) The app needs GATE_KEY too: put it on the clipboard, never on screen
 Set-Clipboard -Value $gateKey
 Write-Host ''
 Write-Host 'Done. GATE_KEY is on your clipboard (the app needs it).'

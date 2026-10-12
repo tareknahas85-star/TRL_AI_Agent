@@ -2,7 +2,7 @@
 param([Parameter(Mandatory)][ValidateSet('on','off')][string]$Mode)
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-$gateUrl = 'https://trl-agent-gate.YOUR-SUBDOMAIN.workers.dev'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 function New-Secret {
   $b = New-Object byte[] 32
@@ -49,7 +49,7 @@ try {
 $envf = Join-Path $env:TEMP ('t-' + [guid]::NewGuid().ToString('N') + '.env')
 try {
   [IO.File]::WriteAllText($envf, "TG_TOKEN=$tg`n", (New-Object Text.UTF8Encoding $false))
-  gh secret set --env-file $envf --repo YOUR-GITHUB-USER/trl-agent-runner
+  gh secret set --env-file $envf --repo $repo
   if ($LASTEXITCODE -ne 0) { throw 'gh secret set failed' }
 } finally { if (Test-Path $envf) { Remove-Item $envf -Force } }
 

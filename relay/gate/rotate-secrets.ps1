@@ -2,7 +2,7 @@
 # Create the NEW keys first (BotFather /revoke, openrouter.ai/keys, GitHub PAT), then paste each here.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-$repo = 'YOUR-GITHUB-USER/trl-agent-runner'
+. (Join-Path $PSScriptRoot 'common.ps1')
 function Read-Hidden($prompt) {
   $s = Read-Host $prompt -AsSecureString
   $p = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($s)

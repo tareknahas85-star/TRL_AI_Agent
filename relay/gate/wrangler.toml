@@ -3,7 +3,7 @@ main = "index.js"
 compatibility_date = "2025-01-01"
 
 [vars]
-GH_REPO = "YOUR-GITHUB-USER/trl-agent-runner"
+GH_REPO = "YOUR-GITHUB-USER/TRL_AI_Agent"
 
 [[durable_objects.bindings]]
 name = "GATE"

@@ -109,6 +109,14 @@ export class Gate extends DurableObject {
       const a = await st.get('ap:' + m[1]);
       return json(a && Date.now() - a.ts < 3600000 ? { v: a.v } : {});
     }
+    const j = p.match(/^\/job\/([0-9a-f]{12})$/);
+    if (j && req.method === 'GET') {
+      // one-time read: the task never appears in public Actions inputs or logs
+      const job = await st.get('job:' + j[1]);
+      if (!job || Date.now() - job.ts > 3600000) return json({ error: 'not found' }, 404);
+      await st.delete('job:' + j[1]);
+      return json({ task: job.task, agent: job.agent, prompt: job.prompt });
+    }
     return json({ error: 'not found' }, 404);
   }
 
@@ -270,6 +278,13 @@ export class Gate extends DurableObject {
   async dispatch(agent, task) {
     const { GH_TOKEN, GH_REPO } = this.env;
     if (!GH_TOKEN || !GH_REPO) return this.say('☁️ السحابة مو مفعّلة لسا.');
+    const id = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    await this.ctx.storage.put('job:' + id, {
+      ts: Date.now(),
+      task: clip(task, 4000),
+      agent: clip(agent?.name || '', 40),
+      prompt: clip(agent?.prompt || '', 3000),
+    });
     const r = await fetch(
       `https://api.github.com/repos/${GH_REPO}/actions/workflows/agent.yml/dispatches`,
       {
@@ -277,11 +292,7 @@ export class Gate extends DurableObject {
         headers: this.gh(),
         body: JSON.stringify({
           ref: 'main',
-          inputs: {
-            task: clip(task, 4000),
-            agent: clip(agent?.name || '', 40),
-            prompt: clip(agent?.prompt || '', 3000),
-          },
+          inputs: { job: id },
         }),
       },
     );
@@ -296,7 +307,7 @@ export class Gate extends DurableObject {
     let n = 0;
     for (const status of ['in_progress', 'queued']) {
       const r = await fetch(
-        `https://api.github.com/repos/${GH_REPO}/actions/runs?status=${status}&per_page=20`,
+        `https://api.github.com/repos/${GH_REPO}/actions/workflows/agent.yml/runs?status=${status}&per_page=20`,
         { headers: this.gh() },
       );
       if (!r.ok) continue;

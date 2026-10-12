@@ -257,6 +257,13 @@ modify it, or republish it anywhere except this repository. Want to use it in
 a business? Write to tareknahas@live.com. Full terms are in [LICENSE](LICENSE),
 and the licenses of the libraries it uses are in
 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+
+### Contributors
+
+- Tarek Nahhas - author and maintainer
+- AI - co-author
+
+
 ## بالعربي
 
 وكيل ذكاء اصطناعي لسطح المكتب، يعمل على ويندوز ولينكس. تكتب طلبًا واحدًا، فيقرؤه
@@ -485,3 +492,8 @@ Model Context Protocol (MCP)، وelectron-builder لمثبّتات ويندوز 
 تنشرو بأي مكان غير هالريبو. بدك تستعملو بشغل تجاري؟ احكيني على tareknahas@live.com.
 التفاصيل الكاملة بملف [LICENSE](LICENSE)، وتراخيص المكتبات يلي بيستعملها بملف
 [THIRD_PARTY_NOTICES.txt](THIRD_PARTY_NOTICES.txt).
+
+### المساهمون
+
+- طارق نحاس - صاحب المشروع والمشرف عليه
+- AI - مشارك بالكتابة

@@ -1,7 +1,7 @@
 # rotate-gate-key.ps1 - run it yourself. The key is never printed, only copied to the clipboard.
 $ErrorActionPreference = 'Stop'
 Set-Location $PSScriptRoot
-$repo = 'YOUR-GITHUB-USER/trl-agent-runner'
+. (Join-Path $PSScriptRoot 'common.ps1')
 
 if (-not (Get-Command gh -ErrorAction SilentlyContinue)) { throw 'gh CLI not found.' }
 gh auth status | Out-Null
