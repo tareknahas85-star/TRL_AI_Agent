@@ -1,7 +1,5 @@
 name: Release Linux
 on:
-  release:
-    types: [published]
   workflow_dispatch:
     inputs:
       tag:
