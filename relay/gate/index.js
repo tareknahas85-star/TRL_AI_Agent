@@ -296,9 +296,10 @@ export class Gate extends DurableObject {
         }),
       },
     );
-    return this.say(
-      r.status === 204 ? '☁️ بلّشت المهمة على الكمبيوتر السحابي.' : `⚠️ فشل تشغيل السحابة (${r.status}).`,
-    );
+    if (r.status === 204) return this.say('☁️ بلّشت المهمة على الكمبيوتر السحابي.');
+    let why = '';
+    try { why = clip(String((await r.json()).message || ''), 120); } catch {}
+    return this.say(`⚠️ فشل تشغيل السحابة (${r.status}).${why ? '\n' + why : ''}`);
   }
 
   async cancelCloud() {
