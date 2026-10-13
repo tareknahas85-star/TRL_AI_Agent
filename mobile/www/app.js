@@ -41573,7 +41573,100 @@
     }
   };
 
+  // src/views.js
+  var DAYS = ["\u0627\u0644\u0623\u062D\u062F", "\u0627\u0644\u0627\u062B\u0646\u064A\u0646", "\u0627\u0644\u062B\u0644\u0627\u062B\u0627\u0621", "\u0627\u0644\u0623\u0631\u0628\u0639\u0627\u0621", "\u0627\u0644\u062E\u0645\u064A\u0633", "\u0627\u0644\u062C\u0645\u0639\u0629", "\u0627\u0644\u0633\u0628\u062A"];
+  var RUNON = { local: "\u0645\u062D\u0644\u064A", cloud: "\u0633\u062D\u0627\u0628\u064A", auto: "\u062A\u0644\u0642\u0627\u0626\u064A" };
+  var TIER = { free: "\u0645\u062C\u0627\u0646\u064A", cheap: "\u0631\u062E\u064A\u0635", sub: "\u0627\u0634\u062A\u0631\u0627\u0643", custom: "\u0645\u062E\u0635\u0635", other: "\u0645\u062F\u0641\u0648\u0639" };
+  var TIERC = { free: "var(--ok)", cheap: "var(--pri)", sub: "#a78bfa", custom: "var(--warn)", other: "var(--dng)" };
+  var ago = (t) => {
+    if (!t) return "\u0645\u0627 \u0627\u0634\u062A\u063A\u0644\u062A \u0644\u0633\u0627";
+    const m = Math.max(0, Math.round((Date.now() - t) / 6e4));
+    if (m < 1) return "\u0647\u0644\u0623";
+    if (m < 60) return "\u0645\u0646 " + m + " \u062F\u0642\u064A\u0642\u0629";
+    const h = Math.round(m / 60);
+    if (h < 48) return "\u0645\u0646 " + h + " \u0633\u0627\u0639\u0629";
+    return "\u0645\u0646 " + Math.round(h / 24) + " \u064A\u0648\u0645";
+  };
+  var when = (t) => t ? new Date(t).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" }) : "-";
+  var kindTxt = (t) => t.kind === "daily" ? "\u064A\u0648\u0645\u064A\u0627\u064B \u0627\u0644\u0633\u0627\u0639\u0629 " + t.time : t.kind === "weekly" ? "\u0623\u0633\u0628\u0648\u0639\u064A\u0627\u064B (" + (t.days || []).map((d) => DAYS[d]).join("\u060C ") + ") " + t.time : "\u0643\u0644 " + (t.everyMin >= 60 && t.everyMin % 60 === 0 ? t.everyMin / 60 + " \u0633\u0627\u0639\u0629" : t.everyMin + " \u062F\u0642\u064A\u0642\u0629");
+  var head = (icon, title, sub, right = "") => '<div class="ph"><div class="phi">' + icon + '</div><div class="pht"><h2>' + title + '</h2><div class="mut">' + sub + "</div></div>" + right + "</div>";
+  var empty = (msg) => '<div class="emp">' + msg + "</div>";
+  function agentsHtml(c) {
+    const { S: S2, esc: esc2, md: md2, fmtDur: fmtDur2 } = c;
+    const online = S2.conn === "online";
+    let h = head("\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621", "\u0634\u063A\u0651\u0644 \u0623\u064A \u0648\u0643\u064A\u0644 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0628\u064A\u0646\u0641\u0651\u0630 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631", '<button class="chip" data-refresh="agents">\u062A\u062D\u062F\u064A\u062B</button>');
+    if (S2.tasks.length) {
+      h += '<div class="card glow"><h3>\u23F3 \u0634\u063A\u0651\u0627\u0644 \u0647\u0644\u0623</h3>' + S2.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc2(t.label) + '</b> <span class="mut">\xB7 ' + fmtDur2(Date.now() - t.started) + '</span><div class="mut">' + esc2(t.text || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + '</div></div><button class="chip" data-stop="' + esc2(t.tab) + '">\u0625\u064A\u0642\u0627\u0641</button></div>').join("") + "</div>";
+    }
+    if (!online && !S2.agents.length) return h + empty("\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u062A\u0638\u0647\u0631 \u0627\u0644\u0648\u0643\u0644\u0627\u0621.");
+    if (!S2.agents.length) return h + empty("\u0645\u0627 \u0641\u064A \u0648\u0643\u0644\u0627\u0621 \u0644\u0633\u0627. \u0623\u0646\u0634\u0626 \u0648\u0643\u064A\u0644 \u0645\u0646 \u062A\u0628\u0648\u064A\u0628 \xAB\u0648\u0643\u0644\u0627\u0621\xBB \u0628\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0648\u0628\u064A\u0638\u0647\u0631 \u0647\u0648\u0646.");
+    h += S2.agents.map((a) => {
+      const st = S2.agentOut[a.id] || {};
+      const open = S2.agentOpen === a.id;
+      return '<div class="card agent' + (open ? " open" : "") + '"><div class="ag-top" data-agopen="' + esc2(a.id) + '"><div class="av">' + esc2((a.name || "?").trim().slice(0, 1).toUpperCase()) + '</div><div class="ag-i"><b>' + esc2(a.name) + '</b><span class="pill">' + (RUNON[a.runOn] || a.runOn) + "</span>" + (a.hint ? '<div class="mut ag-h">' + esc2(a.hint) + "</div>" : "") + '</div><span class="chev">' + (open ? "\u25BE" : "\u25C2") + "</span></div>" + (open ? '<div class="ag-body"><textarea id="agTask" rows="3" placeholder="\u0627\u0644\u0645\u0647\u0645\u0629 \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u0644\u0648\u0643\u064A\u0644 \u064A\u0646\u0641\u0630\u0647\u0627\u2026">' + esc2(st.task || "") + '</textarea><div class="acts">' + (st.running ? '<button class="btn danger" data-agstop="' + esc2(a.id) + '">\u25A0 \u0625\u064A\u0642\u0627\u0641</button>' : '<button class="btn" data-agrun="' + esc2(a.id) + '"' + (online ? "" : " disabled") + ">\u25B6 \u0646\u0641\u0651\u0630</button>") + "</div>" + (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc2(st.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + "</div>" : "") + '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? " err" : "") + '">' + md2(st.out) + '<div class="meta">' + esc2(when(st.at)) + "</div></div>" : "") + "</div></div>" : "") + "</div>";
+    }).join("");
+    return h;
+  }
+  function schedHtml(c) {
+    const { S: S2, esc: esc2, md: md2 } = c;
+    let h = head("\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629", "\u0645\u0647\u0627\u0645 \u0628\u062A\u0634\u062A\u063A\u0644 \u0644\u062D\u0627\u0644\u0647\u0627 \u0628\u0623\u0648\u0642\u0627\u062A \u0645\u062D\u062F\u062F\u0629", '<button class="chip" data-refresh="sched">\u062A\u062D\u062F\u064A\u062B</button>');
+    if (S2.sched === null) return h + empty(S2.conn === "online" ? '<span class="spin"></span> \u0639\u0645 \u064A\u062C\u064A\u0628 \u0627\u0644\u0645\u0647\u0627\u0645\u2026' : "\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u062A\u0638\u0647\u0631 \u0627\u0644\u0645\u0647\u0627\u0645.");
+    if (!S2.sched.length) return h + empty("\u0645\u0627 \u0641\u064A \u0645\u0647\u0627\u0645 \u0645\u062C\u062F\u0648\u0644\u0629. \u0623\u0646\u0634\u0626 \u0648\u062D\u062F\u0629 \u0645\u0646 \u062A\u0628\u0648\u064A\u0628 \xAB\u062C\u062F\u0648\u0644\u0629\xBB \u0628\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.");
+    h += S2.sched.map((t) => {
+      const open = S2.schedOpen === t.id;
+      const stc = t.status === "running" ? "run" : t.status === "ok" ? "ok" : t.status === "failed" ? "bad" : "";
+      const stx = t.status === "running" ? "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644" : t.status === "ok" ? "\u0646\u062C\u062D\u062A" : t.status === "failed" ? "\u0641\u0634\u0644\u062A" : "\u0628\u0639\u062F\u0647\u0627";
+      return '<div class="card sc' + (t.enabled ? "" : " off") + '"><div class="sc-top"><div class="sc-i" data-sopen="' + esc2(t.id) + '"><b>' + esc2(t.name) + '</b><div class="mut">' + esc2(kindTxt(t)) + '</div><div class="mut"><span class="st ' + stc + '">' + stx + "</span> \xB7 " + esc2(ago(t.lastRun)) + '</div></div><label class="sw"><input type="checkbox" data-sw="' + esc2(t.id) + '" ' + (t.enabled ? "checked" : "") + "><i></i></label></div>" + (open ? '<div class="sc-body">' + (t.result ? '<div class="msg bot">' + md2(t.result) + "</div>" : '<div class="mut">\u0645\u0627 \u0641\u064A \u0646\u062A\u064A\u062C\u0629 \u0644\u0633\u0627.</div>') + "</div>" : "") + '<div class="acts"><button class="chip pri" data-srun="' + esc2(t.id) + '"' + (t.status === "running" || S2.conn !== "online" ? " disabled" : "") + '>\u25B6 \u0634\u063A\u0651\u0644\u0647\u0627 \u0647\u0644\u0623</button><button class="chip" data-sopen="' + esc2(t.id) + '">' + (open ? "\u0625\u062E\u0641\u0627\u0621 \u0627\u0644\u0646\u062A\u064A\u062C\u0629" : "\u0622\u062E\u0631 \u0646\u062A\u064A\u062C\u0629") + "</button></div></div>";
+    }).join("");
+    return h;
+  }
+  function reportHtml(c) {
+    const { S: S2, esc: esc2 } = c;
+    const per = S2.rperiod;
+    let h = head("\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631", "\u0634\u0648 \u0627\u0634\u062A\u063A\u0644 \u0648\u0643\u0645 \u0643\u0644\u0651\u0641 \u0648\u0628\u0623\u064A \u0645\u0648\u062F\u064A\u0644", '<button class="chip" data-refresh="report">\u062A\u062D\u062F\u064A\u062B</button>');
+    h += '<div class="seg">' + [["7", "7 \u0623\u064A\u0627\u0645"], ["30", "30 \u064A\u0648\u0645"], ["all", "\u0627\u0644\u0643\u0644"]].map(([k, l]) => '<button data-rperiod="' + k + '" class="' + (per === k ? "act" : "") + '">' + l + "</button>").join("") + "</div>";
+    if (S2.report === null) return h + empty(S2.conn === "online" ? '<span class="spin"></span> \u0639\u0645 \u064A\u062C\u0647\u0651\u0632 \u0627\u0644\u062A\u0642\u0631\u064A\u0631\u2026' : "\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u064A\u0638\u0647\u0631 \u0627\u0644\u062A\u0642\u0631\u064A\u0631.");
+    const since = per === "all" ? 0 : Date.now() - Number(per) * 864e5;
+    const rows = S2.report.filter((r) => r.at >= since);
+    if (!rows.length) return h + empty("\u0645\u0627 \u0641\u064A \u0645\u0647\u0627\u0645 \u0628\u0647\u0627\u0644\u0641\u062A\u0631\u0629.");
+    const n = rows.length;
+    const free = rows.filter((r) => r.tier === "free").length;
+    const fails = rows.filter((r) => r.fails > 0).length;
+    const esc22 = rows.filter((r) => r.esc).length;
+    const timed = rows.filter((r) => r.ms > 0);
+    const avg = timed.length ? timed.reduce((s, r) => s + r.ms, 0) / timed.length : 0;
+    const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+    const tokens = rows.reduce((s, r) => s + (r.tokens || 0), 0);
+    const stat = (v, l, tone = "") => '<div class="stat ' + tone + '"><div class="sv">' + v + '</div><div class="sl">' + l + "</div></div>";
+    h += '<div class="stats">' + stat(n, "\u0645\u0647\u0645\u0629") + stat(Math.round(free / n * 100) + "%", "\u0645\u062C\u0627\u0646\u064A\u0629", "ok") + stat(cost > 0 ? "$" + (cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)) : "$0", "\u062A\u0643\u0644\u0641\u0629 \u062A\u0642\u062F\u064A\u0631\u064A\u0629") + stat(avg ? avg >= 6e4 ? Math.floor(avg / 6e4) + "\u062F " + Math.round(avg % 6e4 / 1e3) + "\u062B" : (avg / 1e3).toFixed(1) + "\u062B" : "-", "\u0645\u062A\u0648\u0633\u0637 \u0627\u0644\u0648\u0642\u062A") + stat(fails, "\u0641\u064A\u0647\u0627 \u0623\u062E\u0637\u0627\u0621", fails ? "bad" : "") + stat(esc22, "\u062A\u0635\u0639\u064A\u062F \u0644\u0645\u0648\u062F\u064A\u0644 \u0623\u0642\u0648\u0649") + "</div>";
+    const tiers = {};
+    rows.forEach((r) => {
+      tiers[r.tier] = (tiers[r.tier] || 0) + 1;
+    });
+    h += '<div class="card"><h3>\u062A\u0648\u0632\u064A\u0639 \u0627\u0644\u0623\u0646\u0648\u0627\u0639</h3><div class="bar">' + Object.entries(tiers).map(([k, v]) => '<i style="width:' + v / n * 100 + "%;background:" + (TIERC[k] || "var(--mut)") + '"></i>').join("") + '</div><div class="legend">' + Object.entries(tiers).map(([k, v]) => '<span><b style="background:' + (TIERC[k] || "var(--mut)") + '"></b>' + (TIER[k] || k) + " " + v + "</span>").join("") + '</div><div class="mut" style="margin-top:6px">\u062A\u0648\u0643\u0646\u0632: ' + tokens.toLocaleString("en") + "</div></div>";
+    const byModel = {};
+    rows.forEach((r) => {
+      byModel[r.model] = (byModel[r.model] || 0) + 1;
+    });
+    const top = Object.entries(byModel).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    h += '<div class="card"><h3>\u0623\u0643\u062B\u0631 \u0627\u0644\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0627\u0633\u062A\u062E\u062F\u0627\u0645\u0627\u064B</h3>' + top.map(([m, v]) => '<div class="mrow"><span dir="ltr">' + esc2(m) + '</span><div class="mb"><i style="width:' + v / top[0][1] * 100 + '%"></i></div><b>' + v + "</b></div>").join("") + "</div>";
+    h += '<div class="card"><h3>\u0622\u062E\u0631 \u0627\u0644\u0645\u0647\u0627\u0645</h3>' + rows.slice(0, 15).map((r) => '<div class="rrow"><div class="rp">' + esc2(r.prompt || "(\u0628\u062F\u0648\u0646 \u0639\u0646\u0648\u0627\u0646)") + '</div><div class="mut"><span dir="ltr">' + esc2(r.model) + "</span> \xB7 " + esc2(when(r.at)) + (r.fails ? " \xB7 \u26A0\uFE0F" : "") + "</div></div>").join("") + "</div>";
+    return h;
+  }
+  function moreHtml(c) {
+    const { S: S2, esc: esc2, version } = c;
+    const d = S2.device || {};
+    const m = S2.mode;
+    const opt = (id, v) => '<option value="' + esc2(v.value) + '" ' + (id === v.value ? "selected" : "") + ">" + esc2(v.label) + "</option>";
+    let h = head("\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F", "\u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0648\u0627\u0644\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644");
+    h += '<div class="card"><h3>\u{1F4C1} \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639</h3><div class="mut" style="margin-bottom:8px">\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u064A\u0644\u064A \u0628\u062A\u062E\u062A\u0627\u0631\u0648\u0627 \u0628\u062A\u0634\u062A\u063A\u0644 \u0639\u0644\u064A\u0647 \u0645\u062D\u0627\u062F\u062B\u0627\u062A\u0643 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646.</div><div class="prj' + (!S2.project ? " sel" : "") + '" data-proj=""><div class="pn">\u0628\u062F\u0648\u0646 \u0645\u0634\u0631\u0648\u0639</div></div>' + S2.projects.map((p) => '<div class="prj' + (S2.project === p.id ? " sel" : "") + (p.confidential ? " lock" : "") + '" data-proj="' + esc2(p.id) + '"><div class="pn">' + (p.confidential ? "\u{1F512} " : "\u{1F4C2} ") + esc2(p.name) + "</div>" + (S2.activeProject === p.id ? '<span class="pill ok">\u0641\u0639\u0651\u0627\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</span>' : p.confidential ? "" : '<button class="chip" data-projdesk="' + esc2(p.id) + '">\u0641\u0639\u0651\u0644\u0647 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</button>') + "</div>").join("") + (S2.projects.length ? "" : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u0634\u0627\u0631\u064A\u0639. \u0623\u0636\u0641 \u0645\u0634\u0631\u0648\u0639 \u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.</div>') + "</div>";
+    h += '<div class="card"><h3>\u{1F9E0} \u0627\u0644\u0645\u0648\u062F\u064A\u0644 \u0648\u0637\u0631\u064A\u0642\u0629 \u0627\u0644\u0634\u063A\u0644</h3><div class="seg">' + [["auto", "\u062A\u0644\u0642\u0627\u0626\u064A"], ["free", "\u0645\u062C\u0627\u0646\u064A"], ["model", "\u0645\u0648\u062F\u064A\u0644"], ["council", "council"]].map(([k, l]) => '<button data-mode="' + k + '" class="' + (m.kind === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="mut" style="margin-bottom:8px">' + { auto: "\u064A\u062E\u062A\u0627\u0631 \u0623\u0646\u0633\u0628 \u0645\u0648\u062F\u064A\u0644 (\u0645\u062C\u0627\u0646\u064A \u0623\u0648 \u0645\u062F\u0641\u0648\u0639) \u062D\u0633\u0628 \u0627\u0644\u0637\u0644\u0628.", free: "\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0645\u062C\u0627\u0646\u064A\u0629 \u0628\u0633 (\u0627\u0644\u0623\u0631\u062E\u0635 \u0648\u0627\u0644\u0623\u0623\u0645\u0646).", model: "\u0645\u0648\u062F\u064A\u0644 \u0645\u062D\u062F\u062F \u0628\u062A\u062E\u062A\u0627\u0631\u0647 \u0625\u0646\u062A.", council: "\u0643\u0627\u062A\u0628 \u0648\u0645\u0631\u0627\u062C\u0639: \u062C\u0648\u0627\u0628 \u0623\u062F\u0642 \u0628\u0633 \u0623\u0628\u0637\u0623." }[m.kind] + "</div>" + (m.kind === "model" ? '<select class="sel" id="selModel"><option value="">\u2014 \u0627\u062E\u062A\u0631 \u2014</option>' + S2.models.map((v) => opt(m.id, v)).join("") + "</select>" : "") + (m.kind === "council" ? '<div class="mut">\u0627\u0644\u0643\u0627\u062A\u0628</div><select class="sel" id="selAuthor"><option value="">\u062A\u0644\u0642\u0627\u0626\u064A</option>' + S2.models.map((v) => opt(m.author, v)).join("") + '</select><div class="mut">\u0627\u0644\u0645\u0631\u0627\u062C\u0639</div><select class="sel" id="selCritic"><option value="">\u062A\u0644\u0642\u0627\u0626\u064A</option>' + S2.models.map((v) => opt(m.critic, v)).join("") + "</select>" : "") + '<div class="mut">' + S2.models.length + " \u0645\u0648\u062F\u064A\u0644 \u0645\u062A\u0627\u062D</div></div>";
+    h += '<div class="card"><h3>\u{1F50C} \u0627\u0644\u0627\u062A\u0635\u0627\u0644</h3><div class="mut">\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631: <b>' + esc2(S2.host || d.name) + "</b><br>\u0627\u0644\u062D\u0627\u0644\u0629: " + esc2({ online: "\u0645\u062A\u0635\u0644 \u2705", connecting: "\u0639\u0645 \u064A\u062A\u0635\u0644\u2026", hostdown: "\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0640 relay", offline: "\u063A\u064A\u0631 \u0645\u062A\u0635\u0644" }[S2.conn]) + '<br>\u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646: <span dir="ltr">' + esc2((d.urls || []).map((u) => u.replace(/^wss?:\/\//, "").replace("/ws", "")).join(" , ")) + '</span></div></div><div class="card"><h3>\u0627\u0644\u062E\u0644\u0641\u064A\u0629</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S2.keepAlive ? "checked" : "") + '> \u062E\u0644\u0651\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u062E\u0644\u0641\u064A\u0629 (\u0628\u064A\u0638\u0647\u0631 \u0625\u0634\u0639\u0627\u0631 \u062B\u0627\u0628\u062A) \u0639\u0634\u0627\u0646 \u062A\u0648\u0635\u0644\u0643 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A \u0648\u0627\u0644\u0646\u062A\u0627\u0626\u062C</label></div><div class="card"><h3>\u{1F510} \u0627\u0644\u0623\u0645\u0627\u0646</h3><div class="mut">\u0643\u0644 \u0634\u064A \u0628\u064A\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0634\u0641\u0651\u0631 \u0645\u0646 \u0627\u0644\u0637\u0631\u0641\u064A\u0646. \u0645\u0641\u062A\u0627\u062D \u0647\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u062D\u0641\u0648\u0638 \u0628\u0645\u062E\u0632\u0646 \u0623\u0646\u062F\u0631\u0648\u064A\u062F \u0627\u0644\u0622\u0645\u0646 (Keystore).</div></div><button class="btn ghost" id="reconBtn" style="margin-bottom:10px">\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644</button><button class="btn danger" id="unpairBtn">\u0625\u0644\u063A\u0627\u0621 \u0631\u0628\u0637 \u0647\u0627\u0644\u062C\u0647\u0627\u0632</button><div class="mut" style="text-align:center;margin-top:14px">TRL Agent ' + esc2(version) + "</div>";
+    return h;
+  }
+
   // src/main.js
+  var VERSION = true ? "5.10.1" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -41628,6 +41721,7 @@
       }
       let h = esc(p);
       h = h.replace(/`([^`\n]+)`/g, "<code>$1</code>").replace(/\*\*([^*\n]+)\*\*/g, "<b>$1</b>");
+      h = h.replace(/\[([^\]\n]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
       h = h.replace(/^#{1,4}\s*(.+)$/gm, "<b>$1</b>").replace(/^\s*[-*]\s+/gm, "\u2022 ");
       return h.replace(/\n/g, "<br>");
     }).join("");
@@ -41646,6 +41740,14 @@
     tasks: [],
     sas: "",
     pairErr: "",
+    agents: [],
+    sched: null,
+    report: null,
+    agentOpen: "",
+    schedOpen: "",
+    rperiod: "30",
+    activeProject: null,
+    agentOut: Object.fromEntries(Object.entries(lsGet("trl.agentout", {})).map(([k, v]) => [k, { ...v, running: false }])),
     mode: lsGet("trl.mode", { kind: "free" }),
     project: lsGet("trl.project", null),
     convs: lsGet("trl.convs", []),
@@ -41661,6 +41763,9 @@
     lsSet("trl.convs", S.convs.slice(0, 40).map((c) => ({ ...c, msgs: c.msgs.slice(-120) })));
     lsSet("trl.cur", S.cur);
   };
+  var VC = { get S() {
+    return S;
+  }, esc, md, fmtDur, version: VERSION };
   var curConv = () => {
     let c = S.convs.find((x) => x.id === S.cur);
     if (!c) {
@@ -41732,7 +41837,9 @@
     const t = $("#connTxt");
     if (t) t.textContent = { online: "\u0645\u062A\u0635\u0644", connecting: "\u0639\u0645 \u064A\u062A\u0635\u0644\u2026", hostdown: "\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644", offline: "\u063A\u064A\u0631 \u0645\u062A\u0635\u0644" }[S.conn] || "";
     const b = $("#send");
-    if (b) b.disabled = S.conn !== "online" && !S.running;
+    if (b) b.disabled = false;
+    const qn = getQ().length;
+    if (t && qn) t.textContent += " \xB7 " + qn + " \u0628\u0631\u0633\u0627\u0644\u0629 \u0628\u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631";
   }
   function scheduleRetry() {
     if (conn.timer || !S.device) return;
@@ -41776,6 +41883,9 @@
         conn.retry = 0;
         setConn("online");
         link.send({ k: "hello" });
+        link.send({ k: "agents.get" });
+        link.send({ k: "sched.get" });
+        setTimeout(flushQueue, 400);
       },
       onMessage: (m) => onHost(m),
       onPeer: (up) => setConn(up ? "connecting" : "hostdown")
@@ -41838,6 +41948,7 @@
         S.models = m.models || [];
         S.projects = m.projects || [];
         S.host = m.host || S.host;
+        S.activeProject = m.activeProject || null;
         if (Array.isArray(m.urls) && m.urls.length && S.device) {
           const merged = [.../* @__PURE__ */ new Set([...m.urls, ...S.device.urls])].slice(0, 8);
           if (merged.join() !== S.device.urls.join()) {
@@ -41852,20 +41963,34 @@
         if (S.view === "main") {
           renderHeader();
           if (S.sheet) renderSheet();
+          if (S.tab === "more") renderPage();
         }
         return;
       case "tasks":
         S.tasks = m.list || [];
         if (S.view === "main") {
           renderTabs();
-          if (S.tab === "tasks") renderPage();
+          if (S.tab === "agents" && !document.activeElement.matches("textarea")) renderPage();
         }
+        return;
+      case "agents":
+        S.agents = m.list || [];
+        if (S.tab === "agents") renderPage();
+        return;
+      case "sched":
+        S.sched = m.list || [];
+        if (S.tab === "sched") renderPage();
+        return;
+      case "report":
+        S.report = m.rows || [];
+        if (S.tab === "report") renderPage();
         return;
       case "prog": {
         const p = S.pending.get(m.id);
         if (p) {
           p.status = m.text;
-          renderStatus();
+          if (p.agent) agProg(p);
+          else renderStatus();
         }
         return;
       }
@@ -41874,6 +41999,7 @@
         if (!p) return;
         if (m.kind === "reset") p.buf = "";
         else p.buf += m.text || "";
+        if (p.agent) return agStream(p);
         renderLast();
         return;
       }
@@ -41907,17 +42033,23 @@
     }
   }
   function answerLoc(m) {
-    const fail = (why) => sendHost({ k: "loc.res", id: m.id, err: why });
-    if (!navigator.geolocation) return fail("no geolocation");
+    const fail = (why2) => sendHost({ k: "loc.res", id: m.id, err: why2 });
+    if (!navigator.geolocation) return fail("no geolocation in this app");
+    const ok = (p) => sendHost({ k: "loc.res", id: m.id, lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy });
+    const why = (e) => e && e.code === 1 ? "location permission denied: allow Location for TRL Agent in Android settings" : e && e.code === 3 ? "GPS timed out" : e && e.message ? e.message : "unknown";
     navigator.geolocation.getCurrentPosition(
-      (p) => sendHost({ k: "loc.res", id: m.id, lat: p.coords.latitude, lon: p.coords.longitude, acc: p.coords.accuracy }),
-      (e) => fail(e && e.message ? e.message : "denied"),
-      { enableHighAccuracy: true, timeout: 12e3, maximumAge: 6e4 }
+      ok,
+      (e1) => {
+        if (e1 && e1.code === 1) return fail(why(e1));
+        navigator.geolocation.getCurrentPosition(ok, (e2) => fail(why(e2)), { enableHighAccuracy: false, timeout: 1e4, maximumAge: 3e5 });
+      },
+      { enableHighAccuracy: true, timeout: 25e3, maximumAge: 6e4 }
     );
   }
   function onDone(m) {
     const p = S.pending.get(m.id);
     S.pending.delete(m.id);
+    if (p && p.agent) return agDone(m, p);
     const c = S.convs.find((x) => x.id === (p ? p.conv : m.tab)) || null;
     if (!c) return;
     if (m.cancelled) {
@@ -41964,9 +42096,23 @@
     const text = ta.value.trim();
     if (S.running) return stopChat();
     if (!text && !S.atts.length) return;
-    if (S.conn !== "online") return toast("\u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631");
+    const offline = S.conn !== "online";
+    if (offline && S.atts.length) return toast("\u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0628\u062F\u0647\u0627 \u0627\u062A\u0635\u0627\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631. \u0627\u0643\u062A\u0628 \u0627\u0644\u0646\u0635 \u0628\u0633 \u0648\u0628\u064A\u0646\u0628\u0639\u062A \u0644\u0645\u0627 \u064A\u062A\u0635\u0644");
     if (S.atts.some((a) => !a.fid)) return toast("\u0627\u0633\u062A\u0646\u0649 \u0644\u062D\u062F \u0645\u0627 \u064A\u062E\u0644\u0635 \u0631\u0641\u0639 \u0627\u0644\u0645\u0644\u0641\u0627\u062A");
     const c = curConv();
+    if (offline) {
+      const qid = rid();
+      c.msgs.push({ role: "user", content: text, qid, queued: true, at: Date.now() });
+      queueAdd({ id: qid, conv: c.id, text, project: S.project, mode: S.mode, at: Date.now() });
+      ta.value = "";
+      ta.style.height = "auto";
+      saveConvs();
+      toast("\u0627\u0646\u062D\u0641\u0638\u062A. \u0628\u062A\u0646\u0628\u0639\u062A \u0644\u0645\u0627 \u064A\u062A\u0635\u0644 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631");
+      updateDot();
+      renderMsgs();
+      renderSend();
+      return;
+    }
     const hist = c.msgs.filter((x) => x.content && !x.failed).slice(-12).map((x) => ({ role: x.role === "user" ? "user" : "assistant", content: x.content }));
     const id = rid();
     const attNames = S.atts.map((a) => a.name);
@@ -41984,6 +42130,152 @@
     }
     renderMsgs();
     renderAtts();
+    renderStatus();
+    renderSend();
+  }
+  var saveAgOut = () => lsSet("trl.agentout", Object.fromEntries(Object.entries(S.agentOut).map(([k, v]) => [k, { task: v.task, out: String(v.out || "").slice(0, 6e3), at: v.at, failed: v.failed }])));
+  function runAgentNow(id) {
+    const ta = $("#agTask");
+    const task = (ta ? ta.value : "").trim();
+    if (!task) return toast("\u0627\u0643\u062A\u0628 \u0627\u0644\u0645\u0647\u0645\u0629 \u0623\u0648\u0644");
+    const r = rid();
+    const st = S.agentOut[id] = { task, out: "", at: Date.now(), running: true, status: "\u0639\u0645 \u064A\u0631\u0633\u0644\u2026" };
+    S.pending.set(r, { agent: id, buf: "", status: st.status });
+    if (!sendHost({ k: "agent.run", id: r, agent: id, task, project: S.project, mode: S.mode })) {
+      S.pending.delete(r);
+      st.running = false;
+      toast("\u0627\u0646\u0642\u0637\u0639 \u0627\u0644\u0627\u062A\u0635\u0627\u0644");
+    }
+    saveAgOut();
+    renderPage();
+  }
+  function agProg(p) {
+    const st = S.agentOut[p.agent];
+    if (!st) return;
+    st.status = p.status;
+    const el = $("#agStatus");
+    if (el) el.innerHTML = '<span class="spin"></span> ' + esc(p.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026");
+  }
+  function agStream(p) {
+    const el = $("#agOut");
+    if (el && S.agentOpen === p.agent) el.innerHTML = '<div class="msg bot">' + (p.buf ? md(p.buf) : '<span class="mut">\u2026</span>') + "</div>";
+  }
+  function agDone(m, p) {
+    const st = S.agentOut[p.agent] || (S.agentOut[p.agent] = {});
+    st.running = false;
+    st.failed = !!m.failed;
+    st.at = Date.now();
+    st.out = m.cancelled ? (p.buf || "") + "\n(\u0627\u0646\u0644\u063A\u0649)" : m.content || "";
+    saveAgOut();
+    if (S.tab === "agents") renderPage();
+    const a = S.agents.find((x) => x.id === p.agent);
+    notify((a ? a.name : "\u0627\u0644\u0648\u0643\u064A\u0644") + (m.failed ? ": \u0645\u0627 \u062E\u0644\u0635\u062A" : ": \u062E\u0644\u0635"), m.content || "");
+    try {
+      navigator.vibrate && navigator.vibrate(60);
+    } catch {
+    }
+  }
+  function openTab(id) {
+    S.tab = id;
+    renderTabs();
+    renderPage();
+    if (id === "agents") sendHost({ k: "agents.get" });
+    else if (id === "sched") sendHost({ k: "sched.get" });
+    else if (id === "report") sendHost({ k: "report.get" });
+  }
+  function viewClick(t) {
+    const d = t.dataset;
+    if (d.tab) {
+      openTab(d.tab);
+      return true;
+    }
+    if (d.refresh) {
+      sendHost({ k: d.refresh + ".get" });
+      toast("\u0639\u0645 \u064A\u062D\u062F\u0651\u062B\u2026");
+      return true;
+    }
+    if (d.agopen !== void 0) {
+      S.agentOpen = S.agentOpen === d.agopen ? "" : d.agopen;
+      renderPage();
+      return true;
+    }
+    if (d.agrun) {
+      runAgentNow(d.agrun);
+      return true;
+    }
+    if (d.agstop) {
+      sendHost({ k: "cancel", tab: "agent-" + d.agstop });
+      toast("\u0637\u0644\u0628\u062A \u0627\u0644\u0625\u064A\u0642\u0627\u0641");
+      return true;
+    }
+    if (d.sopen !== void 0) {
+      S.schedOpen = S.schedOpen === d.sopen ? "" : d.sopen;
+      renderPage();
+      return true;
+    }
+    if (d.srun) {
+      sendHost({ k: "sched.run", id: d.srun });
+      toast("\u0628\u0644\u0651\u0634\u062A \u0627\u0644\u0645\u0647\u0645\u0629");
+      return true;
+    }
+    if (d.rperiod) {
+      S.rperiod = d.rperiod;
+      renderPage();
+      return true;
+    }
+    if (d.projdesk) {
+      sendHost({ k: "project.set", id: d.projdesk });
+      toast("\u0627\u0646\u0641\u0639\u0651\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631");
+      return true;
+    }
+    if (d.proj !== void 0) {
+      const p = S.projects.find((x) => x.id === d.proj);
+      if (p && p.confidential) {
+        toast("\u{1F512} \u0645\u0634\u0631\u0648\u0639 \u0633\u0631\u064A\u060C \u0645\u0627 \u0628\u064A\u0646\u0641\u062A\u062D \u0645\u0646 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644");
+        return true;
+      }
+      S.project = d.proj || null;
+      lsSet("trl.project", S.project);
+      renderPage();
+      return true;
+    }
+    return false;
+  }
+  var QUEUE_TTL = 60 * 60 * 1e3;
+  var getQ = () => lsGet("trl.queue", []);
+  var queueAdd = (it) => {
+    const q = getQ();
+    q.push(it);
+    lsSet("trl.queue", q.slice(-50));
+  };
+  function flushQueue() {
+    const q = getQ();
+    if (!q.length || !conn.link || !conn.link.isReady) return;
+    const stale = q.filter((x) => Date.now() - x.at > QUEUE_TTL).length;
+    const sendStale = stale ? confirm("\u0641\u064A " + stale + " \u0631\u0633\u0627\u0644\u0629 \u0628\u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u0623\u0642\u062F\u0645 \u0645\u0646 \u0633\u0627\u0639\u0629. \u062A\u0628\u0639\u062A\u0647\u0627 \u0647\u0644\u0623\u061F (\u0625\u0644\u063A\u0627\u0621 = \u0628\u062A\u0646\u062D\u0630\u0641)") : false;
+    const rest = [];
+    for (const it of q) {
+      const c = S.convs.find((x) => x.id === it.conv);
+      const idx = c ? c.msgs.findIndex((x) => x.qid === it.id) : -1;
+      const m = idx >= 0 ? c.msgs[idx] : null;
+      if (Date.now() - it.at > QUEUE_TTL && !sendStale) {
+        if (m) {
+          m.queued = false;
+          m.expired = true;
+        }
+        continue;
+      }
+      const hist = c ? c.msgs.slice(0, Math.max(idx, 0)).filter((x) => x.content && !x.failed && !x.queued && !x.expired).slice(-12).map((x) => ({ role: x.role === "user" ? "user" : "assistant", content: x.content })) : [];
+      const msg = { k: "chat", id: it.id, text: it.text, tab: it.conv, project: it.project, mode: it.mode, hist, atts: [], qAge: Math.max(1, Math.round((Date.now() - it.at) / 6e4)) };
+      if (sendHost(msg)) {
+        S.pending.set(it.id, { conv: it.conv, buf: "", status: "\u0639\u0645 \u064A\u0631\u0633\u0644\u2026" });
+        if (m) m.queued = false;
+      } else rest.push(it);
+    }
+    lsSet("trl.queue", rest);
+    saveConvs();
+    updateDot();
+    renderMsgs();
     renderStatus();
     renderSend();
   }
@@ -42008,7 +42300,7 @@
     el.innerHTML = p ? '<span class="spin"></span> ' + esc(p.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") : "";
   }
   function msgHtml(m) {
-    if (m.role === "user") return '<div class="msg user">' + esc(m.content).replace(/\n/g, "<br>") + (m.atts && m.atts.length ? '<div class="meta">\u{1F4CE} ' + m.atts.map(esc).join(" \xB7 ") + "</div>" : "") + "</div>";
+    if (m.role === "user") return '<div class="msg user">' + esc(m.content).replace(/\n/g, "<br>") + (m.atts && m.atts.length ? '<div class="meta">\u{1F4CE} ' + m.atts.map(esc).join(" \xB7 ") + "</div>" : "") + (m.queued ? '<div class="meta">\u23F3 \u0628\u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026</div>' : "") + (m.expired ? '<div class="meta">\u26A0\uFE0F \u0645\u0627 \u0627\u0646\u0628\u0639\u062A\u062A (\u0642\u062F\u064A\u0645\u0629)</div>' : "") + "</div>";
     const model = (String(m.meta || "").match(/Model: ([^|]+?)(?: \||$)/) || [])[1];
     return '<div class="msg bot' + (m.failed ? " err" : "") + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta">' + esc(model || m.meta || "") + "</div>" : "") + "</div>";
   }
@@ -42017,8 +42309,8 @@
     if (!el) return;
     const c = curConv();
     const p = [...S.pending.values()].find((x) => x.conv === c.id);
-    const empty = !c.msgs.length && !p;
-    el.innerHTML = empty ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">\u0627\u0643\u062A\u0628 \u0633\u0624\u0627\u0644\u0643 \u0623\u0648 \u0627\u0628\u0639\u062A \u0645\u0644\u0641. \u0643\u0644 \u0634\u064A \u0628\u064A\u062A\u0646\u0641\u0630 \u0639\u0644\u0649 \u0643\u0645\u0628\u064A\u0648\u062A\u0631\u0643.</div>' : c.msgs.map(msgHtml).join("") + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">\u2026</span>') + "</div>" : "");
+    const empty2 = !c.msgs.length && !p;
+    el.innerHTML = empty2 ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">\u0627\u0643\u062A\u0628 \u0633\u0624\u0627\u0644\u0643 \u0623\u0648 \u0627\u0628\u0639\u062A \u0645\u0644\u0641. \u0643\u0644 \u0634\u064A \u0628\u064A\u062A\u0646\u0641\u0630 \u0639\u0644\u0649 \u0643\u0645\u0628\u064A\u0648\u062A\u0631\u0643.</div>' : c.msgs.map(msgHtml).join("") + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">\u2026</span>') + "</div>" : "");
     if (stick) el.scrollTop = el.scrollHeight;
   }
   function renderLast() {
@@ -42355,11 +42647,16 @@
     const t = $("#tabs");
     if (!t) return;
     const n = S.tasks.length;
-    t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["tasks", "\u{1F4CB}", "\u0627\u0644\u0645\u0647\u0627\u0645"], ["settings", "\u2699\uFE0F", "\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + i + "</span>" + l + (id === "tasks" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
+    t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + i + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
   }
   function renderPage() {
     const p = $("#page");
     if (!p) return;
+    const ta0 = $("#agTask");
+    if (ta0 && S.agentOpen) {
+      const st0 = S.agentOut[S.agentOpen] || (S.agentOut[S.agentOpen] = {});
+      st0.task = ta0.value;
+    }
     const top = document.querySelector(".top");
     if (top) top.style.display = S.tab === "chat" ? "flex" : "none";
     if (S.tab === "chat") {
@@ -42369,11 +42666,9 @@
       renderStatus();
       renderSend();
       renderRec();
-    } else if (S.tab === "tasks") {
-      p.innerHTML = '<div class="page"><h2 style="margin:0 0 12px;font-size:18px">\u0627\u0644\u0645\u0647\u0627\u0645 \u0627\u0644\u0634\u063A\u0651\u0627\u0644\u0629 \u0647\u0644\u0623</h2>' + (S.tasks.length ? S.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc(t.label) + '</b> <span class="mut">\xB7 ' + fmtDur(Date.now() - t.started) + '</span><div class="mut">' + esc(t.text || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + '</div></div><button class="chip" data-stop="' + esc(t.tab) + '">\u0625\u064A\u0642\u0627\u0641</button></div>').join("") : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u0647\u0627\u0645 \u0634\u063A\u0651\u0627\u0644\u0629 \u0647\u0644\u0623.</div>') + "</div>";
     } else {
-      const d = S.device || {};
-      p.innerHTML = '<div class="page"><div class="card"><h3>\u0627\u0644\u0627\u062A\u0635\u0627\u0644</h3><div class="mut">\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631: <b>' + esc(S.host || d.name) + "</b><br>\u0627\u0644\u062D\u0627\u0644\u0629: " + esc({ online: "\u0645\u062A\u0635\u0644 \u2705", connecting: "\u0639\u0645 \u064A\u062A\u0635\u0644\u2026", hostdown: "\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0640 relay", offline: "\u063A\u064A\u0631 \u0645\u062A\u0635\u0644" }[S.conn]) + '<br>\u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646: <span dir="ltr">' + esc((d.urls || []).map((u) => u.replace(/^wss?:\/\//, "").replace("/ws", "")).join(" , ")) + '</span></div></div><div class="card"><h3>\u0627\u0644\u062E\u0644\u0641\u064A\u0629</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S.keepAlive ? "checked" : "") + '> \u062E\u0644\u0651\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u062E\u0644\u0641\u064A\u0629 (\u0628\u064A\u0638\u0647\u0631 \u0625\u0634\u0639\u0627\u0631 \u062B\u0627\u0628\u062A) \u0639\u0634\u0627\u0646 \u062A\u0648\u0635\u0644\u0643 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A \u0648\u0627\u0644\u0646\u062A\u0627\u0626\u062C</label></div><div class="card"><h3>\u0627\u0644\u0623\u0645\u0627\u0646</h3><div class="mut">\u0643\u0644 \u0634\u064A \u0628\u064A\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0634\u0641\u0651\u0631 \u0645\u0646 \u0627\u0644\u0637\u0631\u0641\u064A\u0646. \u0645\u0641\u062A\u0627\u062D \u0647\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u062D\u0641\u0648\u0638 \u0628\u0645\u062E\u0632\u0646 \u0623\u0646\u062F\u0631\u0648\u064A\u062F \u0627\u0644\u0622\u0645\u0646 (Keystore).</div></div><button class="btn ghost" id="reconBtn" style="margin-bottom:10px">\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644</button><button class="btn danger" id="unpairBtn">\u0625\u0644\u063A\u0627\u0621 \u0631\u0628\u0637 \u0647\u0627\u0644\u062C\u0647\u0627\u0632</button><div class="mut" style="text-align:center;margin-top:14px">TRL Agent 0.1</div></div>';
+      const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, more: moreHtml }[S.tab] || moreHtml;
+      p.innerHTML = '<div class="page fade">' + fn(VC) + "</div>";
     }
   }
   function renderApproval() {
@@ -42411,9 +42706,10 @@
     }
   }
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("button,[data-conv],[data-close]");
+    const t = e.target.closest("button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj]");
     if (!t) return;
     const id = t.id;
+    if (viewClick(t)) return;
     if (t.dataset.close && (t === e.target || t.tagName === "BUTTON") && t.closest("#sheetHost")) {
       if (t.classList.contains("sheet-bg") ? e.target === t : true) {
         S.sheet = null;
@@ -42439,6 +42735,7 @@
       lsSet("trl.mode", S.mode);
       renderSheet();
       renderHeader();
+      if (S.tab === "more") renderPage();
       return;
     }
     if (t.dataset.delconv) {
@@ -42530,6 +42827,10 @@
       t.value = "";
       return;
     }
+    if (t.dataset.sw) {
+      sendHost({ k: "sched.toggle", id: t.dataset.sw, enabled: t.checked });
+      return;
+    }
     if (t.id === "kaChk") {
       S.keepAlive = t.checked;
       lsSet("trl.keepalive", S.keepAlive);
@@ -42571,7 +42872,7 @@
   });
   window.addEventListener("online", wake);
   setInterval(() => {
-    if (S.view === "main" && S.tab === "tasks" && S.tasks.length) renderPage();
+    if (S.view === "main" && S.tab === "agents" && S.tasks.length && !document.activeElement.matches("textarea")) renderPage();
   }, 1e3 * 5);
   async function handleShare(data) {
     if (!data || !data.text && !(data.files && data.files.length)) return;

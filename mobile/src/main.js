@@ -5,6 +5,9 @@ import { App as CapApp } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
+import { agentsHtml, schedHtml, reportHtml, moreHtml } from './views.js'
+
+const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '5.10'
 
 // ---------- native bridge (with a browser fallback so the UI can be tested without a phone) ----------
 const AirNative = registerPlugin('AirNative', {
@@ -47,11 +50,14 @@ let L = null
 const S = {
   view: 'boot', tab: 'chat', device: null, ppk: '', psk: '',
   conn: 'offline', host: '', models: [], projects: [], tasks: [], sas: '', pairErr: '',
+  agents: [], sched: null, report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null,
+  agentOut: Object.fromEntries(Object.entries(lsGet('trl.agentout', {})).map(([k, v]) => [k, { ...v, running: false }])),
   mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
   convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
   pending: new Map(), atts: [], recording: null, approval: null, sheet: null, keepAlive: lsGet('trl.keepalive', true)
 }
 const saveConvs = () => { lsSet('trl.convs', S.convs.slice(0, 40).map((c) => ({ ...c, msgs: c.msgs.slice(-120) }))); lsSet('trl.cur', S.cur) }
+const VC = { get S() { return S }, esc, md, fmtDur, version: VERSION }
 const curConv = () => { let c = S.convs.find((x) => x.id === S.cur); if (!c) { c = { id: 'c' + rid(), title: 'محادثة جديدة', msgs: [], at: Date.now() }; S.convs.unshift(c); S.cur = c.id; saveConvs() } return c }
 
 function toast(t) {
@@ -102,7 +108,7 @@ async function connect() {
   const link = new GuestLink({
     sodium, ppk: S.ppk, psk: S.psk, name: S.device.me, mode: 'device', device: { dpk: S.device.dpk, room: S.device.room },
     send: (f) => { if (ws.readyState === 1) ws.send(f) },
-    onReady: () => { conn.retry = 0; setConn('online'); link.send({ k: 'hello' }); setTimeout(flushQueue, 400) },
+    onReady: () => { conn.retry = 0; setConn('online'); link.send({ k: 'hello' }); link.send({ k: 'agents.get' }); link.send({ k: 'sched.get' }); setTimeout(flushQueue, 400) },
     onMessage: (m) => onHost(m),
     onPeer: (up) => setConn(up ? 'connecting' : 'hostdown')
   })
@@ -133,16 +139,20 @@ const fileWait = new Map()
 function onHost(m) {
   switch (m.k) {
     case 'state':
-      S.models = m.models || []; S.projects = m.projects || []; S.host = m.host || S.host
+      S.models = m.models || []; S.projects = m.projects || []; S.host = m.host || S.host; S.activeProject = m.activeProject || null
       if (Array.isArray(m.urls) && m.urls.length && S.device) { const merged = [...new Set([...m.urls, ...S.device.urls])].slice(0, 8); if (merged.join() !== S.device.urls.join()) { S.device.urls = merged; lsSet('trl.device', S.device) } }
       if (S.project && S.projects.find((p) => p.id === S.project && p.confidential)) { S.project = null; lsSet('trl.project', null) }
-      if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet() }
+      if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet(); if (S.tab === 'more') renderPage() }
       return
-    case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'tasks') renderPage() } return
-    case 'prog': { const p = S.pending.get(m.id); if (p) { p.status = m.text; renderStatus() } return }
+    case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !document.activeElement.matches('textarea')) renderPage() } return
+    case 'agents': S.agents = m.list || []; if (S.tab === 'agents') renderPage(); return
+    case 'sched': S.sched = m.list || []; if (S.tab === 'sched') renderPage(); return
+    case 'report': S.report = m.rows || []; if (S.tab === 'report') renderPage(); return
+    case 'prog': { const p = S.pending.get(m.id); if (p) { p.status = m.text; if (p.agent) agProg(p); else renderStatus() } return }
     case 'stream': {
       const p = S.pending.get(m.id); if (!p) return
       if (m.kind === 'reset') p.buf = ''; else p.buf += m.text || ''
+      if (p.agent) return agStream(p)
       renderLast(); return
     }
     case 'done': return onDone(m)
@@ -174,6 +184,7 @@ function answerLoc(m) {
 function onDone(m) {
   const p = S.pending.get(m.id)
   S.pending.delete(m.id)
+  if (p && p.agent) return agDone(m, p)
   const c = S.convs.find((x) => x.id === (p ? p.conv : m.tab)) || null
   if (!c) return
   if (m.cancelled) { c.msgs.push({ role: 'bot', content: p && p.buf ? p.buf : '', meta: 'انلغى', at: Date.now(), cancelled: true }) }
@@ -232,6 +243,54 @@ async function sendChat() {
   if (!sendHost(msg)) { S.pending.delete(id); toast('انقطع الاتصال'); }
   renderMsgs(); renderAtts(); renderStatus(); renderSend()
 }
+// ---------- agents / schedules / reports ----------
+const saveAgOut = () => lsSet('trl.agentout', Object.fromEntries(Object.entries(S.agentOut).map(([k, v]) => [k, { task: v.task, out: String(v.out || '').slice(0, 6000), at: v.at, failed: v.failed }])))
+function runAgentNow(id) {
+  const ta = $('#agTask'); const task = (ta ? ta.value : '').trim()
+  if (!task) return toast('اكتب المهمة أول')
+  const r = rid()
+  const st = S.agentOut[id] = { task, out: '', at: Date.now(), running: true, status: 'عم يرسل…' }
+  S.pending.set(r, { agent: id, buf: '', status: st.status })
+  if (!sendHost({ k: 'agent.run', id: r, agent: id, task, project: S.project, mode: S.mode })) { S.pending.delete(r); st.running = false; toast('انقطع الاتصال') }
+  saveAgOut(); renderPage()
+}
+function agProg(p) { const st = S.agentOut[p.agent]; if (!st) return; st.status = p.status; const el = $('#agStatus'); if (el) el.innerHTML = '<span class="spin"></span> ' + esc(p.status || 'عم يشتغل…') }
+function agStream(p) { const el = $('#agOut'); if (el && S.agentOpen === p.agent) el.innerHTML = '<div class="msg bot">' + (p.buf ? md(p.buf) : '<span class="mut">…</span>') + '</div>' }
+function agDone(m, p) {
+  const st = S.agentOut[p.agent] || (S.agentOut[p.agent] = {})
+  st.running = false; st.failed = !!m.failed; st.at = Date.now()
+  st.out = m.cancelled ? (p.buf || '') + '\n(انلغى)' : (m.content || '')
+  saveAgOut()
+  if (S.tab === 'agents') renderPage()
+  const a = S.agents.find((x) => x.id === p.agent)
+  notify((a ? a.name : 'الوكيل') + (m.failed ? ': ما خلصت' : ': خلص'), m.content || '')
+  try { navigator.vibrate && navigator.vibrate(60) } catch { /* */ }
+}
+function openTab(id) {
+  S.tab = id; renderTabs(); renderPage()
+  if (id === 'agents') sendHost({ k: 'agents.get' })
+  else if (id === 'sched') sendHost({ k: 'sched.get' })
+  else if (id === 'report') sendHost({ k: 'report.get' })
+}
+function viewClick(t) {
+  const d = t.dataset
+  if (d.tab) { openTab(d.tab); return true }
+  if (d.refresh) { sendHost({ k: d.refresh + '.get' }); toast('عم يحدّث…'); return true }
+  if (d.agopen !== undefined) { S.agentOpen = S.agentOpen === d.agopen ? '' : d.agopen; renderPage(); return true }
+  if (d.agrun) { runAgentNow(d.agrun); return true }
+  if (d.agstop) { sendHost({ k: 'cancel', tab: 'agent-' + d.agstop }); toast('طلبت الإيقاف'); return true }
+  if (d.sopen !== undefined) { S.schedOpen = S.schedOpen === d.sopen ? '' : d.sopen; renderPage(); return true }
+  if (d.srun) { sendHost({ k: 'sched.run', id: d.srun }); toast('بلّشت المهمة'); return true }
+  if (d.rperiod) { S.rperiod = d.rperiod; renderPage(); return true }
+  if (d.projdesk) { sendHost({ k: 'project.set', id: d.projdesk }); toast('انفعّل عالكمبيوتر'); return true }
+  if (d.proj !== undefined) {
+    const p = S.projects.find((x) => x.id === d.proj)
+    if (p && p.confidential) { toast('🔒 مشروع سري، ما بينفتح من الموبايل'); return true }
+    S.project = d.proj || null; lsSet('trl.project', S.project); renderPage(); return true
+  }
+  return false
+}
+
 // ---------- offline queue ----------
 const QUEUE_TTL = 60 * 60 * 1000 // older than 1 hour: ask before sending
 const getQ = () => lsGet('trl.queue', [])
@@ -471,10 +530,11 @@ function renderHeader() {
 function renderTabs() {
   const t = $('#tabs'); if (!t) return
   const n = S.tasks.length
-  t.innerHTML = [['chat', '💬', 'الشات'], ['tasks', '📋', 'المهام'], ['settings', '⚙️', 'الإعدادات']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + i + '</span>' + l + (id === 'tasks' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
+  t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + i + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
 }
 function renderPage() {
   const p = $('#page'); if (!p) return
+  const ta0 = $('#agTask'); if (ta0 && S.agentOpen) { const st0 = S.agentOut[S.agentOpen] || (S.agentOut[S.agentOpen] = {}); st0.task = ta0.value }
   const top = document.querySelector('.top'); if (top) top.style.display = S.tab === 'chat' ? 'flex' : 'none'
   if (S.tab === 'chat') {
     p.innerHTML = '<div class="msgs" id="msgs"></div><div class="status" id="status"></div><div class="composer"><div class="atts" id="atts"></div><div class="row">' +
@@ -482,16 +542,9 @@ function renderPage() {
       '<textarea id="ta" rows="1" placeholder="اكتب هون…"></textarea><button class="send" id="send">➤</button></div>' +
       '<input type="file" id="fileIn" multiple hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>'
     renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
-  } else if (S.tab === 'tasks') {
-    p.innerHTML = '<div class="page"><h2 style="margin:0 0 12px;font-size:18px">المهام الشغّالة هلأ</h2>' + (S.tasks.length
-      ? S.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc(t.label) + '</b> <span class="mut">· ' + fmtDur(Date.now() - t.started) + '</span><div class="mut">' + esc(t.text || 'عم يشتغل…') + '</div></div><button class="chip" data-stop="' + esc(t.tab) + '">إيقاف</button></div>').join('')
-      : '<div class="mut">ما في مهام شغّالة هلأ.</div>') + '</div>'
   } else {
-    const d = S.device || {}
-    p.innerHTML = '<div class="page"><div class="card"><h3>الاتصال</h3><div class="mut">الكمبيوتر: <b>' + esc(S.host || d.name) + '</b><br>الحالة: ' + esc(({ online: 'متصل ✅', connecting: 'عم يتصل…', hostdown: 'الكمبيوتر مو متصل بالـ relay', offline: 'غير متصل' })[S.conn]) + '<br>العناوين: <span dir="ltr">' + esc((d.urls || []).map((u) => u.replace(/^wss?:\/\//, '').replace('/ws', '')).join(' , ')) + '</span></div></div>' +
-      '<div class="card"><h3>الخلفية</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S.keepAlive ? 'checked' : '') + '> خلّي التطبيق متصل بالخلفية (بيظهر إشعار ثابت) عشان توصلك الموافقات والنتائج</label></div>' +
-      '<div class="card"><h3>الأمان</h3><div class="mut">كل شي بين التلفون والكمبيوتر مشفّر من الطرفين. مفتاح هالجهاز محفوظ بمخزن أندرويد الآمن (Keystore).</div></div>' +
-      '<button class="btn ghost" id="reconBtn" style="margin-bottom:10px">إعادة الاتصال</button><button class="btn danger" id="unpairBtn">إلغاء ربط هالجهاز</button><div class="mut" style="text-align:center;margin-top:14px">TRL Agent 0.1</div></div>'
+    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, more: moreHtml }[S.tab] || moreHtml
+    p.innerHTML = '<div class="page fade">' + fn(VC) + '</div>'
   }
 }
 function renderApproval() {
@@ -522,12 +575,13 @@ function renderSheet() {
 
 // ---------- events (delegated) ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('button,[data-conv],[data-close]'); if (!t) return
+  const t = e.target.closest('button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj]'); if (!t) return
   const id = t.id
+  if (viewClick(t)) return
   if (t.dataset.close && (t === e.target || t.tagName === 'BUTTON') && t.closest('#sheetHost')) { if (t.classList.contains('sheet-bg') ? e.target === t : true) { S.sheet = null; renderSheet(); renderHeader() } return }
   if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); renderPage(); return }
   if (t.dataset.stop) { sendHost({ k: 'stop', tab: t.dataset.stop }); toast('طلبت الإيقاف'); return }
-  if (t.dataset.mode) { const k = t.dataset.mode; S.mode = k === 'model' ? { kind: 'model', id: S.mode.id || '' } : k === 'council' ? { kind: 'council', author: S.mode.author || '', critic: S.mode.critic || '' } : { kind: k }; lsSet('trl.mode', S.mode); renderSheet(); renderHeader(); return }
+  if (t.dataset.mode) { const k = t.dataset.mode; S.mode = k === 'model' ? { kind: 'model', id: S.mode.id || '' } : k === 'council' ? { kind: 'council', author: S.mode.author || '', critic: S.mode.critic || '' } : { kind: k }; lsSet('trl.mode', S.mode); renderSheet(); renderHeader(); if (S.tab === 'more') renderPage(); return }
   if (t.dataset.delconv) { S.convs = S.convs.filter((c) => c.id !== t.dataset.delconv); if (S.cur === t.dataset.delconv) S.cur = null; saveConvs(); renderSheet(); if (S.tab === 'chat') renderMsgs(); return }
   if (t.dataset.conv) { S.cur = t.dataset.conv; saveConvs(); S.sheet = null; renderSheet(); S.tab = 'chat'; renderTabs(); renderPage(); return }
   if (t.dataset.rm) { S.atts.splice(Number(t.dataset.rm), 1); renderAtts(); return }
@@ -553,6 +607,7 @@ document.addEventListener('click', (e) => {
 document.addEventListener('change', (e) => {
   const t = e.target
   if (t.id === 'fileIn' || t.id === 'camIn') { for (const f of t.files) addFile(f); t.value = ''; return }
+  if (t.dataset.sw) { sendHost({ k: 'sched.toggle', id: t.dataset.sw, enabled: t.checked }); return }
   if (t.id === 'kaChk') { S.keepAlive = t.checked; lsSet('trl.keepalive', S.keepAlive); applyKeepAlive(); return }
   if (t.id === 'selModel') { S.mode = { kind: 'model', id: t.value }; lsSet('trl.mode', S.mode); renderHeader(); return }
   if (t.id === 'selAuthor' || t.id === 'selCritic') { S.mode = { kind: 'council', author: ($('#selAuthor') || {}).value || '', critic: ($('#selCritic') || {}).value || '' }; lsSet('trl.mode', S.mode); return }
@@ -562,7 +617,7 @@ document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'ta
 document.addEventListener('keydown', (e) => { if (e.target.id === 'ta' && e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendChat() } })
 document.addEventListener('visibilitychange', () => { if (!document.hidden) wake() })
 window.addEventListener('online', wake)
-setInterval(() => { if (S.view === 'main' && S.tab === 'tasks' && S.tasks.length) renderPage() }, 1000 * 5)
+setInterval(() => { if (S.view === 'main' && S.tab === 'agents' && S.tasks.length && !document.activeElement.matches('textarea')) renderPage() }, 1000 * 5)
 
 // ---------- share-to-app ----------
 async function handleShare(data) {

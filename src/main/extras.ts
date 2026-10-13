@@ -108,7 +108,7 @@ function estCost(model: string, tokens: number): number {
   }
 }
 
-function tasksReport(limit = 400): TaskRow[] {
+export function tasksReport(limit = 400): TaskRow[] {
   const rows: TaskRow[] = []
   const convs = [...listConversations()].sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0)).slice(0, 120)
   for (const s of convs) {

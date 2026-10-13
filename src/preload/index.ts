@@ -238,7 +238,8 @@ const api = {
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
     save: (p: { id?: string; name: string; prompt: string; runOn: string }) => ipcRenderer.invoke('agents:save', p),
-    remove: (id: string) => ipcRenderer.invoke('agents:remove', id)
+    remove: (id: string) => ipcRenderer.invoke('agents:remove', id),
+    run: (id: string, task: string) => ipcRenderer.invoke('agents:run', id, task)
   },
   gate: {
     get: () => ipcRenderer.invoke('gate:get'),

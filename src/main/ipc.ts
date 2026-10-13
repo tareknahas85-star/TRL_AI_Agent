@@ -6,7 +6,8 @@ import { executeWithSkill } from '../skills/executor'
 import { runCouncil, resetCouncilTrace, getLastCouncilTrace, type CouncilInfo } from '../core/council'
 import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { registerManagementHandlers } from './management'
-import { getConversation, listProjects, saveConversation } from '../core/workspace'
+import { activeProject, getConversation, listProjects, saveConversation } from '../core/workspace'
+import { listAgents } from '../core/agents'
 import { missingFileClaims, claimsWarning } from '../core/claims'
 import { setScheduleRunner, startScheduler } from '../core/scheduler'
 import { refreshFreeRanking } from '../core/free-best'
@@ -308,6 +309,17 @@ export function registerIpcHandlers(): void {
   startFreeWatch()
   void refreshFreeRanking()
 
+  ipcMain.handle('agents:run', async (event, id: unknown, task: unknown) => {
+    const a = listAgents().find((x) => x.id === id)
+    const t = typeof task === 'string' ? task.trim().slice(0, 20000) : ''
+    if (!a) return { content: 'ما لقيت الوكيل.', failed: true }
+    if (!t) return { content: 'اكتب المهمة أول.', failed: true }
+    if (a.runOn === 'cloud') return { content: 'هالوكيل مضبوط سحابي بس. بيشتغل من تيليغرام أو الموبايل لما الكمبيوتر مطفي.', failed: true }
+    const p = activeProject()
+    if (p?.confidential) return { content: '🔒 المشروع الفعّال سري. غيّر المشروع أول.', failed: true }
+    const r = (await runChat(event.sender, (a.prompt ? a.prompt + '\n\n' : '') + 'المهمة: ' + t, false, [], { tabId: 'agent-' + a.id, projectId: p?.id ?? null, mode: { kind: 'auto' } })) as { content: string; failed?: boolean }
+    return { content: String(r.content ?? ''), failed: !!r.failed }
+  })
   ipcMain.handle('chat:send', (event, userMsg: unknown, history?: unknown, opts?: unknown) => {
     if (typeof userMsg !== 'string' || !userMsg.trim()) return { content: 'Error: empty message' }
     return runChat(event.sender, userMsg, false, history, tabOf(opts))

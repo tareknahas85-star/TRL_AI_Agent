@@ -12,7 +12,10 @@ import WebSocket from 'ws'
 import QRCode from 'qrcode'
 import sodium from 'libsodium-wrappers'
 import { readJson, writeJson, newId } from '../core/json-store'
-import { listProjects, activeProject } from '../core/workspace'
+import { listProjects, activeProject, setActiveProject } from '../core/workspace'
+import { listAgents } from '../core/agents'
+import { listSchedules, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
+import { tasksReport } from '../main/extras'
 import { listRuns, cancelRun, runHub } from '../core/progress'
 import { prepareFile, type Attachment } from '../main/attach'
 import { attachRelay } from './relay'
@@ -326,8 +329,38 @@ export function pushTasks(): void {
 }
 runHub.on('change', pushTasks)
 
+const confIds = (): Set<string> => new Set(listProjects().projects.filter((p) => p.confidential).map((p) => p.id))
+const schedMsg = (): Json => {
+  const run = new Set(runningSchedules())
+  const conf = confIds()
+  return {
+    k: 'sched',
+    list: listSchedules().map((t) => ({
+      id: t.id, name: t.name, kind: t.kind, time: t.time, days: t.days, everyMin: t.everyMin, enabled: t.enabled,
+      lastRun: t.lastRun ?? 0, status: run.has(t.id) ? 'running' : (t.lastStatus ?? ''),
+      result: t.projectId && conf.has(t.projectId) ? '🔒 مشروع سري' : (t.lastResult ?? '').slice(0, 1500)
+    }))
+  }
+}
+const reportMsg = (): Json => {
+  const conf = confIds()
+  const rows = tasksReport(200).filter((r) => !(r.projectId && conf.has(r.projectId)))
+  return { k: 'report', rows: rows.map((r) => ({ at: r.at, model: r.model, tier: r.tier, tokens: r.tokens, cost: r.cost, ms: r.totalMs, fails: r.failures, esc: r.escalated, prompt: r.prompt })) }
+}
+
 async function handle(dev: Device, m: Json): Promise<void> {
-  const k = str(m.k, 30)
+  let k = str(m.k, 30)
+  if (k === 'agent.run') {
+    // an agent run is a normal chat turn whose text is the agent's instructions + the task
+    const a = listAgents().find((x) => x.id === str(m.agent, 20))
+    const task = typeof m.task === 'string' ? m.task.trim().slice(0, 20000) : ''
+    const rid = str(m.id, 60)
+    if (!a || !rid) return void send(dev.id, { k: 'error', text: 'ما لقيت الوكيل' })
+    if (!task) return void send(dev.id, { k: 'error', text: 'اكتب المهمة أول' })
+    if (a.runOn === 'cloud') return void send(dev.id, { k: 'done', id: rid, tab: 'agent-' + a.id, content: 'هالوكيل مضبوط سحابي بس، بيشتغل من تيليغرام.', failed: true })
+    m = { ...m, text: (a.prompt ? a.prompt + '\n\n' : '') + 'المهمة: ' + task, tab: 'agent-' + a.id }
+    k = 'chat'
+  }
   dev.lastSeen = Date.now()
   try {
     switch (k) {
@@ -339,6 +372,34 @@ async function handle(dev: Device, m: Json): Promise<void> {
       case 'ping':
         send(dev.id, { k: 'pong' })
         return
+      case 'agents.get':
+        send(dev.id, { k: 'agents', list: listAgents().map((a) => ({ id: a.id, name: a.name, runOn: a.runOn, hint: a.prompt.replace(/\s+/g, ' ').slice(0, 140) })) })
+        return
+      case 'sched.get':
+        send(dev.id, schedMsg())
+        return
+      case 'sched.run': {
+        const id = str(m.id, 40)
+        if (!id) return
+        void runScheduleNow(id).finally(() => broadcast(schedMsg()))
+        setTimeout(() => broadcast(schedMsg()), 400)
+        return
+      }
+      case 'sched.toggle': {
+        const id = str(m.id, 40)
+        if (id) updateSchedule(id, { enabled: m.enabled === true })
+        broadcast(schedMsg())
+        return
+      }
+      case 'report.get':
+        send(dev.id, reportMsg())
+        return
+      case 'project.set': {
+        const id = str(m.id, 60)
+        if (id === null || listProjects().projects.some((p) => p.id === id)) setActiveProject(id)
+        broadcast({ k: 'state', ...stateFor() })
+        return
+      }
       case 'loc.res': {
         const id = str(m.id, 40)
         const p = id ? pendingLoc.get(id) : null

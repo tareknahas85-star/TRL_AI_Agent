@@ -17,6 +17,21 @@ export function AgentsPage() {
   const [key, setKey] = useState('')
   const [msg, setMsg] = useState('')
   const [busy, setBusy] = useState(false)
+  const [runId, setRunId] = useState('')
+  const [task, setTask] = useState('')
+  const [out, setOut] = useState('')
+  const [running, setRunning] = useState(false)
+  const runAgent = async (id: string): Promise<void> => {
+    setRunning(true)
+    setOut('')
+    try {
+      const r = await window.api.agents.run(id, task)
+      setOut((r.failed ? '⚠️ ' : '') + r.content)
+    } catch (e) {
+      setOut('⚠️ ' + (e instanceof Error ? e.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, '') : String(e)))
+    }
+    setRunning(false)
+  }
 
   useEffect(() => {
     window.api.agents.list().then(setList).catch(() => undefined)
@@ -101,8 +116,25 @@ export function AgentsPage() {
                   {a.name} <span className="text-xs text-muted">({MODES.find((m) => m.id === a.runOn)?.label.split(':')[0].split(' (')[0]})</span>
                 </div>
                 {a.prompt && <div className="mt-1 line-clamp-2 text-xs text-muted">{a.prompt}</div>}
+                {runId === a.id && (
+                  <div className="mt-2 grid gap-2">
+                    <textarea value={task} onChange={(e) => setTask(e.target.value)} rows={2} placeholder="المهمة يلي بدك الوكيل ينفذها" className={field} />
+                    <div className="flex gap-2 text-xs">
+                      <button disabled={running || !task.trim()} onClick={() => void runAgent(a.id)} className="rounded-full bg-primary px-3 py-1 text-white disabled:opacity-50">
+                        {running ? 'عم ينفّذ…' : 'نفّذ'}
+                      </button>
+                    </div>
+                    {out && <div className="max-h-64 overflow-y-auto whitespace-pre-wrap rounded-lg border border-outline bg-surface p-2 text-xs">{out}</div>}
+                  </div>
+                )}
               </div>
               <div className="flex shrink-0 gap-2 text-xs">
+                <button
+                  onClick={() => { setRunId(runId === a.id ? '' : a.id); setOut('') }}
+                  className="rounded-full bg-primary px-3 py-1 text-white"
+                >
+                  شغّل
+                </button>
                 <button onClick={() => setForm(a)} className="rounded-full border border-outline px-3 py-1 hover:bg-surface2">
                   تعديل
                 </button>

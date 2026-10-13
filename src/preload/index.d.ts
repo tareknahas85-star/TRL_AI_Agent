@@ -259,6 +259,7 @@ declare global {
       list: () => Promise<AgentInfo[]>
       save: (p: { id?: string; name: string; prompt: string; runOn: string }) => Promise<AgentInfo[]>
       remove: (id: string) => Promise<AgentInfo[]>
+      run: (id: string, task: string) => Promise<{ content: string; failed?: boolean }>
     }
     gate: {
       get: () => Promise<GateInfo>
