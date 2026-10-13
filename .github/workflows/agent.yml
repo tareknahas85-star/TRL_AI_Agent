@@ -30,6 +30,7 @@ jobs:
           JOB: ${{ inputs.job }}
           TG_TOKEN: ${{ secrets.TG_TOKEN }}
           TG_CHAT_ID: ${{ secrets.TG_CHAT_ID }}
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           OPENROUTER_KEY: ${{ secrets.OPENROUTER_KEY }}
           GATE_URL: ${{ secrets.GATE_URL }}
           GATE_KEY: ${{ secrets.GATE_KEY }}

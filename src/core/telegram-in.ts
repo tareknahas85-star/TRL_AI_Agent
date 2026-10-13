@@ -2,7 +2,7 @@ import { telegramState, tgApi, sendTelegramText } from './telegram'
 import { activeProject } from './workspace'
 import { cancelRun } from './progress'
 import { pendingApprovalIds, resolveApproval } from './tg-approve'
-import { approvalDecision, gateReady, pollInbox, syncAgents, type InboxItem } from './gate'
+import { approvalDecision, gateReady, pollInbox, postResult, syncAgents, type InboxItem } from './gate'
 import { listAgents, matchAgent, type Agent } from './agents'
 
 // Two-way control: a message from YOUR private Telegram chat (and nobody else) runs as a task.
@@ -28,27 +28,33 @@ const MODE = { local: 'محلي', cloud: 'سحابي', auto: 'تلقائي' } as
 
 const HELP = 'أوامر:\n/status — حالة البرنامج\n/stop — إلغاء المهمة الشغالة\n/agents — لائحة الوكلاء\n/agent <اسم الوكيل> <المهمة> — شغّل وكيل\n/help — هالقائمة\nأي نص تاني بينفّذ كمهمة بالمشروع الفعّال (مو السري). الأوامر الخطيرة بتنرفض هون.'
 
-async function runTask(text: string, label?: string): Promise<void> {
-  if (busy) return sendTelegramText('في مهمة شغالة. استنى تخلص أو ابعت /stop')
+// Output goes to Telegram (if configured) and, for phone-started jobs, to the gate result feed.
+async function tell(job: string, kind: 'say' | 'done' | 'fail', text: string): Promise<void> {
+  if (job) await postResult(job, kind, text)
+  await sendTelegramText(text)
+}
+
+async function runTask(text: string, label?: string, job = ''): Promise<void> {
+  if (busy) return tell(job, 'fail', 'في مهمة شغالة. استنى تخلص أو ابعت /stop')
   const p = activeProject()
-  if (p?.confidential) return sendTelegramText('🔒 المشروع الفعّال سري. ما بنفذ مهام من تيليغرام عليه. غيّر المشروع من البرنامج.')
-  if (!runner) return sendTelegramText('البرنامج مو جاهز.')
+  if (p?.confidential) return tell(job, 'fail', '🔒 المشروع الفعّال سري. ما بنفذ مهام من بعيد عليه. غيّر المشروع من البرنامج.')
+  if (!runner) return tell(job, 'fail', 'البرنامج مو جاهز.')
   busy = true
   try {
-    await sendTelegramText('⏳ استلمت، عم نفّذ' + (label ? ' (' + label + ')' : '') + (p ? ' بمشروع ' + p.name : '') + '…')
+    await tell(job, 'say', '⏳ استلمت، عم نفّذ' + (label ? ' (' + label + ')' : '') + (p ? ' بمشروع ' + p.name : '') + '…')
     const r = await runner(text, p?.id ?? null)
-    await sendTelegramText((r.failed ? '⚠️ ' : '✅ ') + (r.content || '(بدون رد)'))
+    await tell(job, r.failed ? 'fail' : 'done', (r.failed ? '⚠️ ' : '✅ ') + (r.content || '(بدون رد)'))
   } catch (e) {
-    await sendTelegramText('⚠️ خطأ: ' + (e instanceof Error ? e.message : String(e)))
+    await tell(job, 'fail', '⚠️ خطأ: ' + (e instanceof Error ? e.message : String(e)))
   } finally {
     busy = false
   }
 }
 
-async function runAgent(agent: Agent, task: string): Promise<void> {
-  if (!task.trim()) return sendTelegramText('شو المهمة لـ ' + agent.name + '؟')
-  if (agent.runOn === 'cloud') return sendTelegramText('هالوكيل مضبوط يشتغل بالسحابة بس. هاد بيحتاج وضع البوابة (Gate) مفعّل بالتطبيق.')
-  return runTask((agent.prompt ? agent.prompt + '\n\n' : '') + 'المهمة: ' + task, 'الوكيل ' + agent.name)
+async function runAgent(agent: Agent, task: string, job = ''): Promise<void> {
+  if (!task.trim()) return tell(job, 'fail', 'شو المهمة لـ ' + agent.name + '؟')
+  if (agent.runOn === 'cloud') return tell(job, 'fail', 'هالوكيل مضبوط يشتغل بالسحابة بس. هاد بيحتاج وضع البوابة (Gate) مفعّل بالتطبيق.')
+  return runTask((agent.prompt ? agent.prompt + '\n\n' : '') + 'المهمة: ' + task, 'الوكيل ' + agent.name, job)
 }
 
 async function handle(text: string): Promise<void> {
@@ -97,10 +103,10 @@ function dispatchItem(it: InboxItem): void {
     const name = String(it.agent ?? '').toLowerCase()
     const a = listAgents().find((x) => x.name.toLowerCase() === name)
     if (!a) {
-      void sendTelegramText('ما لقيت هالوكيل على الكمبيوتر. افتح تبويب "وكلاء" بالتطبيق وضغط مزامنة.')
+      void tell(it.job ?? '', 'fail', 'ما لقيت هالوكيل على الكمبيوتر. افتح تبويب "وكلاء" بالتطبيق وضغط مزامنة.')
       return
     }
-    void runAgent(a, String(it.text ?? ''))
+    void runAgent(a, String(it.text ?? ''), it.job ?? '')
     return
   }
   if (it.type === 'msg' && it.text) void handle(String(it.text))

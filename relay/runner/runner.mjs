@@ -14,8 +14,10 @@ let AGENT = '';
 let PROMPT = '';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-if (!TG_TOKEN || !TG_CHAT_ID || !OPENROUTER_KEY || !GATE_URL || !GATE_KEY || !/^[0-9a-f]{12}$/.test(E.JOB || '')) {
-  console.error('missing required secrets or job id');
+const GEMINI_KEY = E.GEMINI_KEY;
+const JOB = E.JOB || '';
+if (!(GEMINI_KEY || OPENROUTER_KEY) || !GATE_URL || !GATE_KEY || !/^[0-9a-f]{12}$/.test(JOB)) {
+  console.error('missing required secrets (GEMINI_KEY or OPENROUTER_KEY, GATE_URL, GATE_KEY) or job id');
   process.exit(1);
 }
 
@@ -30,7 +32,20 @@ async function loadJob() {
   if (!TASK) throw new Error('empty job');
 }
 
+async function gpost(path, body) {
+  try {
+    const r = await fetch(GATE_URL.replace(/\/$/, '') + path, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', 'x-gate-key': GATE_KEY },
+      body: JSON.stringify(body),
+    });
+    return r.ok;
+  } catch {
+    return false;
+  }
+}
 async function tg(method, body) {
+  if (!TG_TOKEN || !TG_CHAT_ID) return {};
   try {
     const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, {
       method: 'POST',
@@ -42,12 +57,16 @@ async function tg(method, body) {
     return {};
   }
 }
-const say = (t) => tg('sendMessage', { chat_id: TG_CHAT_ID, text: String(t).slice(0, 4000) });
+const say = (t, kind = 'say') => {
+  gpost('/result', { job: JOB, kind, text: String(t).slice(0, 3500) });
+  return tg('sendMessage', { chat_id: TG_CHAT_ID, text: String(t).slice(0, 4000) });
+};
 
 // Approvals: Telegram buttons, answered through the gate
 async function approve(title, preview) {
   if (!GATE_URL || !GATE_KEY) return false;
   const id = randomBytes(6).toString('hex');
+  await gpost('/approval-req', { id, job: JOB, title, preview: String(preview).slice(0, 2500) });
   await tg('sendMessage', {
     chat_id: TG_CHAT_ID,
     text: `🔐 طلب تشغيل على السحابة\n${title}\n\n${String(preview).slice(0, 2500)}`,
@@ -235,23 +254,37 @@ async function callTool(name, args) {
   return 'Error: unknown tool';
 }
 
-// Free OpenRouter models that support tools
+// Primary: Gemini (pinned model names, OpenAI-compatible endpoint). Optional fallback: free OpenRouter models.
 async function pickModels() {
-  const r = await fetch('https://openrouter.ai/api/v1/models');
-  const j = await r.json();
-  return (j.data || [])
-    .filter((m) => m.id.endsWith(':free') && (m.supported_parameters || []).includes('tools'))
-    .sort((a, b) => (b.context_length || 0) - (a.context_length || 0))
-    .slice(0, 5)
-    .map((m) => m.id);
+  const list = [];
+  if (GEMINI_KEY) {
+    for (const m of (E.GEMINI_MODELS || 'gemini-2.5-flash-lite,gemini-2.5-flash').split(',')) {
+      if (m.trim()) list.push({ p: 'gemini', id: m.trim() });
+    }
+  }
+  if (OPENROUTER_KEY) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/models');
+      const j = await r.json();
+      for (const m of (j.data || [])
+        .filter((m) => m.id.endsWith(':free') && (m.supported_parameters || []).includes('tools'))
+        .sort((a, b) => (b.context_length || 0) - (a.context_length || 0))
+        .slice(0, 3)) list.push({ p: 'or', id: m.id });
+    } catch {}
+  }
+  return list;
 }
 async function chat(model, messages) {
-  const r = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${OPENROUTER_KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify({ model, messages, tools: TOOLS, tool_choice: 'auto', max_tokens: 2000 }),
-  });
-  if (!r.ok) throw new Error('openrouter ' + r.status);
+  const gem = model.p === 'gemini';
+  const r = await fetch(
+    gem ? 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions' : 'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: { authorization: `Bearer ${gem ? GEMINI_KEY : OPENROUTER_KEY}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: model.id, messages, tools: TOOLS, tool_choice: 'auto', max_tokens: 2000 }),
+    },
+  );
+  if (!r.ok) throw new Error(model.p + ' ' + r.status);
   const j = await r.json();
   const m = j.choices?.[0]?.message;
   if (!m) throw new Error('empty response');
@@ -267,7 +300,7 @@ async function main() {
   await loadJob();
   await say(`☁️ بلّش ${AGENT ? 'الوكيل ' + AGENT : 'المهمة'} على الكمبيوتر السحابي.`);
   const models = await pickModels();
-  if (!models.length) { await say('⚠️ ما لقيت نموذج مجاني بيدعم الأدوات هلأ.'); return; }
+  if (!models.length) { await say('⚠️ ما لقيت نموذج متاح.', 'fail'); return; }
   const messages = [
     { role: 'system', content: (PROMPT ? PROMPT + '\n\n' : '') + RULES },
     { role: 'user', content: TASK },
@@ -278,25 +311,25 @@ async function main() {
     while (true) {
       try { msg = await chat(models[mi], messages); break; }
       catch (e) {
-        console.error('model failed:', models[mi], String(e.message).slice(0, 100));
-        if (++mi >= models.length) { await say('⚠️ كل النماذج المجانية فشلت هلأ. جرّب بعد شوي.'); return; }
+        console.error('model failed:', models[mi].id, String(e.message).slice(0, 100));
+        if (++mi >= models.length) { await say('⚠️ كل النماذج فشلت هلأ (' + String(e.message).slice(0, 40) + '). جرّب بعد شوي.', 'fail'); return; }
       }
     }
     const calls = msg.tool_calls || [];
-    if (!calls.length) { await say(msg.content || '(ما في رد)'); return; }
+    if (!calls.length) { await say(msg.content || '(ما في رد)', 'done'); return; }
     messages.push(msg);
     for (const c of calls) {
       let args = {};
       try { args = JSON.parse(c.function?.arguments || '{}'); } catch {}
       const out = await callTool(c.function?.name, args);
-      messages.push({ role: 'tool', tool_call_id: c.id, content: String(out).slice(0, 12000) });
+      messages.push({ role: 'tool', tool_call_id: c.id, name: c.function?.name, content: String(out).slice(0, 12000) });
     }
   }
-  await say('⚠️ وصلت لحد الخطوات (8) بدون جواب نهائي.');
+  await say('⚠️ وصلت لحد الخطوات (8) بدون جواب نهائي.', 'fail');
 }
 
 main().catch(async (e) => {
   console.error('fatal:', String(e.message || e).slice(0, 200));
-  await say('⚠️ صار خطأ بالتشغيل السحابي.');
+  await say('⚠️ صار خطأ بالتشغيل السحابي.', 'fail');
   process.exit(1);
 });

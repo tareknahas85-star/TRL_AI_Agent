@@ -67,7 +67,10 @@ export class Gate extends DurableObject {
 
     // Phone app (separate narrow key, registered by the PC app): same routing as the Telegram bot.
     // /status says whether the PC is online; /run sends a task (to the PC if online, else the cloud runner).
-    if (p === '/run' || p === '/status') {
+    const phonePath =
+      p === '/run' || p === '/status' || p === '/approvals' || p.startsWith('/result/') ||
+      (p.startsWith('/approval/') && (req.method === 'POST' || req.method === 'OPTIONS'));
+    if (phonePath) {
       const cors = {
         'access-control-allow-origin': '*',
         'access-control-allow-headers': 'x-phone-key,content-type',
@@ -79,6 +82,32 @@ export class Gate extends DurableObject {
       const pk = await st.get('phoneKey');
       if (!pk || !safeEq(req.headers.get('x-phone-key'), pk)) return out({ error: 'unauthorized' }, 401);
       if (p === '/status' && req.method === 'GET') return out({ ok: true, online: await this.online() });
+      // results of a job (cloud runner or the PC post progress/final text here, so Telegram is optional)
+      const rm = p.match(/^\/result\/([0-9a-f]{12})$/);
+      if (rm && req.method === 'GET') {
+        const r = await st.get('res:' + rm[1]);
+        return out({ ok: true, events: r && Date.now() - r.ts < 3600000 ? r.events : [] });
+      }
+      // approvals requested by a cloud run: the phone lists the pending ones and answers
+      if (p === '/approvals' && req.method === 'GET') {
+        const all = await st.list({ prefix: 'apreq:' });
+        const items = [];
+        for (const [k, v] of all) {
+          if (Date.now() - v.ts > 600000) { await st.delete(k); continue; }
+          items.push({ id: k.slice(6), title: v.title, preview: v.preview, job: v.job });
+        }
+        return out({ ok: true, items });
+      }
+      const am = p.match(/^\/approval\/([0-9a-f]{12})$/);
+      if (am && req.method === 'POST') {
+        let b;
+        try { b = await req.json(); } catch { return out({ error: 'bad json' }, 400); }
+        if (b?.v !== 0 && b?.v !== 1) return out({ error: 'bad value' }, 400);
+        if (!(await st.get('apreq:' + am[1]))) return out({ error: 'not found' }, 404);
+        await st.put('ap:' + am[1], { v: b.v, ts: Date.now() });
+        await st.delete('apreq:' + am[1]);
+        return out({ ok: true });
+      }
       if (p === '/run' && req.method === 'POST') {
         const last = (await st.get('lastPhoneRun')) || 0;
         if (Date.now() - last < 2000) return out({ error: 'too fast' }, 429);
@@ -95,9 +124,11 @@ export class Gate extends DurableObject {
         }
         const mode = agent ? agent.runOn : 'auto';
         const online = await this.online();
-        const where = mode === 'local' || (mode === 'auto' && online) ? (online ? 'pc' : 'none') : 'cloud';
-        await this.run(agent, task);
-        return out({ ok: true, where });
+        const force = b?.force === 'cloud';
+        if (force && mode === 'local') return out({ error: 'local only' }, 400);
+        const where = force ? 'cloud' : mode === 'local' || (mode === 'auto' && online) ? (online ? 'pc' : 'none') : 'cloud';
+        const job = where === 'none' ? '' : await this.run(agent, task, where);
+        return out({ ok: true, where, job });
       }
       return out({ error: 'not found' }, 404);
     }
@@ -148,6 +179,21 @@ export class Gate extends DurableObject {
     if (p === '/agents' && req.method === 'GET')
       return json({ agents: (await st.get('agents')) || [] });
 
+    if (p === '/result' && req.method === 'POST') {
+      let b;
+      try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+      if (!/^[0-9a-f]{12}$/.test(String(b?.job ?? ''))) return json({ error: 'bad job' }, 400);
+      const kind = ['say', 'done', 'fail'].includes(b?.kind) ? b.kind : 'say';
+      await this.addResult(b.job, kind, clip(b?.text, 3500));
+      return json({ ok: true });
+    }
+    if (p === '/approval-req' && req.method === 'POST') {
+      let b;
+      try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+      if (!/^[0-9a-f]{12}$/.test(String(b?.id ?? ''))) return json({ error: 'bad id' }, 400);
+      await st.put('apreq:' + b.id, { ts: Date.now(), job: clip(b?.job, 12), title: clip(b?.title, 200), preview: clip(b?.preview, 2500) });
+      return json({ ok: true });
+    }
     const m = p.match(/^\/approval\/([0-9a-f]{12})$/);
     if (m && req.method === 'GET') {
       const a = await st.get('ap:' + m[1]);
@@ -166,6 +212,7 @@ export class Gate extends DurableObject {
 
   // ---------- helpers ----------
   async tg(method, body) {
+    if (!this.env.TG_TOKEN || !this.env.TG_CHAT_ID) return false;
     const r = await fetch(`https://api.telegram.org/bot${this.env.TG_TOKEN}/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -279,15 +326,31 @@ export class Gate extends DurableObject {
     return this.run(null, t);
   }
 
-  async run(agent, task) {
+  newJob() {
+    return [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  }
+  // where: optional override ('pc' | 'cloud'); returns the job id (phone polls /result/<job>), '' if nothing started
+  async run(agent, task, where) {
     const mode = agent ? agent.runOn : 'auto';
     const online = await this.online();
-    if (mode === 'local' || (mode === 'auto' && online)) {
-      if (!online) return this.say('🔴 الكمبيوتر مطفي، والوكيل هاد مضبوط يشتغل محلي بس.');
-      await this.enqueue({ type: agent ? 'agent' : 'msg', agent: agent?.name, text: task });
-      return this.say('📥 وصلت المهمة للكمبيوتر.');
+    const toPc = where ? where === 'pc' : mode === 'local' || (mode === 'auto' && online);
+    if (toPc) {
+      if (!online) { await this.say('🔴 الكمبيوتر مطفي، والوكيل هاد مضبوط يشتغل محلي بس.'); return ''; }
+      const job = this.newJob();
+      await this.enqueue({ type: agent ? 'agent' : 'msg', agent: agent?.name, text: task, job });
+      await this.say('📥 وصلت المهمة للكمبيوتر.');
+      return job;
     }
     return this.dispatch(agent, task);
+  }
+  async addResult(job, kind, text) {
+    const st = this.ctx.storage;
+    const cur = (await st.get('res:' + job)) || { ts: Date.now(), events: [] };
+    cur.events = [...cur.events, { n: cur.events.length + 1, kind, text }].slice(-30);
+    cur.ts = Date.now();
+    await st.put('res:' + job, cur);
+    // lazy cleanup of old results
+    for (const [k, v] of await st.list({ prefix: 'res:' })) if (Date.now() - v.ts > 3600000) await st.delete(k);
   }
 
   // ---------- Agent mailbox ----------
@@ -322,7 +385,7 @@ export class Gate extends DurableObject {
   async dispatch(agent, task) {
     const { GH_TOKEN, GH_REPO } = this.env;
     if (!GH_TOKEN || !GH_REPO) return this.say('☁️ السحابة مو مفعّلة لسا.');
-    const id = [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, '0')).join('');
+    const id = this.newJob();
     await this.ctx.storage.put('job:' + id, {
       ts: Date.now(),
       task: clip(task, 4000),
@@ -340,10 +403,12 @@ export class Gate extends DurableObject {
         }),
       },
     );
-    if (r.status === 204) return this.say('☁️ بلّشت المهمة على الكمبيوتر السحابي.');
+    if (r.status === 204) { await this.say('☁️ بلّشت المهمة على الكمبيوتر السحابي.'); return id; }
     let why = '';
     try { why = clip(String((await r.json()).message || ''), 120); } catch {}
-    return this.say(`⚠️ فشل تشغيل السحابة (${r.status}).${why ? '\n' + why : ''}`);
+    await this.addResult(id, 'fail', `فشل تشغيل السحابة (${r.status}).${why ? ' ' + why : ''}`);
+    await this.say(`⚠️ فشل تشغيل السحابة (${r.status}).${why ? '\n' + why : ''}`);
+    return id;
   }
 
   async cancelCloud() {

@@ -45,7 +45,13 @@ async function gateFetch(path: string, init?: { method?: string; body?: string }
   }
 }
 
-export type InboxItem = { id: number; ts: number; type: 'msg' | 'agent' | 'stop'; text?: string; agent?: string }
+export type InboxItem = { id: number; ts: number; type: 'msg' | 'agent' | 'stop'; text?: string; agent?: string; job?: string }
+
+/** Post progress/final text of a phone-started job to the gate (the phone polls it; Telegram is optional). */
+export async function postResult(job: string, kind: 'say' | 'done' | 'fail', text: string): Promise<void> {
+  if (!/^[0-9a-f]{12}$/.test(job)) return
+  await gateFetch('/result', { method: 'POST', body: JSON.stringify({ job, kind, text: text.slice(0, 3500) }) }).catch(() => null)
+}
 
 /** Long-ish poll of the inbox. Also counts as the heartbeat. */
 export async function pollInbox(after: number): Promise<{ items: InboxItem[]; last: number } | null> {

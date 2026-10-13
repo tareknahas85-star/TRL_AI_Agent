@@ -46,8 +46,10 @@ export function agentsHtml(c) {
           '<div class="acts">' + (st.running
             ? '<button class="btn danger" data-agstop="' + esc(a.id) + '">■ إيقاف</button>'
             : '<button class="btn" data-agrun="' + esc(a.id) + '">▶ نفّذ</button>') + '</div>' +
-          (!st.running && !online ? '<div class="mut" style="margin-top:8px">' + (S.gate ? '⚠️ الكمبيوتر مو واصل هلأ: لما تكبس نفّذ بتنبعت المهمة عبر البوابة (للكمبيوتر إذا شغّال، أو للسحابة)، والنتيجة على تيليغرام.' : '⚠️ الكمبيوتر مو متصل هلأ. وصّل التلفون بالكمبيوتر مرة لتفعيل البوابة السحابية.') + '</div>' : '') +
+          (!st.running && !online ? '<div class="mut" style="margin-top:8px">' + (S.gate ? '⚠️ الكمبيوتر مو واصل هلأ: لما تكبس نفّذ بتنبعت المهمة عبر البوابة (للكمبيوتر إذا شغّال، أو للسحابة)، والنتيجة بتظهر هون.' : '⚠️ الكمبيوتر مو متصل هلأ. وصّل التلفون بالكمبيوتر مرة لتفعيل البوابة السحابية.') + '</div>' : '') +
           (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc(st.status || 'عم يشتغل…') + '</div>' : '') +
+          (st.running && st.stale ? '<div class="mut" style="margin-top:8px">الكمبيوتر ما ردّ لهلأ. <button class="btn" data-agcloud="' + esc(a.id) + '">☁️ شغّلها بالسحابة</button></div>' : '') +
+          (S.approvals || []).filter((x) => x.job && x.job === st.job).map((x) => '<div class="card" style="margin-top:8px"><b>🔐 ' + esc(x.title || 'طلب موافقة') + '</b><pre class="code" style="white-space:pre-wrap;max-height:160px;overflow:auto">' + esc(x.preview || '') + '</pre><div class="acts"><button class="btn" data-apv="' + esc(x.id) + '|1">✅ موافق</button> <button class="btn danger" data-apv="' + esc(x.id) + '|0">❌ رفض</button></div></div>').join('') +
           '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? ' err' : '') + '">' + md(st.out) + '<div class="meta">' + esc(when(st.at)) + '</div></div>' : '') + '</div></div>'
         : '') + '</div>'
   }).join('')

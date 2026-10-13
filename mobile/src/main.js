@@ -283,20 +283,52 @@ async function pcStatus() {
   S.pc = r && r.ok ? (r.online ? 'on' : 'off') : 'unk'
   if (S.tab === 'agents') renderPage()
 }
-async function gateRun(id, task) {
+async function gateRun(id, task, force) {
   const a = S.agents.find((x) => x.id === id)
   const st = S.agentOut[id] || (S.agentOut[id] = {})
-  const r = await gateCall('/run', { agent: a ? a.name : '', task })
-  st.running = false; st.at = Date.now(); st.failed = false
-  if (!r) { st.failed = true; st.out = 'ما قدرت أوصل للبوابة. تأكد من النت.' }
-  else if (r.status === 200 && r.ok) {
-    st.failed = r.where === 'none'
-    st.out = r.where === 'cloud' ? '☁️ الكمبيوتر مطفي، فانبعتت المهمة للكمبيوتر السحابي. النتيجة بتوصلك على تيليغرام.' : r.where === 'pc' ? '📥 وصلت المهمة للكمبيوتر. النتيجة بتوصلك على تيليغرام.' : '🔴 الكمبيوتر مطفي والوكيل هاد مضبوط يشتغل محلي بس.'
+  const r = await gateCall('/run', { agent: a ? a.name : '', task, force: force ? 'cloud' : undefined })
+  st.at = Date.now(); st.failed = false; st.stale = false
+  if (!r) { st.running = false; st.failed = true; st.out = 'ما قدرت أوصل للبوابة. تأكد من النت.' }
+  else if (r.status === 200 && r.ok && r.where !== 'none' && r.job) {
+    st.running = true; st.job = r.job; st.where = r.where; st.task = task; st.polling = true; st.t0 = Date.now(); st.seen = 0
+    st.status = r.where === 'cloud' ? '☁️ عم يشتغل عالكمبيوتر السحابي…' : '📥 وصلت المهمة للكمبيوتر، عم ينتظر…'
+    void gatePoll(id, r.job)
+  } else if (r.status === 200 && r.ok) {
+    st.running = false; st.failed = true
+    st.out = '🔴 الكمبيوتر مطفي والوكيل هاد مضبوط يشتغل محلي بس.'
   } else {
-    st.failed = true
-    st.out = r.error === 'agent not found' ? 'الوكيل مو موجود عالبوابة. افتح تبويب «وكلاء» بالبرنامج وضغط مزامنة.' : r.status === 401 ? 'مفتاح البوابة قديم. وصّل التلفون بالكمبيوتر مرة تانية لتجديدو.' : r.status === 429 ? 'استنى ثانيتين وجرّب.' : 'فشل: ' + (r.error || r.status)
+    st.running = false; st.failed = true
+    st.out = r.error === 'agent not found' ? 'الوكيل مو موجود عالبوابة. افتح تبويب «وكلاء» بالبرنامج وضغط مزامنة.' : r.status === 401 ? 'مفتاح البوابة قديم. وصّل التلفون بالكمبيوتر مرة تانية لتجديدو.' : r.status === 429 ? 'استنى ثانيتين وجرّب.' : r.error === 'local only' ? 'هالوكيل محلي بس.' : 'فشل: ' + (r.error || r.status)
   }
   saveAgOut(); renderPage()
+}
+// Follow a gate job: progress text, final result, and approval requests (replaces Telegram)
+async function gatePoll(id, job) {
+  const st = S.agentOut[id]
+  const end = Date.now() + 25 * 60 * 1000
+  while (st && st.polling && st.job === job && Date.now() < end) {
+    await new Promise((r) => setTimeout(r, 3000))
+    if (!st.polling || st.job !== job) return
+    const r = await gateCall('/result/' + job)
+    const ev = r && r.ok ? r.events || [] : []
+    if (ev.length) st.seen = ev.length
+    const say = [...ev].reverse().find((e) => e.kind === 'say')
+    if (say) st.status = say.text
+    const fin = ev.find((e) => e.kind === 'done' || e.kind === 'fail')
+    if (fin) {
+      st.polling = false; st.running = false; st.failed = fin.kind === 'fail'; st.out = fin.text; st.at = Date.now(); st.stale = false
+      S.approvals = (S.approvals || []).filter((x) => x.job !== job)
+      saveAgOut(); renderPage()
+      notify((S.agents.find((x) => x.id === id) || {}).name + (st.failed ? ': ما خلصت' : ': خلص'), fin.text || '')
+      try { navigator.vibrate && navigator.vibrate(60) } catch { /* */ }
+      return
+    }
+    const ap = await gateCall('/approvals')
+    S.approvals = ap && ap.ok ? ap.items || [] : S.approvals
+    st.stale = st.where === 'pc' && !ev.length && Date.now() - st.t0 > 45000
+    if (S.tab === 'agents') renderPage()
+  }
+  if (st && st.polling && st.job === job) { st.polling = false; st.running = false; st.failed = true; st.out = 'انتهى وقت الانتظار بدون نتيجة.'; saveAgOut(); renderPage() }
 }
 function agProg(p) { const st = S.agentOut[p.agent]; if (!st) return; st.status = p.status; const el = $('#agStatus'); if (el) el.innerHTML = '<span class="spin"></span> ' + esc(p.status || 'عم يشتغل…') }
 function agStream(p) { const el = $('#agOut'); if (el && S.agentOpen === p.agent) el.innerHTML = '<div class="msg bot">' + (p.buf ? md(p.buf) : '<span class="mut">…</span>') + '</div>' }
@@ -322,7 +354,23 @@ function viewClick(t) {
   if (d.refresh) { sendHost({ k: d.refresh + '.get' }); toast('عم يحدّث…'); return true }
   if (d.agopen !== undefined) { S.agentOpen = S.agentOpen === d.agopen ? '' : d.agopen; renderPage(); return true }
   if (d.agrun) { runAgentNow(d.agrun); return true }
-  if (d.agstop) { sendHost({ k: 'cancel', tab: 'agent-' + d.agstop }); toast('طلبت الإيقاف'); return true }
+  if (d.agstop) {
+    const gs = S.agentOut[d.agstop]
+    if (gs && gs.polling) { gs.polling = false; gs.running = false; gs.out = 'وقّفت المتابعة (المهمة ممكن تكمّل بالخلفية).'; saveAgOut(); renderPage() } else { sendHost({ k: 'cancel', tab: 'agent-' + d.agstop }); toast('طلبت الإيقاف') }
+    return true
+  }
+  if (d.agcloud) {
+    const cs = S.agentOut[d.agcloud]
+    if (cs) { cs.polling = false; cs.status = 'عم يبعتها للسحابة…'; saveAgOut(); renderPage(); void gateRun(d.agcloud, cs.task, true) }
+    return true
+  }
+  if (d.apv) {
+    const [aid, v] = d.apv.split('|')
+    S.approvals = (S.approvals || []).filter((x) => x.id !== aid)
+    renderPage()
+    void gateCall('/approval/' + aid, { v: Number(v) }).then((r) => { if (!r || !r.ok) toast('ما انرسل الرد، جرّب مرة تانية') })
+    return true
+  }
   if (d.sopen !== undefined) { S.schedOpen = S.schedOpen === d.sopen ? '' : d.sopen; renderPage(); return true }
   if (d.srun) { sendHost({ k: 'sched.run', id: d.srun }); toast('بلّشت المهمة'); return true }
   if (d.rperiod) { S.rperiod = d.rperiod; renderPage(); return true }
