@@ -37,7 +37,8 @@ import {
   listCustomModelViews,
   removeCustomModel,
   testCustomModel,
-  toggleCustomModel
+  toggleCustomModel,
+  setCustomModelPrice
 } from '../core/custom-models'
 import { getEffort, setEffort } from '../core/effort'
 import { clearGeneral, getMasterMemory, updateProjectMemory } from '../core/master-memory'
@@ -210,6 +211,7 @@ export function registerManagementHandlers(): void {
     }
   })
   ipcMain.handle('models:remove', (_e, id: unknown) => typeof id === 'string' && removeCustomModel(id))
+  ipcMain.handle('models:setPrice', (_e, id: unknown, pin: unknown, pout: unknown) => (typeof id === 'string' ? setCustomModelPrice(id, pin, pout) : false))
   ipcMain.handle('models:toggle', (_e, id: unknown) => (typeof id === 'string' ? toggleCustomModel(id) : null))
   ipcMain.handle('models:test', (_e, id: unknown) =>
     typeof id === 'string' ? testCustomModel(id) : { ok: false, message: 'id مو صالح' }

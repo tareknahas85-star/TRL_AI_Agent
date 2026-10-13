@@ -41636,9 +41636,10 @@
     const timed = rows.filter((r) => r.ms > 0);
     const avg = timed.length ? timed.reduce((s, r) => s + r.ms, 0) / timed.length : 0;
     const cost = rows.reduce((s, r) => s + (r.cost || 0), 0);
+    const unk = rows.filter((r) => r.ck === false).length;
     const tokens = rows.reduce((s, r) => s + (r.tokens || 0), 0);
     const stat = (v, l, tone = "") => '<div class="stat ' + tone + '"><div class="sv">' + v + '</div><div class="sl">' + l + "</div></div>";
-    h += '<div class="stats">' + stat(n, "\u0645\u0647\u0645\u0629") + stat(Math.round(free / n * 100) + "%", "\u0645\u062C\u0627\u0646\u064A\u0629", "ok") + stat(cost > 0 ? "$" + (cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)) : "$0", "\u062A\u0643\u0644\u0641\u0629 \u062A\u0642\u062F\u064A\u0631\u064A\u0629") + stat(avg ? avg >= 6e4 ? Math.floor(avg / 6e4) + "\u062F " + Math.round(avg % 6e4 / 1e3) + "\u062B" : (avg / 1e3).toFixed(1) + "\u062B" : "-", "\u0645\u062A\u0648\u0633\u0637 \u0627\u0644\u0648\u0642\u062A") + stat(fails, "\u0641\u064A\u0647\u0627 \u0623\u062E\u0637\u0627\u0621", fails ? "bad" : "") + stat(esc22, "\u062A\u0635\u0639\u064A\u062F \u0644\u0645\u0648\u062F\u064A\u0644 \u0623\u0642\u0648\u0649") + "</div>";
+    h += '<div class="stats">' + stat(n, "\u0645\u0647\u0645\u0629") + stat(Math.round(free / n * 100) + "%", "\u0645\u062C\u0627\u0646\u064A\u0629", "ok") + stat(cost > 0 ? "$" + (cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)) : unk ? "\u063A\u064A\u0631 \u0645\u0639\u0631\u0648\u0641\u0629" : "$0", unk ? "\u062A\u0643\u0644\u0641\u0629 \u062A\u0642\u062F\u064A\u0631\u064A\u0629 (+" + unk + " \u0628\u062F\u0648\u0646 \u0633\u0639\u0631)" : "\u062A\u0643\u0644\u0641\u0629 \u062A\u0642\u062F\u064A\u0631\u064A\u0629") + stat(avg ? avg >= 6e4 ? Math.floor(avg / 6e4) + "\u062F " + Math.round(avg % 6e4 / 1e3) + "\u062B" : (avg / 1e3).toFixed(1) + "\u062B" : "-", "\u0645\u062A\u0648\u0633\u0637 \u0627\u0644\u0648\u0642\u062A") + stat(fails, "\u0641\u064A\u0647\u0627 \u0623\u062E\u0637\u0627\u0621", fails ? "bad" : "") + stat(esc22, "\u062A\u0635\u0639\u064A\u062F \u0644\u0645\u0648\u062F\u064A\u0644 \u0623\u0642\u0648\u0649") + "</div>";
     const tiers = {};
     rows.forEach((r) => {
       tiers[r.tier] = (tiers[r.tier] || 0) + 1;
@@ -41666,7 +41667,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.10.3" : "5.10";
+  var VERSION = true ? "5.10.4" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {

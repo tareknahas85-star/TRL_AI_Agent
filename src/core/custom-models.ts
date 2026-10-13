@@ -2,6 +2,7 @@ import { hostOf } from './hosts'
 import OpenAI from 'openai'
 import { readJson, writeJson, newId } from './json-store'
 import { getSecret, setSecret } from '../store/secure-store'
+import { knownPrice, type Price } from './pricing'
 
 export type Tier = 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'
 export type CustomModel = {
@@ -12,8 +13,10 @@ export type CustomModel = {
   tier: Tier
   enabled: boolean
   last?: boolean // true => tried after the OpenRouter models of its tier
+  priceIn?: number // USD per 1M input tokens (manual; wins over the built-in table)
+  priceOut?: number // USD per 1M output tokens
 }
-export type CustomModelView = CustomModel & { hasKey: boolean }
+export type CustomModelView = CustomModel & { hasKey: boolean; autoPrice: Price | null }
 
 const FILE = 'custom-models.json'
 const TIERS: Tier[] = ['TIER_1_FREE', 'TIER_2_CHEAP', 'TIER_3_EXPENSIVE']
@@ -24,7 +27,7 @@ export const getCustomModel = (id: string): CustomModel | undefined =>
   listCustomModels().find((m) => m.id === id)
 
 export const listCustomModelViews = (): CustomModelView[] =>
-  listCustomModels().map((m) => ({ ...m, hasKey: !!getSecret(`model:${m.id}`) }))
+  listCustomModels().map((m) => ({ ...m, hasKey: !!getSecret(`model:${m.id}`), autoPrice: knownPrice(m.model) }))
 
 export function customModelsForTier(tier: Tier, last = false): string[] {
   return listCustomModels()
@@ -58,7 +61,29 @@ export function addCustomModel(input: {
   const m: CustomModel = { id: newId(), name, model, baseURL, tier, enabled: true }
   writeJson(FILE, [...listCustomModels(), m])
   if (input.apiKey) setSecret(`model:${m.id}`, String(input.apiKey))
-  return { ...m, hasKey: !!input.apiKey }
+  return { ...m, hasKey: !!input.apiKey, autoPrice: knownPrice(m.model) }
+}
+
+// Manual price per 1M tokens; null/empty clears it (then the built-in table / OpenRouter catalog is used).
+export function setCustomModelPrice(id: string, priceIn: unknown, priceOut: unknown): boolean {
+  const all = listCustomModels()
+  const m = all.find((x) => x.id === id)
+  if (!m) return false
+  const num = (v: unknown): number | undefined => {
+    const n = typeof v === 'string' ? Number(v.replace(',', '.')) : typeof v === 'number' ? v : NaN
+    return Number.isFinite(n) && n >= 0 ? n : undefined
+  }
+  const a = num(priceIn)
+  const b = num(priceOut)
+  if (a === undefined || b === undefined) {
+    delete m.priceIn
+    delete m.priceOut
+  } else {
+    m.priceIn = a
+    m.priceOut = b
+  }
+  writeJson(FILE, all)
+  return true
 }
 
 export function removeCustomModel(id: string): boolean {

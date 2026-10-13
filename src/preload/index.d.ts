@@ -35,6 +35,9 @@ export type CustomModelInfo = {
   enabled: boolean
   hasKey: boolean
   last?: boolean
+  priceIn?: number
+  priceOut?: number
+  autoPrice?: { in: number; out: number } | null
 }
 export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
 export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
@@ -84,6 +87,7 @@ export type TaskRowInfo = {
   convTitle: string
   projectId: string | null
   cost: number
+  costKnown: boolean
   model: string
   tried: string[]
   escalated: boolean
@@ -185,6 +189,7 @@ declare global {
         fetchRemote: (id: string, all?: boolean) => Promise<{ ok: boolean; models?: { id: string; recommended: boolean; added: boolean; free: boolean }[]; error?: string }>
         importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => Promise<number>
         setPosition: (id: string, last: boolean) => Promise<boolean>
+        setPrice: (id: string, pin: string, pout: string) => Promise<boolean>
         setKey: (id: string, key: string) => Promise<boolean>
         add: (m: {
           name: string

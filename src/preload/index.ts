@@ -96,6 +96,7 @@ const api = {
     add: (m: unknown) => ipcRenderer.invoke('models:add', m),
     remove: (id: string) => ipcRenderer.invoke('models:remove', id),
     toggle: (id: string) => ipcRenderer.invoke('models:toggle', id),
+    setPrice: (id: string, pin: string, pout: string) => ipcRenderer.invoke('models:setPrice', id, pin, pout),
     test: (id: string) => ipcRenderer.invoke('models:test', id),
     fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
     importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)

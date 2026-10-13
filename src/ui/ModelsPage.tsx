@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useState, type ReactElement, type ReactNode } from 'react'
 import { UsagePanel } from './UsagePanel'
 import { askConfirm } from './components/confirm'
 import { Loader2, Plug, Plus, Trash2 } from 'lucide-react'
@@ -32,6 +32,32 @@ const PROVIDERS = [
 ] as const
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier }
+
+// Manual price (USD per 1M tokens) for a custom model; empty = use the built-in table (Gemini...) or OpenRouter's price.
+function PriceRow({ m, onSaved }: { m: CustomModelInfo; onSaved: () => void }): ReactElement {
+  const [pin, setPin] = useState(m.priceIn !== undefined ? String(m.priceIn) : '')
+  const [pout, setPout] = useState(m.priceOut !== undefined ? String(m.priceOut) : '')
+  const auto = m.autoPrice
+  const cls = 'w-16 rounded-lg border border-outline bg-surface px-2 py-0.5 text-xs'
+  return (
+    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>سعر $ لكل مليون توكن:</span>
+      <label className="flex items-center gap-1">دخل <input dir="ltr" className={cls} value={pin} placeholder={auto ? String(auto.in) : '—'} onChange={(e) => setPin(e.target.value)} /></label>
+      <label className="flex items-center gap-1">خرج <input dir="ltr" className={cls} value={pout} placeholder={auto ? String(auto.out) : '—'} onChange={(e) => setPout(e.target.value)} /></label>
+      <button
+        className="rounded-full border border-outline px-2 py-0.5 text-primary hover:bg-surface2"
+        onClick={async () => {
+          await window.api.models.setPrice(m.id, pin, pout)
+          onSaved()
+        }}
+      >
+        حفظ
+      </button>
+      {m.priceIn === undefined && auto && <span>(تلقائي من أسعار Google)</span>}
+      {m.priceIn === undefined && !auto && <span>(بدون سعر: بتظهر «غير معروفة» بالتقرير)</span>}
+    </div>
+  )
+}
 
 export function ModelsPage() {
   const chk = useFullCheck('models')
@@ -140,6 +166,7 @@ export function ModelsPage() {
                   <div dir="ltr" className="truncate text-start font-mono text-xs text-muted">
                     {m.model} · {m.baseURL || 'openrouter.ai'}
                   </div>
+                  <PriceRow key={m.id + String(m.priceIn) + String(m.priceOut)} m={m} onSaved={load} />
                   {r && <div className={`mt-1 text-xs ${r.ok ? 'text-success' : 'text-danger'}`}>{r.ok ? '✓ ' : '✗ '}{r.message}</div>}
                 </div>
                 <div className="flex items-center gap-1">

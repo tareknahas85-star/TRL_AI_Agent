@@ -345,7 +345,7 @@ const schedMsg = (): Json => {
 const reportMsg = (): Json => {
   const conf = confIds()
   const rows = tasksReport(200).filter((r) => !(r.projectId && conf.has(r.projectId)))
-  return { k: 'report', rows: rows.map((r) => ({ at: r.at, model: r.model, tier: r.tier, tokens: r.tokens, cost: r.cost, ms: r.totalMs, fails: r.failures, esc: r.escalated, prompt: r.prompt })) }
+  return { k: 'report', rows: rows.map((r) => ({ at: r.at, model: r.model, tier: r.tier, tokens: r.tokens, cost: r.cost, ck: r.costKnown, ms: r.totalMs, fails: r.failures, esc: r.escalated, prompt: r.prompt })) }
 }
 
 async function handle(dev: Device, m: Json): Promise<void> {

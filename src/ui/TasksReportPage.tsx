@@ -59,6 +59,7 @@ export function TasksReportPage({ onOpenConv }: { onOpenConv?: (id: string) => v
   const timed = list.filter((r) => r.totalMs > 0)
   const avg = timed.length ? timed.reduce((s, r) => s + r.totalMs, 0) / timed.length : 0
   const totalCost = list.reduce((s, r) => s + r.cost, 0)
+  const unknownCost = list.filter((r) => !r.costKnown).length
   const monthKey = new Date().toISOString().slice(0, 7)
   const monthCost = all.filter((r) => dayKey(r.at).startsWith(monthKey)).reduce((s, r) => s + r.cost, 0)
   const overBudget = budget > 0 && monthCost >= budget
@@ -166,7 +167,7 @@ export function TasksReportPage({ onOpenConv }: { onOpenConv?: (id: string) => v
           <Stat label="نفّذها موديل مجاني" value={free} tone="text-success" />
           <Stat label="صعّدت لموديل تاني" value={esc} tone={esc ? 'text-warning' : ''} />
           <Stat label="متوسط الوقت" value={fmtDur(avg)} />
-          <Stat label="تكلفة تقديرية" value={totalCost > 0 ? fmtCost(totalCost) : '$0'} />
+          <Stat label={unknownCost ? `تكلفة تقديرية (+${unknownCost} بدون سعر)` : 'تكلفة تقديرية'} value={totalCost > 0 ? fmtCost(totalCost) : unknownCost ? 'غير معروفة' : '$0'} />
         </div>
         {withFail > 0 && <div className="text-[11px] text-warning">{withFail} مهمة فيها محاولات فاشلة قبل ما تنجح.</div>}
 
@@ -290,7 +291,7 @@ export function TasksReportPage({ onOpenConv }: { onOpenConv?: (id: string) => v
                     </td>
                     <td className="px-3 py-2">{TIER[r.tier]}</td>
                     <td className="whitespace-nowrap px-3 py-2">{fmtDur(r.totalMs)}</td>
-                    <td className="whitespace-nowrap px-3 py-2">{fmtCost(r.cost)}</td>
+                    <td className="whitespace-nowrap px-3 py-2">{r.costKnown ? fmtCost(r.cost) : 'بدون سعر'}</td>
                     <td className="px-3 py-2">
                       {r.escalated ? <span className="text-warning">صعّد ({r.tried.length} محاولات)</span> : r.failures > 0 ? <span className="text-warning">{r.failures} فشل</span> : <span className="text-success">نجح</span>}
                     </td>

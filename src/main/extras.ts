@@ -4,6 +4,8 @@ import fsp from 'fs/promises'
 import path from 'path'
 import { prepareFile } from './attach'
 import { listCatalog } from '../core/catalog'
+import { listCustomModels } from '../core/custom-models'
+import { costOf, knownPrice } from '../core/pricing'
 import { readJson, writeJson } from '../core/json-store'
 import { getConversation, listConversations } from '../core/workspace'
 import { deleteAgent, listAgents, saveAgent } from '../core/agents'
@@ -62,6 +64,7 @@ export type TaskRow = {
   convTitle: string
   projectId: string | null
   cost: number
+  costKnown: boolean // false = paid model with no known price (cost shown as unknown, not $0)
   model: string
   tried: string[]
   escalated: boolean
@@ -69,11 +72,13 @@ export type TaskRow = {
   tools: string[]
   totalMs: number
   tokens: number
+  promptTokens: number
+  completionTokens: number
   tier: 'free' | 'cheap' | 'sub' | 'custom' | 'other'
   prompt: string
 }
 
-function parseMeta(meta: string): Omit<TaskRow, 'at' | 'convId' | 'convTitle' | 'prompt' | 'projectId' | 'cost'> | null {
+function parseMeta(meta: string): Omit<TaskRow, 'at' | 'convId' | 'convTitle' | 'prompt' | 'projectId' | 'cost' | 'costKnown'> | null {
   const model = meta.match(/^Model:\s*([^|\[]+?)(?:\s*\[[^\]]*\])?(?:\s*·[^|]*)?\s*(?:🔒)?\s*\|/)?.[1]?.trim()
   if (!model) return null
   const tried = (meta.match(/\| Tried:\s*([^|]*?)\s*\|\s*Stats:/)?.[1] ?? '').split('->').map((s) => s.trim()).filter(Boolean)
@@ -92,20 +97,33 @@ function parseMeta(meta: string): Omit<TaskRow, 'at' | 'convId' | 'convTitle' | 
     tools: st.tools ?? [],
     totalMs: st.totalMs ?? 0,
     tokens: (st.promptTokens ?? 0) + (st.completionTokens ?? 0),
+    promptTokens: st.promptTokens ?? 0,
+    completionTokens: st.completionTokens ?? 0,
     tier
   }
 }
 
-// Estimated cost in USD: total tokens x the catalog's blended price per million (free / subscription / unknown = 0).
-function estCost(model: string, tokens: number): number {
-  if (!tokens) return 0
+// Estimated cost in USD from prompt/completion tokens. Order: free/subscription/local = 0 (known); a price the user typed on the
+// custom model; the built-in direct-provider table (Gemini...); the OpenRouter catalog's blended price. Anything else is
+// "unknown" (shown as such, never as $0).
+function estCost(r: { model: string; tier: TaskRow['tier']; promptTokens: number; completionTokens: number }): { cost: number; known: boolean } {
+  const { promptTokens: pt, completionTokens: ct } = r
+  if (!pt && !ct) return { cost: 0, known: true }
+  if (r.tier === 'free' || r.tier === 'sub' || r.model.endsWith(':free')) return { cost: 0, known: true }
   try {
-    const id = model.replace(/:free$/, '')
-    const m = listCatalog().models.find((x) => x.id === model || x.id === id)
-    return m && m.pricePerM > 0 && !model.endsWith(':free') ? (tokens / 1e6) * m.pricePerM : 0
+    const cm = listCustomModels().find((m) => m.name === r.model || m.id === r.model || m.model === r.model)
+    if (cm && /localhost|127\.0\.0\.1|:11434|:1234/i.test(cm.baseURL ?? '')) return { cost: 0, known: true }
+    if (cm && cm.priceIn !== undefined && cm.priceOut !== undefined) return { cost: costOf({ in: cm.priceIn, out: cm.priceOut }, pt, ct), known: true }
+    const pid = cm?.model ?? r.model
+    const kp = knownPrice(pid)
+    if (kp) return { cost: costOf(kp, pt, ct), known: true }
+    const id = pid.replace(/:free$/, '')
+    const m = listCatalog().models.find((x) => x.id === pid || x.id === id)
+    if (m) return { cost: pid.endsWith(':free') ? 0 : ((pt + ct) / 1e6) * m.pricePerM, known: true }
   } catch {
-    return 0
+    /* fall through to unknown */
   }
+  return { cost: 0, known: false }
 }
 
 export function tasksReport(limit = 400): TaskRow[] {
@@ -119,7 +137,7 @@ export function tasksReport(limit = 400): TaskRow[] {
       const p = parseMeta(m.meta)
       if (!p) return
       const prev = [...c.messages.slice(0, i)].reverse().find((x) => x.role === 'user')
-      rows.push({ ...p, at: m.at ?? 0, convId: s.id, convTitle: s.title, projectId: s.projectId ?? null, cost: estCost(p.model, p.tokens), prompt: (prev?.content ?? '').split('\n')[0].slice(0, 90) })
+      rows.push({ ...p, at: m.at ?? 0, convId: s.id, convTitle: s.title, projectId: s.projectId ?? null, ...((): { cost: number; costKnown: boolean } => { const e = estCost(p); return { cost: e.cost, costKnown: e.known } })(), prompt: (prev?.content ?? '').split('\n')[0].slice(0, 90) })
     })
   }
   return rows.sort((a, b) => b.at - a.at).slice(0, limit)

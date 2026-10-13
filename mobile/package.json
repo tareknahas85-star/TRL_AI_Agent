@@ -1,6 +1,6 @@
 {
   "name": "trl-mobile",
-  "version": "5.10.3",
+  "version": "5.10.4",
   "private": true,
   "description": "TRL_AI_Agent phone app (Capacitor shell over an encrypted link to the desktop app)",
   "scripts": {

@@ -87,9 +87,10 @@ export function reportHtml(c) {
   const timed = rows.filter((r) => r.ms > 0)
   const avg = timed.length ? timed.reduce((s, r) => s + r.ms, 0) / timed.length : 0
   const cost = rows.reduce((s, r) => s + (r.cost || 0), 0)
+  const unk = rows.filter((r) => r.ck === false).length
   const tokens = rows.reduce((s, r) => s + (r.tokens || 0), 0)
   const stat = (v, l, tone = '') => '<div class="stat ' + tone + '"><div class="sv">' + v + '</div><div class="sl">' + l + '</div></div>'
-  h += '<div class="stats">' + stat(n, 'مهمة') + stat(Math.round((free / n) * 100) + '%', 'مجانية', 'ok') + stat(cost > 0 ? '$' + (cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)) : '$0', 'تكلفة تقديرية') +
+  h += '<div class="stats">' + stat(n, 'مهمة') + stat(Math.round((free / n) * 100) + '%', 'مجانية', 'ok') + stat(cost > 0 ? '$' + (cost < 0.01 ? cost.toFixed(4) : cost.toFixed(2)) : (unk ? 'غير معروفة' : '$0'), unk ? 'تكلفة تقديرية (+' + unk + ' بدون سعر)' : 'تكلفة تقديرية') +
     stat(avg ? (avg >= 60000 ? Math.floor(avg / 60000) + 'د ' + Math.round((avg % 60000) / 1000) + 'ث' : (avg / 1000).toFixed(1) + 'ث') : '-', 'متوسط الوقت') + stat(fails, 'فيها أخطاء', fails ? 'bad' : '') + stat(esc2, 'تصعيد لموديل أقوى') + '</div>'
   const tiers = {}
   rows.forEach((r) => { tiers[r.tier] = (tiers[r.tier] || 0) + 1 })
