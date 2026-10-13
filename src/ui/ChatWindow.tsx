@@ -648,7 +648,7 @@ export function ChatWindow({
             <div className="flex items-center gap-3">
               <Avatar />
               <div className="flex items-center gap-2 text-sm text-muted">
-                <span>الماستر بيختار أرخص موديل</span>
+                <span>{progress || 'عم يشتغل…'}</span>
                 <span className="flex gap-1">
                   {[0, 1, 2].map((i) => (
                     <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" style={{ animationDelay: `${i * 150}ms` }} />

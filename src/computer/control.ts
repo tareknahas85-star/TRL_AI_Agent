@@ -134,6 +134,65 @@ async function ask(title: string, detail: string): Promise<boolean> {
   return r.response === 0 || r.response === 1
 }
 
+// ---------- safety helpers ----------
+function killTree(p: { pid?: number; kill: () => boolean }): void {
+  try {
+    if (p.pid && process.platform === 'win32') {
+      const k = spawn('taskkill', ['/PID', String(p.pid), '/T', '/F'], { windowsHide: true })
+      k.on('error', () => {
+        try {
+          p.kill()
+        } catch {
+          /* ignore */
+        }
+      })
+    } else p.kill()
+  } catch {
+    try {
+      p.kill()
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+// Raw disk operations: never on the system/boot disk (even with Full Access), always a confirmation for any other disk.
+const DISK_OPS = /(physicaldrive|clear-disk|initialize-disk|set-disk\b|remove-partition|new-partition|format-volume|diskpart|select\s+disk)/i
+const DISK_NUM = [
+  /physicaldrive\s*(\d+)/gi,
+  /-disk\s*number\s+(\d+)/gi,
+  /-number\s+(\d+)/gi,
+  /select\s+disk\s+(\d+)/gi,
+  /\$\w*disk\w*\s*=\s*(\d+)/gi
+]
+async function diskGuard(cmd: string): Promise<string | null> {
+  if (process.platform !== 'win32' || !DISK_OPS.test(cmd)) return null
+  const nums = new Set<number>()
+  for (const re of DISK_NUM) for (const m of cmd.matchAll(re)) nums.add(Number(m[1]))
+  let disks: { Number: number; FriendlyName?: string; BusType?: string; Size?: number; IsSystem?: boolean; IsBoot?: boolean }[] = []
+  try {
+    const raw = await runPs('Get-Disk | Select-Object Number,FriendlyName,BusType,Size,IsSystem,IsBoot | ConvertTo-Json -Compress', {}, 20000)
+    const j = JSON.parse(raw.slice(raw.indexOf('[') >= 0 && (raw.indexOf('{') < 0 || raw.indexOf('[') < raw.indexOf('{')) ? raw.indexOf('[') : raw.indexOf('{')))
+    disks = Array.isArray(j) ? j : [j]
+  } catch {
+    /* unknown disk layout: handled below */
+  }
+  if (!nums.size) {
+    return (await confirmAlways('أمر بيمسّ الأقراص بدون ما يحدد رقم القرص', cmd))
+      ? null
+      : 'Error: disk command refused - it does not say which disk it targets. Name the exact disk number (a removable/USB disk the user confirmed), never guess.'
+  }
+  const lines: string[] = []
+  for (const n of nums) {
+    const d = disks.find((x) => x.Number === n)
+    if (n === 0 || !d || d.IsSystem || d.IsBoot)
+      return 'Error: BLOCKED - disk ' + n + ' is ' + (n === 0 ? 'disk 0 (internal system disk)' : !d ? 'unknown' : 'the system/boot disk') + '. Disk operations are never allowed on it. Tell the user; do not retry or work around.'
+    lines.push('قرص ' + n + ': ' + (d.BusType ?? '?') + ' ' + Math.round((d.Size ?? 0) / 1e9) + 'GB ' + (d.FriendlyName ?? ''))
+  }
+  if (!(await confirmAlways('عملية على قرص (بتمسح محتواه): ' + lines.join(' | '), cmd))) return 'Error: the user did not confirm this disk operation.'
+  return null
+}
+
 // ---------- powershell runner ----------
 function runPs(script: string, args: unknown = {}, timeoutMs = 60000, signal?: AbortSignal): Promise<string> {
   const b64 = Buffer.from(JSON.stringify(args), 'utf-8').toString('base64')
@@ -157,15 +216,15 @@ function runPs(script: string, args: unknown = {}, timeoutMs = 60000, signal?: A
     }
     const t = setTimeout(() => {
       try {
-        p.kill()
+        killTree(p)
       } catch {
         /* ignore */
       }
-      finish((out + '\n[timeout after ' + timeoutMs / 1000 + 's]').trim())
+      finish((out + '\n[timeout after ' + timeoutMs / 1000 + 's - the command and everything it started were killed. Likely a hidden prompt (sudo/password/Y-N), an interactive program or a hung network call: fix the cause and retry, do not just wait]').trim())
     }, timeoutMs)
     signal?.addEventListener('abort', () => {
       try {
-        p.kill()
+        killTree(p)
       } catch {
         /* ignore */
       }
@@ -278,6 +337,8 @@ export function addComputerTools(
     async (a) => {
       let cmd = s(a.command).trim()
       if (!cmd) return 'Error: empty command'
+      const dg = await diskGuard(cmd)
+      if (dg) return dg
       if (fullAccessOn()) {
         if (DESTRUCTIVE.test(cmd) && !(await confirmAlways('أمر مدمّر (حذف/فرمتة/ريجستري/مستخدمين)', (a.cwd ? '[' + s(a.cwd) + '] ' : '') + cmd)))
           return 'Error: this destructive command was not confirmed by the user.'
@@ -287,6 +348,70 @@ export function addComputerTools(
       const secs = Math.min(1800, Math.max(60, Number(a.timeout_seconds) || 120))
       const out = await runPs(BUILD_ENV_PS + "\nif($A.cwd){ Set-Location -LiteralPath $A.cwd }\n" + cmd, { cwd: s(a.cwd) }, secs * 1000, getSignal?.())
       return out.length > 5500 ? '…[start of output cut]\n' + out.slice(-5500) : out
+    }
+  )
+  def(
+    'pc_run_admin',
+    "Run PowerShell as ADMINISTRATOR (elevated): pass 'command' (inline script) or 'script_path' (a .ps1 file). Windows shows a UAC prompt that the user must click Yes on; this tool waits for it and for the script to finish, then returns the REAL output and exit code. It says clearly if UAC was declined, never answered (timeout), or if the script has a PowerShell syntax error (checked before launching). Report only what it returns - never claim it ran without that. Optional timeout_seconds (default 300, max 3600). Use it only when admin rights are really needed (raw disk writes, services, HKLM, drivers).",
+    { command: str, script_path: str, timeout_seconds: num },
+    [],
+    async (a) => {
+      if (process.platform !== 'win32') return 'Error: pc_run_admin works on Windows only.'
+      let body = s(a.command).trim()
+      const sp = s(a.script_path).trim()
+      if (!body && sp) {
+        try {
+          body = await fsp.readFile(rp(sp), 'utf8')
+        } catch (e) {
+          return 'Error: cannot read script: ' + (e instanceof Error ? e.message : String(e))
+        }
+      }
+      if (!body.trim()) return 'Error: give command or script_path'
+      const dg = await diskGuard(body)
+      if (dg) return dg
+      if (DESTRUCTIVE.test(body) && !(await confirmAlways('سكربت أدمن فيه أمر مدمّر (حذف/فرمتة/ريجستري/مستخدمين)', body.slice(0, 1500)))) return 'Error: this destructive script was not confirmed by the user.'
+      if (!(await confirmAlways('بدو ينفذ سكربت PowerShell بصلاحية أدمن (رح تطلع نافذة UAC)', body.slice(0, 1500)))) return 'Error: the user denied the admin run.'
+      const dir = path.join(app.getPath('temp'), 'trl-admin')
+      await fsp.mkdir(dir, { recursive: true })
+      const id = String(Date.now())
+      const inner = path.join(dir, id + '-inner.ps1')
+      const wrap = path.join(dir, id + '-wrap.ps1')
+      const log = path.join(dir, id + '.log')
+      const done = path.join(dir, id + '.done')
+      const q = (x: string): string => "'" + x.replace(/'/g, "''") + "'"
+      await fsp.writeFile(inner, '\uFEFF' + body, 'utf8')
+      await fsp.writeFile(
+        wrap,
+        '\uFEFF' +
+          ['$ErrorActionPreference="Continue"', 'Start-Transcript -Path ' + q(log) + ' -Force | Out-Null', '$code=0', 'try { & ' + q(inner) + '; if($LASTEXITCODE){$code=$LASTEXITCODE} } catch { Write-Output ("ERROR: " + $_.Exception.Message); $code=1 }', 'Stop-Transcript | Out-Null', 'Set-Content -Path ' + q(done) + ' -Value $code'].join('\r\n'),
+        'utf8'
+      )
+      const chk = await runPs('$e=$null; [void][System.Management.Automation.Language.Parser]::ParseFile($A.f,[ref]$null,[ref]$e); if($e.Count){ $e | % { "line "+$_.Extent.StartLineNumber+": "+$_.Message } } else { "OK" }', { f: inner }, 30000)
+      if (!/^OK\s*$/.test(chk.trim())) return 'Error: PowerShell syntax error - nothing was run. Fix the script (Windows PowerShell 5.1 rules: write "${name}:" instead of "$name:" inside double-quoted strings; save Arabic text in a UTF-8 file with BOM):\n' + chk.slice(0, 1500)
+      const launch = await runPs(
+        "try { $p = Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -PassThru -ArgumentList @('-NoProfile','-ExecutionPolicy','Bypass','-File',$A.w); 'LAUNCHED pid=' + $p.Id } catch { 'UAC_DECLINED: ' + $_.Exception.Message }",
+        { w: wrap },
+        120000,
+        getSignal?.()
+      )
+      if (!/LAUNCHED/.test(launch)) return 'Error: the admin run did NOT start (' + launch.slice(0, 300) + '). The user declined or did not see the UAC prompt. Nothing ran; do not claim it did. Ask the user to approve the UAC prompt and retry.'
+      const secs = Math.min(3600, Math.max(30, Number(a.timeout_seconds) || 300))
+      const t0 = Date.now()
+      while (Date.now() - t0 < secs * 1000) {
+        if (getSignal?.()?.aborted) return '[cancelled] the elevated script may still be running (' + launch.trim() + '); log: ' + log
+        if (fs.existsSync(done)) break
+        await new Promise((r) => setTimeout(r, 1000))
+      }
+      let txt = ''
+      try {
+        txt = (await fsp.readFile(log, 'utf8')).replace(/^\uFEFF/, '')
+      } catch {
+        /* no log yet */
+      }
+      if (!fs.existsSync(done)) return '[timeout after ' + secs + 's] the elevated script has not finished (' + launch.trim() + '). It may still be running, or the UAC prompt was not answered. Log so far: ' + log + '\n' + txt.slice(-3000)
+      const code = (await fsp.readFile(done, 'utf8')).trim()
+      const outTxt = txt.length > 5000 ? '…[start cut]\n' + txt.slice(-5000) : txt
+      return 'exit code: ' + code + ' (' + launch.trim() + ')\n' + outTxt
     }
   )
   def('pc_list_dir', 'List files and folders of a directory on the computer (absolute path).', { path: str }, ['path'], async (a) => {
