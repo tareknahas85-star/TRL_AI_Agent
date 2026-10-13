@@ -41670,7 +41670,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.10.5" : "5.10";
+  var VERSION = true ? "5.10.6" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -42152,6 +42152,18 @@
     const ta = $("#agTask");
     const task = (ta ? ta.value : "").trim();
     if (!task) return toast("\u0627\u0643\u062A\u0628 \u0627\u0644\u0645\u0647\u0645\u0629 \u0623\u0648\u0644");
+    if (/^\/status\b/i.test(task)) {
+      S.agentOut[id] = { task, out: S.conn === "online" ? "\u{1F7E2} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0634\u063A\u0651\u0627\u0644." : "\u23F3 \u0639\u0645 \u0623\u0641\u062D\u0635 \u062D\u0627\u0644\u0629 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026", at: Date.now(), running: false };
+      renderPage();
+      if (S.conn !== "online") {
+        pcAt = 0;
+        void pcStatus().then(() => {
+          S.agentOut[id].out = S.pc === "on" ? "\u{1F7E1} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0634\u063A\u0651\u0627\u0644 \u0628\u0633 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0645\u0648 \u0648\u0627\u0635\u0644\u0648 \u0645\u0628\u0627\u0634\u0631\u0629." : S.pc === "off" ? "\u{1F534} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A \u0623\u0648 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u0633\u0643\u0651\u0631." : "\u26AA \u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0641\u062D\u0635 (\u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0645\u0648 \u0645\u0641\u0639\u0651\u0644\u0629 \u0623\u0648 \u0645\u0627 \u0641\u064A \u0646\u062A).";
+          renderPage();
+        });
+      }
+      return;
+    }
     const r = rid();
     const st = S.agentOut[id] = { task, out: "", at: Date.now(), running: true, status: "\u0639\u0645 \u064A\u0631\u0633\u0644\u2026" };
     S.pending.set(r, { agent: id, buf: "", status: st.status });
@@ -42181,7 +42193,10 @@
       return null;
     }
   }
+  var pcAt = 0;
   async function pcStatus() {
+    if (Date.now() - pcAt < 15e3) return;
+    pcAt = Date.now();
     const r = await gateCall("/status");
     S.pc = r && r.ok ? r.online ? "on" : "off" : "unk";
     if (S.tab === "agents") renderPage();
@@ -42733,6 +42748,7 @@
     const n = S.tasks.length;
     t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + (id === "agents" && S.pal === "syrian" ? EAGLE2 : i) + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
   }
+  var lastPage = { tab: "", html: "" };
   function renderPage() {
     const p = $("#page");
     if (!p) return;
@@ -42750,9 +42766,15 @@
       renderStatus();
       renderSend();
       renderRec();
+      lastPage.tab = "chat";
+      lastPage.html = "";
     } else {
       const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, more: moreHtml }[S.tab] || moreHtml;
-      p.innerHTML = '<div class="page fade">' + fn(VC) + "</div>";
+      const html = fn(VC);
+      if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return;
+      p.innerHTML = '<div class="page' + (lastPage.tab === S.tab ? "" : " fade") + '">' + html + "</div>";
+      lastPage.tab = S.tab;
+      lastPage.html = html;
     }
   }
   function renderApproval() {

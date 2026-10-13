@@ -1,6 +1,6 @@
 {
   "name": "my-ai-router",
-  "version": "5.10.5",
+  "version": "5.10.6",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
   "author": "Tarek Nahas <tareknahas@live.com>",

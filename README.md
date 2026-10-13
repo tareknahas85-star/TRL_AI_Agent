@@ -1,10 +1,10 @@
 # TRL_AI_Agent (وكيل TRL الذكي)
 
-**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.5-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.5-windows-setup.exe)**
+**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.6-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.6-windows-setup.exe)**
 
-**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.5-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.5-android.apk)**
+**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.6-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.6-android.apk)**
 
-**Linux / Ubuntu:** [⬇️ .deb](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.5-linux.deb) &nbsp;|&nbsp; [⬇️ AppImage](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.5-linux.AppImage) &nbsp;|&nbsp; **لينكس / أوبونتو:** نزّل الـ `.deb` أو الـ AppImage من الروابط.
+**Linux / Ubuntu:** [⬇️ .deb](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.6-linux.deb) &nbsp;|&nbsp; [⬇️ AppImage](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.10.6-linux.AppImage) &nbsp;|&nbsp; **لينكس / أوبونتو:** نزّل الـ `.deb` أو الـ AppImage من الروابط.
 
 ---
 
@@ -183,7 +183,7 @@ phone is only a screen.**
 **Set it up (about 3 minutes)**
 
 1. Install the desktop app and make sure it works (steps above).
-2. Download **`TRL_AI_Agent-5.10.5-android.apk`** from the
+2. Download **`TRL_AI_Agent-5.10.6-android.apk`** from the
    [latest release](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    on your phone and install it (Android asks you to allow installing from this
    source once). It is a debug-signed build, not from the Play Store.
@@ -425,7 +425,7 @@ and the licenses of the libraries it uses are in
 **كيف تجهّزو (حوالي 3 دقايق)**
 
 1. ثبّت برنامج الكمبيوتر وتأكد إنو شغّال (الخطوات فوق).
-2. نزّل **`TRL_AI_Agent-5.10.5-android.apk`** من
+2. نزّل **`TRL_AI_Agent-5.10.6-android.apk`** من
    [آخر إصدار](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    عالتلفون وثبّتو (أندرويد بيطلب منك تسمح بالتثبيت من هالمصدر مرة وحدة). هاد ملف
    تجريبي موقّع debug، مو من متجر Play.

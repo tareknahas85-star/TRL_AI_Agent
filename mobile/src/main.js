@@ -248,6 +248,13 @@ const saveAgOut = () => lsSet('trl.agentout', Object.fromEntries(Object.entries(
 function runAgentNow(id) {
   const ta = $('#agTask'); const task = (ta ? ta.value : '').trim()
   if (!task) return toast('اكتب المهمة أول')
+  if (/^\/status\b/i.test(task)) {
+    // same as /status on Telegram: show whether the PC is online, don't run it as a task
+    S.agentOut[id] = { task, out: S.conn === 'online' ? '🟢 الكمبيوتر شغّال.' : '⏳ عم أفحص حالة الكمبيوتر…', at: Date.now(), running: false }
+    renderPage()
+    if (S.conn !== 'online') { pcAt = 0; void pcStatus().then(() => { S.agentOut[id].out = S.pc === 'on' ? '🟡 الكمبيوتر شغّال بس التلفون مو واصلو مباشرة.' : S.pc === 'off' ? '🔴 الكمبيوتر مطفي أو التطبيق مسكّر.' : '⚪ ما قدرت أفحص (البوابة مو مفعّلة أو ما في نت).'; renderPage() }) }
+    return
+  }
   const r = rid()
   const st = S.agentOut[id] = { task, out: '', at: Date.now(), running: true, status: 'عم يرسل…' }
   S.pending.set(r, { agent: id, buf: '', status: st.status })
@@ -268,7 +275,10 @@ async function gateCall(path, body) {
     return { status: r.status, ...j }
   } catch { return null }
 }
+let pcAt = 0
 async function pcStatus() {
+  if (Date.now() - pcAt < 15000) return
+  pcAt = Date.now()
   const r = await gateCall('/status')
   S.pc = r && r.ok ? (r.online ? 'on' : 'off') : 'unk'
   if (S.tab === 'agents') renderPage()
@@ -579,6 +589,7 @@ function renderTabs() {
   const n = S.tasks.length
   t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
 }
+const lastPage = { tab: '', html: '' }
 function renderPage() {
   const p = $('#page'); if (!p) return
   const ta0 = $('#agTask'); if (ta0 && S.agentOpen) { const st0 = S.agentOut[S.agentOpen] || (S.agentOut[S.agentOpen] = {}); st0.task = ta0.value }
@@ -589,9 +600,14 @@ function renderPage() {
       '<textarea id="ta" rows="1" placeholder="اكتب هون…"></textarea><button class="send" id="send">➤</button></div>' +
       '<input type="file" id="fileIn" multiple hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>'
     renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
+    lastPage.tab = 'chat'; lastPage.html = ''
   } else {
     const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, more: moreHtml }[S.tab] || moreHtml
-    p.innerHTML = '<div class="page fade">' + fn(VC) + '</div>'
+    const html = fn(VC)
+    // same tab + same content: leave the DOM alone (no flicker); the fade-in only plays when switching tabs
+    if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return
+    p.innerHTML = '<div class="page' + (lastPage.tab === S.tab ? '' : ' fade') + '">' + html + '</div>'
+    lastPage.tab = S.tab; lastPage.html = html
   }
 }
 function renderApproval() {
