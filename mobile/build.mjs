@@ -17,4 +17,7 @@ await build({
 })
 fs.copyFileSync('src/index.html', 'www/index.html')
 fs.copyFileSync('src/style.css', 'www/style.css')
+fs.mkdirSync('www/fonts', { recursive: true })
+fs.copyFileSync('src/assets/syria-eagle.svg', 'www/syria-eagle.svg')
+for (const f of fs.readdirSync('src/assets/fonts')) fs.copyFileSync('src/assets/fonts/' + f, 'www/fonts/' + f)
 console.log('bundle ok')

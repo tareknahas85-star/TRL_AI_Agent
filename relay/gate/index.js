@@ -65,6 +65,43 @@ export class Gate extends DurableObject {
       return json(await this.addMail(arr));
     }
 
+    // Phone app (separate narrow key, registered by the PC app): same routing as the Telegram bot.
+    // /status says whether the PC is online; /run sends a task (to the PC if online, else the cloud runner).
+    if (p === '/run' || p === '/status') {
+      const cors = {
+        'access-control-allow-origin': '*',
+        'access-control-allow-headers': 'x-phone-key,content-type',
+        'access-control-allow-methods': 'GET,POST,OPTIONS',
+      };
+      const out = (o, s = 200) =>
+        new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json', ...cors } });
+      if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: cors });
+      const pk = await st.get('phoneKey');
+      if (!pk || !safeEq(req.headers.get('x-phone-key'), pk)) return out({ error: 'unauthorized' }, 401);
+      if (p === '/status' && req.method === 'GET') return out({ ok: true, online: await this.online() });
+      if (p === '/run' && req.method === 'POST') {
+        const last = (await st.get('lastPhoneRun')) || 0;
+        if (Date.now() - last < 2000) return out({ error: 'too fast' }, 429);
+        await st.put('lastPhoneRun', Date.now());
+        let b;
+        try { b = await req.json(); } catch { return out({ error: 'bad json' }, 400); }
+        const task = clip(b?.task, 4000).trim();
+        if (!task) return out({ error: 'empty task' }, 400);
+        const name = clip(b?.agent, 40).trim().toLowerCase();
+        let agent = null;
+        if (name) {
+          agent = ((await st.get('agents')) || []).find((a) => a.name.toLowerCase() === name) || null;
+          if (!agent) return out({ error: 'agent not found' }, 404);
+        }
+        const mode = agent ? agent.runOn : 'auto';
+        const online = await this.online();
+        const where = mode === 'local' || (mode === 'auto' && online) ? (online ? 'pc' : 'none') : 'cloud';
+        await this.run(agent, task);
+        return out({ ok: true, where });
+      }
+      return out({ error: 'not found' }, 404);
+    }
+
     // Everything else needs the app key
     if (!env.GATE_KEY || !safeEq(req.headers.get('x-gate-key'), env.GATE_KEY))
       return new Response('unauthorized', { status: 401 });
@@ -78,6 +115,13 @@ export class Gate extends DurableObject {
       const after = parseInt(u.searchParams.get('after') || '0', 10) || 0;
       const inbox = (await st.get('inbox')) || [];
       return json({ items: inbox.filter((i) => i.id > after), last: (await st.get('seq')) || 0 });
+    }
+    if (p === '/phone-key' && req.method === 'PUT') {
+      let b;
+      try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+      if (!/^[0-9a-f]{32,128}$/.test(String(b?.key ?? ''))) return json({ error: 'bad key' }, 400);
+      await st.put('phoneKey', b.key);
+      return json({ ok: true });
     }
     if (p === '/agents' && req.method === 'PUT') {
       const body = await req.text();

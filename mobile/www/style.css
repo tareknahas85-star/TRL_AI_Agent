@@ -122,3 +122,23 @@ body{background:radial-gradient(1200px 500px at 50% -120px,#13303a 0%,var(--bg) 
 .rrow{padding:9px 0;border-bottom:1px solid var(--line)}.rrow:last-child{border:0}.rp{font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .prj{display:flex;align-items:center;gap:8px;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--s2);margin-bottom:8px;cursor:pointer;transition:border-color .2s}
 .prj.sel{border-color:var(--pri);background:var(--glow)}.prj .pn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.prj.lock{opacity:.5;cursor:not-allowed}
+
+
+/* ---- themes: dark (default above), light, and the Syrian identity palette (same values as the desktop app) ---- */
+:root{--g1:#13303a;--t1:#1a2630;--t2:#141b22;--code:#0b0f13}
+body{background:radial-gradient(1200px 500px at 50% -120px,var(--g1) 0%,var(--bg) 60%) fixed}
+.top{background:linear-gradient(180deg,var(--t1),var(--s1))}
+.tabs{background:linear-gradient(0deg,var(--t2),var(--s1))}
+.msg pre,.msg code,.appr pre{background:var(--code)}
+:root.light{--bg:#f6f8fc;--s1:#ffffff;--s2:#eef1f8;--line:#dde2ea;--fg:#1f1f1f;--mut:#5f6368;--pri:#1a73e8;--pri2:#1558b0;--pritxt:#ffffff;--dng:#d93025;--ok:#1e8e3e;--warn:#b06000;--me:#d3e3fd;--glow:rgba(26,115,232,.12);--sh:0 6px 20px rgba(0,0,0,.08);--g1:#e3ecfb;--t1:#ffffff;--t2:#ffffff;--code:#eef1f8}
+:root.light .msg a{color:#1558b0}
+:root.syrian{--bg:#002623;--s1:#033430;--s2:#054239;--line:#1d5b52;--fg:#ede8e0;--mut:#b9a779;--pri:#428177;--pri2:#428177;--pritxt:#002623;--dng:#e0707e;--ok:#6fb39f;--warn:#d4be85;--me:#0b4f45;--glow:rgba(66,129,119,.16);--g1:#054239;--t1:#054239;--t2:#022e2a;--code:#001d1a}
+:root.syrian.light{--bg:#edebe0;--s1:#f7f6ee;--s2:#e3e0d0;--line:#cdc6ac;--fg:#161616;--mut:#5e584b;--pri:#054239;--pri2:#054239;--pritxt:#edebe0;--dng:#6b1f2a;--ok:#2f6b4f;--warn:#7d683c;--me:#d9d4b8;--glow:rgba(5,66,57,.1);--g1:#e3e0d0;--t1:#f7f6ee;--t2:#f7f6ee;--code:#e3e0d0}
+@font-face{font-family:'Hayyakum Allah';src:url('fonts/HayyakumAllah-Light.woff2') format('woff2');font-weight:300;font-display:swap}
+@font-face{font-family:'Hayyakum Allah';src:url('fonts/HayyakumAllah-Regular.woff2') format('woff2');font-weight:400;font-display:swap}
+@font-face{font-family:'Hayyakum Allah';src:url('fonts/HayyakumAllah-Medium.woff2') format('woff2');font-weight:500;font-display:swap}
+@font-face{font-family:'Hayyakum Allah';src:url('fonts/HayyakumAllah-Bold.woff2') format('woff2');font-weight:700;font-display:swap}
+:root.syrian body,:root.syrian button,:root.syrian input,:root.syrian textarea,:root.syrian select{font-family:'Hayyakum Allah',system-ui,-apple-system,"Segoe UI",Roboto,"Noto Naskh Arabic","Noto Sans Arabic",sans-serif}
+.eagle{width:1.15em;height:1.15em;object-fit:contain;vertical-align:middle}
+.phi .eagle{width:30px;height:30px}
+.tabs .i .eagle{width:24px;height:24px}

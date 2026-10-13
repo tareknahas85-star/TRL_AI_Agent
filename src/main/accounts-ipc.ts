@@ -10,7 +10,7 @@ const GOOGLE = 'google-workspace'
 const AUTH_URL = /https:\/\/accounts\.google\.com\/[^\s)>\]"']+/
 
 async function googleTool(name: string) {
-  const tools = await listMcpTools()
+  const tools = await listMcpTools({ only: GOOGLE, waitMs: 120000 })
   return tools.find((t) => t.server === GOOGLE && t.name === name)
 }
 
@@ -74,7 +74,7 @@ export function registerAccountsHandlers(): void {
     try {
       const wanted = action === 'connect' ? 'start_google_auth' : 'list_calendars'
       const t = await googleTool(wanted)
-      if (!t) return { ok: false, message: `ما لقيت الأداة ${wanted}. تأكد إن سيرفر google-workspace شغال بصفحة MCP.` }
+      if (!t) return { ok: false, message: `ما لقيت الأداة ${wanted}. السيرفر لسا عم يشغّل (أول مرة بياخد دقيقة أو أكتر). جرّب كمان مرة، أو تأكد إنو شغال بصفحة MCP.` }
       const props = (t.schema?.properties ?? {}) as Record<string, unknown>
       const args: Record<string, unknown> = {}
       if ('user_google_email' in props) args.user_google_email = email

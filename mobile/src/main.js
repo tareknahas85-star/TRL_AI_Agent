@@ -50,7 +50,7 @@ let L = null
 const S = {
   view: 'boot', tab: 'chat', device: null, ppk: '', psk: '',
   conn: 'offline', host: '', models: [], projects: [], tasks: [], sas: '', pairErr: '',
-  agents: [], sched: null, report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null,
+  agents: lsGet('trl.agents', []), gate: lsGet('trl.gate', null), pc: '', themeMode: lsGet('trl.themeMode', 'dark'), pal: lsGet('trl.pal', 'default'), sched: null, report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null,
   agentOut: Object.fromEntries(Object.entries(lsGet('trl.agentout', {})).map(([k, v]) => [k, { ...v, running: false }])),
   mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
   convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
@@ -82,7 +82,7 @@ async function dial(urls, room, role) {
   for (const u of urls) { try { return await openWs(u, room, role) } catch { /* try next address */ } }
   throw new Error('no route')
 }
-function setConn(s) { if (S.conn !== s) { S.conn = s; updateDot() } }
+function setConn(s) { if (S.conn !== s) { S.conn = s; updateDot(); if (s !== 'online' && s !== 'connecting' && S.gate && S.tab === 'agents') pcStatus() } }
 function updateDot() {
   const d = $('#dot'); if (!d) return
   d.className = 'dot ' + (S.conn === 'online' ? 'on' : S.conn === 'offline' ? '' : 'wait')
@@ -145,7 +145,7 @@ function onHost(m) {
       if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet(); if (S.tab === 'more') renderPage() }
       return
     case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !document.activeElement.matches('textarea')) renderPage() } return
-    case 'agents': S.agents = m.list || []; if (S.tab === 'agents') renderPage(); return
+    case 'agents': S.agents = m.list || []; lsSet('trl.agents', S.agents); if (m.gate && m.gate.url && m.gate.key) { S.gate = m.gate; lsSet('trl.gate', m.gate) } if (S.tab === 'agents') renderPage(); return
     case 'sched': S.sched = m.list || []; if (S.tab === 'sched') renderPage(); return
     case 'report': S.report = m.rows || []; if (S.tab === 'report') renderPage(); return
     case 'prog': { const p = S.pending.get(m.id); if (p) { p.status = m.text; if (p.agent) agProg(p); else renderStatus() } return }
@@ -251,7 +251,41 @@ function runAgentNow(id) {
   const r = rid()
   const st = S.agentOut[id] = { task, out: '', at: Date.now(), running: true, status: 'عم يرسل…' }
   S.pending.set(r, { agent: id, buf: '', status: st.status })
-  if (!sendHost({ k: 'agent.run', id: r, agent: id, task, project: S.project, mode: S.mode })) { S.pending.delete(r); st.running = false; toast('انقطع الاتصال') }
+  if (!sendHost({ k: 'agent.run', id: r, agent: id, task, project: S.project, mode: S.mode })) {
+    S.pending.delete(r)
+    // PC not reachable from the phone: same routing as Telegram, through the gate (cloud runner when the PC is off)
+    if (S.gate) { st.status = 'عم يبعت للبوابة…'; saveAgOut(); renderPage(); void gateRun(id, task); return }
+    st.running = false; toast('الكمبيوتر مو متصل هلأ وما في بوابة سحابية مفعّلة')
+  }
+  saveAgOut(); renderPage()
+}
+async function gateCall(path, body) {
+  const g = S.gate
+  if (!g) return null
+  try {
+    const r = await fetch(g.url + path, { method: body ? 'POST' : 'GET', headers: { 'x-phone-key': g.key, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined })
+    const j = await r.json().catch(() => ({}))
+    return { status: r.status, ...j }
+  } catch { return null }
+}
+async function pcStatus() {
+  const r = await gateCall('/status')
+  S.pc = r && r.ok ? (r.online ? 'on' : 'off') : 'unk'
+  if (S.tab === 'agents') renderPage()
+}
+async function gateRun(id, task) {
+  const a = S.agents.find((x) => x.id === id)
+  const st = S.agentOut[id] || (S.agentOut[id] = {})
+  const r = await gateCall('/run', { agent: a ? a.name : '', task })
+  st.running = false; st.at = Date.now(); st.failed = false
+  if (!r) { st.failed = true; st.out = 'ما قدرت أوصل للبوابة. تأكد من النت.' }
+  else if (r.status === 200 && r.ok) {
+    st.failed = r.where === 'none'
+    st.out = r.where === 'cloud' ? '☁️ الكمبيوتر مطفي، فانبعتت المهمة للكمبيوتر السحابي. النتيجة بتوصلك على تيليغرام.' : r.where === 'pc' ? '📥 وصلت المهمة للكمبيوتر. النتيجة بتوصلك على تيليغرام.' : '🔴 الكمبيوتر مطفي والوكيل هاد مضبوط يشتغل محلي بس.'
+  } else {
+    st.failed = true
+    st.out = r.error === 'agent not found' ? 'الوكيل مو موجود عالبوابة. افتح تبويب «وكلاء» بالبرنامج وضغط مزامنة.' : r.status === 401 ? 'مفتاح البوابة قديم. وصّل التلفون بالكمبيوتر مرة تانية لتجديدو.' : r.status === 429 ? 'استنى ثانيتين وجرّب.' : 'فشل: ' + (r.error || r.status)
+  }
   saveAgOut(); renderPage()
 }
 function agProg(p) { const st = S.agentOut[p.agent]; if (!st) return; st.status = p.status; const el = $('#agStatus'); if (el) el.innerHTML = '<span class="spin"></span> ' + esc(p.status || 'عم يشتغل…') }
@@ -268,7 +302,7 @@ function agDone(m, p) {
 }
 function openTab(id) {
   S.tab = id; renderTabs(); renderPage()
-  if (id === 'agents') sendHost({ k: 'agents.get' })
+  if (id === 'agents') { sendHost({ k: 'agents.get' }); if (S.gate && S.conn !== 'online') pcStatus() }
   else if (id === 'sched') sendHost({ k: 'sched.get' })
   else if (id === 'report') sendHost({ k: 'report.get' })
 }
@@ -283,6 +317,8 @@ function viewClick(t) {
   if (d.srun) { sendHost({ k: 'sched.run', id: d.srun }); toast('بلّشت المهمة'); return true }
   if (d.rperiod) { S.rperiod = d.rperiod; renderPage(); return true }
   if (d.projdesk) { sendHost({ k: 'project.set', id: d.projdesk }); toast('انفعّل عالكمبيوتر'); return true }
+  if (d.themeMode) { S.themeMode = d.themeMode; lsSet('trl.themeMode', S.themeMode); applyTheme(); renderPage(); return true }
+  if (d.pal) { S.pal = d.pal; lsSet('trl.pal', S.pal); applyTheme(); renderTabs(); renderPage(); return true }
   if (d.proj !== undefined) {
     const p = S.projects.find((x) => x.id === d.proj)
     if (p && p.confidential) { toast('🔒 مشروع سري، ما بينفتح من الموبايل'); return true }
@@ -488,6 +524,7 @@ function stopScanner() { scanning = false; if (scanStream) { scanStream.getTrack
 
 // ---------- rendering ----------
 function render() {
+  applyTheme()
   const app = $('#app'); if (!app) return
   if (S.view !== 'scan') stopScanner()
   if (S.view === 'boot') { app.innerHTML = '<div class="center"><div class="logo">T</div><div class="spin"></div></div>'; return }
@@ -527,10 +564,20 @@ function renderHeader() {
   const b = $('#modeBtn'); if (b) b.textContent = '⚙ ' + modeLabel()
   updateDot()
 }
+// ---------- theme: light / dark / follow device, plus the optional Syrian identity palette (colors + font + eagle) ----------
+const EAGLE = '<img class="eagle" src="syria-eagle.svg" alt="">'
+function applyTheme() {
+  const light = S.themeMode === 'light' || (S.themeMode === 'auto' && window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches)
+  const r = document.documentElement
+  r.classList.toggle('light', light)
+  r.classList.toggle('syrian', S.pal === 'syrian')
+  const meta = document.querySelector('meta[name=theme-color]')
+  if (meta) meta.setAttribute('content', getComputedStyle(document.body).getPropertyValue('--bg').trim() || '#0f1419')
+}
 function renderTabs() {
   const t = $('#tabs'); if (!t) return
   const n = S.tasks.length
-  t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + i + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
+  t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
 }
 function renderPage() {
   const p = $('#page'); if (!p) return

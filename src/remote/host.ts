@@ -14,6 +14,7 @@ import sodium from 'libsodium-wrappers'
 import { readJson, writeJson, newId } from '../core/json-store'
 import { listProjects, activeProject, setActiveProject } from '../core/workspace'
 import { listAgents } from '../core/agents'
+import { phoneGateInfo } from '../core/gate'
 import { listSchedules, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
 import { tasksReport } from '../main/extras'
 import { listRuns, cancelRun, runHub } from '../core/progress'
@@ -358,7 +359,10 @@ async function handle(dev: Device, m: Json): Promise<void> {
     if (!a || !rid) return void send(dev.id, { k: 'error', text: 'ما لقيت الوكيل' })
     if (!task) return void send(dev.id, { k: 'error', text: 'اكتب المهمة أول' })
     if (a.runOn === 'cloud') return void send(dev.id, { k: 'done', id: rid, tab: 'agent-' + a.id, content: 'هالوكيل مضبوط سحابي بس، بيشتغل من تيليغرام.', failed: true })
-    m = { ...m, text: (a.prompt ? a.prompt + '\n\n' : '') + 'المهمة: ' + task, tab: 'agent-' + a.id }
+    // same as Telegram: auto mode, the desktop's active project (never confidential), no phone history
+    const ap = activeProject()
+    if (ap?.confidential) return void send(dev.id, { k: 'done', id: rid, tab: 'agent-' + a.id, content: '🔒 المشروع الفعّال سري. غيّر المشروع من البرنامج أول.', failed: true })
+    m = { ...m, text: (a.prompt ? a.prompt + '\n\n' : '') + 'المهمة: ' + task, tab: 'agent-' + a.id, project: ap?.id ?? null, mode: { kind: 'auto' }, hist: [] }
     k = 'chat'
   }
   dev.lastSeen = Date.now()
@@ -373,7 +377,7 @@ async function handle(dev: Device, m: Json): Promise<void> {
         send(dev.id, { k: 'pong' })
         return
       case 'agents.get':
-        send(dev.id, { k: 'agents', list: listAgents().map((a) => ({ id: a.id, name: a.name, runOn: a.runOn, hint: a.prompt.replace(/\s+/g, ' ').slice(0, 140) })) })
+        send(dev.id, { k: 'agents', list: listAgents().map((a) => ({ id: a.id, name: a.name, runOn: a.runOn, hint: a.prompt.replace(/\s+/g, ' ').slice(0, 140) })), gate: await phoneGateInfo().catch(() => null) })
         return
       case 'sched.get':
         send(dev.id, schedMsg())

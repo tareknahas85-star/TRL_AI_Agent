@@ -115,7 +115,7 @@ function getConn(server: MCPServer): Promise<Conn> {
       await c.request(
         'initialize',
         { protocolVersion: '2024-11-05', capabilities: {}, clientInfo: { name: 'ai-router-os', version: '1.0.0' } },
-        60000
+        120000
       )
       c.notify('notifications/initialized')
       return c
@@ -141,12 +141,14 @@ const WAIT_MS = 15000
 
 const safe = (s: string): string => s.replace(/[^a-zA-Z0-9_-]/g, '_')
 
-export async function listMcpTools(): Promise<McpToolInfo[]> {
+// opts.only: start/ask just this one server (an explicit test must not wait behind 25 cold starts), ignore its recent failure and wait longer.
+export async function listMcpTools(opts?: { only?: string; waitMs?: number }): Promise<McpToolInfo[]> {
   const cfg = await loadMCPConfig()
-  const active = cfg.servers.filter((s) => s.enabled !== false)
+  const active = cfg.servers.filter((s) => s.enabled !== false && (!opts?.only || s.name === opts.only))
   const stale = active.filter((s) => {
     const hit = toolCache.get(s.name)
     if (hit && Date.now() - hit.at <= TTL) return false
+    if (opts?.only) return true
     const f = failedAt.get(s.name)
     return !(f && Date.now() - f < FAIL_TTL)
   })
@@ -173,7 +175,7 @@ export async function listMcpTools(): Promise<McpToolInfo[]> {
         }
       })
     )
-    await Promise.race([work, new Promise((r) => setTimeout(r, WAIT_MS))])
+    await Promise.race([work, new Promise((r) => setTimeout(r, opts?.waitMs ?? WAIT_MS))])
   }
   return active.flatMap((s) => toolCache.get(s.name)?.tools ?? [])
 }

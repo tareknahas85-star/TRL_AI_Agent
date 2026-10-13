@@ -19,6 +19,7 @@ const kindTxt = (t) =>
   t.kind === 'daily' ? 'يومياً الساعة ' + t.time
     : t.kind === 'weekly' ? 'أسبوعياً (' + (t.days || []).map((d) => DAYS[d]).join('، ') + ') ' + t.time
       : 'كل ' + (t.everyMin >= 60 && t.everyMin % 60 === 0 ? t.everyMin / 60 + ' ساعة' : t.everyMin + ' دقيقة')
+const EAGLE = '<img class="eagle" src="syria-eagle.svg" alt="">'
 const head = (icon, title, sub, right = '') =>
   '<div class="ph"><div class="phi">' + icon + '</div><div class="pht"><h2>' + title + '</h2><div class="mut">' + sub + '</div></div>' + right + '</div>'
 const empty = (msg) => '<div class="emp">' + msg + '</div>'
@@ -27,7 +28,8 @@ const empty = (msg) => '<div class="emp">' + msg + '</div>'
 export function agentsHtml(c) {
   const { S, esc, md, fmtDur } = c
   const online = S.conn === 'online'
-  let h = head('🤖', 'الوكلاء', 'شغّل أي وكيل من التلفون وبينفّذ عالكمبيوتر', '<button class="chip" data-refresh="agents">تحديث</button>')
+  let h = head(S.pal === 'syrian' ? EAGLE : '🤖', 'الوكلاء', 'شغّل أي وكيل من التلفون وبينفّذ عالكمبيوتر', '<button class="chip" data-refresh="agents">تحديث</button>')
+  h += '<div class="mut" style="margin:0 4px 10px">' + (online ? '🟢 الكمبيوتر شغّال.' : S.gate ? (S.pc === 'on' ? '🟡 الكمبيوتر شغّال بس التلفون مو واصلو مباشرة، فالمهام بتنبعت عبر البوابة.' : S.pc === 'off' ? '🔴 الكمبيوتر مطفي أو التطبيق مسكّر. المهام بتشتغل بالسحابة.' : '⏳ عم يفحص حالة الكمبيوتر…') : '⚪ مو متصل بالكمبيوتر.') + '</div>'
   if (S.tasks.length) {
     h += '<div class="card glow"><h3>⏳ شغّال هلأ</h3>' + S.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc(t.label) + '</b> <span class="mut">· ' + fmtDur(Date.now() - t.started) + '</span><div class="mut">' + esc(t.text || 'عم يشتغل…') + '</div></div><button class="chip" data-stop="' + esc(t.tab) + '">إيقاف</button></div>').join('') + '</div>'
   }
@@ -43,7 +45,8 @@ export function agentsHtml(c) {
         ? '<div class="ag-body"><textarea id="agTask" rows="3" placeholder="المهمة يلي بدك الوكيل ينفذها…">' + esc(st.task || '') + '</textarea>' +
           '<div class="acts">' + (st.running
             ? '<button class="btn danger" data-agstop="' + esc(a.id) + '">■ إيقاف</button>'
-            : '<button class="btn" data-agrun="' + esc(a.id) + '"' + (online ? '' : ' disabled') + '>▶ نفّذ</button>') + '</div>' +
+            : '<button class="btn" data-agrun="' + esc(a.id) + '">▶ نفّذ</button>') + '</div>' +
+          (!st.running && !online ? '<div class="mut" style="margin-top:8px">' + (S.gate ? '⚠️ الكمبيوتر مو واصل هلأ: لما تكبس نفّذ بتنبعت المهمة عبر البوابة (للكمبيوتر إذا شغّال، أو للسحابة)، والنتيجة على تيليغرام.' : '⚠️ الكمبيوتر مو متصل هلأ. وصّل التلفون بالكمبيوتر مرة لتفعيل البوابة السحابية.') + '</div>' : '') +
           (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc(st.status || 'عم يشتغل…') + '</div>' : '') +
           '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? ' err' : '') + '">' + md(st.out) + '<div class="meta">' + esc(when(st.at)) + '</div></div>' : '') + '</div></div>'
         : '') + '</div>'
@@ -122,6 +125,7 @@ export function moreHtml(c) {
     (m.kind === 'model' ? '<select class="sel" id="selModel"><option value="">— اختر —</option>' + S.models.map((v) => opt(m.id, v)).join('') + '</select>' : '') +
     (m.kind === 'council' ? '<div class="mut">الكاتب</div><select class="sel" id="selAuthor"><option value="">تلقائي</option>' + S.models.map((v) => opt(m.author, v)).join('') + '</select><div class="mut">المراجع</div><select class="sel" id="selCritic"><option value="">تلقائي</option>' + S.models.map((v) => opt(m.critic, v)).join('') + '</select>' : '') +
     '<div class="mut">' + S.models.length + ' موديل متاح</div></div>'
+  h += '<div class="card"><h3>🎨 المظهر</h3><div class="seg">' + [['light', 'فاتح'], ['dark', 'غامق'], ['auto', 'حسب الجهاز']].map(([k, l]) => '<button data-theme-mode="' + k + '" class="' + (S.themeMode === k ? 'act' : '') + '">' + l + '</button>').join('') + '</div><div class="seg" style="margin-top:8px">' + [['default', 'الألوان الافتراضية'], ['syrian', 'الهوية السورية']].map(([k, l]) => '<button data-pal="' + k + '" class="' + (S.pal === k ? 'act' : '') + '">' + l + '</button>').join('') + '</div><div class="mut" style="margin-top:8px">الهوية السورية: ألوان وخط (حيّاكم الله) والنسر مكان الروبوت، متل برنامج الكمبيوتر.</div></div>'
   h += '<div class="card"><h3>🔌 الاتصال</h3><div class="mut">الكمبيوتر: <b>' + esc(S.host || d.name) + '</b><br>الحالة: ' + esc(({ online: 'متصل ✅', connecting: 'عم يتصل…', hostdown: 'الكمبيوتر مو متصل بالـ relay', offline: 'غير متصل' })[S.conn]) + '<br>العناوين: <span dir="ltr">' + esc((d.urls || []).map((u) => u.replace(/^wss?:\/\//, '').replace('/ws', '')).join(' , ')) + '</span></div></div>' +
     '<div class="card"><h3>الخلفية</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S.keepAlive ? 'checked' : '') + '> خلّي التطبيق متصل بالخلفية (بيظهر إشعار ثابت) عشان توصلك الموافقات والنتائج</label></div>' +
     '<div class="card"><h3>🔐 الأمان</h3><div class="mut">كل شي بين التلفون والكمبيوتر مشفّر من الطرفين. مفتاح هالجهاز محفوظ بمخزن أندرويد الآمن (Keystore).</div></div>' +

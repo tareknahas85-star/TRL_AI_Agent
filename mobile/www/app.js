@@ -41589,12 +41589,14 @@
   };
   var when = (t) => t ? new Date(t).toLocaleString("ar", { dateStyle: "short", timeStyle: "short" }) : "-";
   var kindTxt = (t) => t.kind === "daily" ? "\u064A\u0648\u0645\u064A\u0627\u064B \u0627\u0644\u0633\u0627\u0639\u0629 " + t.time : t.kind === "weekly" ? "\u0623\u0633\u0628\u0648\u0639\u064A\u0627\u064B (" + (t.days || []).map((d) => DAYS[d]).join("\u060C ") + ") " + t.time : "\u0643\u0644 " + (t.everyMin >= 60 && t.everyMin % 60 === 0 ? t.everyMin / 60 + " \u0633\u0627\u0639\u0629" : t.everyMin + " \u062F\u0642\u064A\u0642\u0629");
+  var EAGLE = '<img class="eagle" src="syria-eagle.svg" alt="">';
   var head = (icon, title, sub, right = "") => '<div class="ph"><div class="phi">' + icon + '</div><div class="pht"><h2>' + title + '</h2><div class="mut">' + sub + "</div></div>" + right + "</div>";
   var empty = (msg) => '<div class="emp">' + msg + "</div>";
   function agentsHtml(c) {
     const { S: S2, esc: esc2, md: md2, fmtDur: fmtDur2 } = c;
     const online = S2.conn === "online";
-    let h = head("\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621", "\u0634\u063A\u0651\u0644 \u0623\u064A \u0648\u0643\u064A\u0644 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0628\u064A\u0646\u0641\u0651\u0630 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631", '<button class="chip" data-refresh="agents">\u062A\u062D\u062F\u064A\u062B</button>');
+    let h = head(S2.pal === "syrian" ? EAGLE : "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621", "\u0634\u063A\u0651\u0644 \u0623\u064A \u0648\u0643\u064A\u0644 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0628\u064A\u0646\u0641\u0651\u0630 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631", '<button class="chip" data-refresh="agents">\u062A\u062D\u062F\u064A\u062B</button>');
+    h += '<div class="mut" style="margin:0 4px 10px">' + (online ? "\u{1F7E2} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0634\u063A\u0651\u0627\u0644." : S2.gate ? S2.pc === "on" ? "\u{1F7E1} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0634\u063A\u0651\u0627\u0644 \u0628\u0633 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0645\u0648 \u0648\u0627\u0635\u0644\u0648 \u0645\u0628\u0627\u0634\u0631\u0629\u060C \u0641\u0627\u0644\u0645\u0647\u0627\u0645 \u0628\u062A\u0646\u0628\u0639\u062A \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629." : S2.pc === "off" ? "\u{1F534} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A \u0623\u0648 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u0633\u0643\u0651\u0631. \u0627\u0644\u0645\u0647\u0627\u0645 \u0628\u062A\u0634\u062A\u063A\u0644 \u0628\u0627\u0644\u0633\u062D\u0627\u0628\u0629." : "\u23F3 \u0639\u0645 \u064A\u0641\u062D\u0635 \u062D\u0627\u0644\u0629 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026" : "\u26AA \u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.") + "</div>";
     if (S2.tasks.length) {
       h += '<div class="card glow"><h3>\u23F3 \u0634\u063A\u0651\u0627\u0644 \u0647\u0644\u0623</h3>' + S2.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc2(t.label) + '</b> <span class="mut">\xB7 ' + fmtDur2(Date.now() - t.started) + '</span><div class="mut">' + esc2(t.text || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + '</div></div><button class="chip" data-stop="' + esc2(t.tab) + '">\u0625\u064A\u0642\u0627\u0641</button></div>').join("") + "</div>";
     }
@@ -41603,7 +41605,7 @@
     h += S2.agents.map((a) => {
       const st = S2.agentOut[a.id] || {};
       const open = S2.agentOpen === a.id;
-      return '<div class="card agent' + (open ? " open" : "") + '"><div class="ag-top" data-agopen="' + esc2(a.id) + '"><div class="av">' + esc2((a.name || "?").trim().slice(0, 1).toUpperCase()) + '</div><div class="ag-i"><b>' + esc2(a.name) + '</b><span class="pill">' + (RUNON[a.runOn] || a.runOn) + "</span>" + (a.hint ? '<div class="mut ag-h">' + esc2(a.hint) + "</div>" : "") + '</div><span class="chev">' + (open ? "\u25BE" : "\u25C2") + "</span></div>" + (open ? '<div class="ag-body"><textarea id="agTask" rows="3" placeholder="\u0627\u0644\u0645\u0647\u0645\u0629 \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u0644\u0648\u0643\u064A\u0644 \u064A\u0646\u0641\u0630\u0647\u0627\u2026">' + esc2(st.task || "") + '</textarea><div class="acts">' + (st.running ? '<button class="btn danger" data-agstop="' + esc2(a.id) + '">\u25A0 \u0625\u064A\u0642\u0627\u0641</button>' : '<button class="btn" data-agrun="' + esc2(a.id) + '"' + (online ? "" : " disabled") + ">\u25B6 \u0646\u0641\u0651\u0630</button>") + "</div>" + (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc2(st.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + "</div>" : "") + '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? " err" : "") + '">' + md2(st.out) + '<div class="meta">' + esc2(when(st.at)) + "</div></div>" : "") + "</div></div>" : "") + "</div>";
+      return '<div class="card agent' + (open ? " open" : "") + '"><div class="ag-top" data-agopen="' + esc2(a.id) + '"><div class="av">' + esc2((a.name || "?").trim().slice(0, 1).toUpperCase()) + '</div><div class="ag-i"><b>' + esc2(a.name) + '</b><span class="pill">' + (RUNON[a.runOn] || a.runOn) + "</span>" + (a.hint ? '<div class="mut ag-h">' + esc2(a.hint) + "</div>" : "") + '</div><span class="chev">' + (open ? "\u25BE" : "\u25C2") + "</span></div>" + (open ? '<div class="ag-body"><textarea id="agTask" rows="3" placeholder="\u0627\u0644\u0645\u0647\u0645\u0629 \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u0644\u0648\u0643\u064A\u0644 \u064A\u0646\u0641\u0630\u0647\u0627\u2026">' + esc2(st.task || "") + '</textarea><div class="acts">' + (st.running ? '<button class="btn danger" data-agstop="' + esc2(a.id) + '">\u25A0 \u0625\u064A\u0642\u0627\u0641</button>' : '<button class="btn" data-agrun="' + esc2(a.id) + '">\u25B6 \u0646\u0641\u0651\u0630</button>') + "</div>" + (!st.running && !online ? '<div class="mut" style="margin-top:8px">' + (S2.gate ? "\u26A0\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0648\u0627\u0635\u0644 \u0647\u0644\u0623: \u0644\u0645\u0627 \u062A\u0643\u0628\u0633 \u0646\u0641\u0651\u0630 \u0628\u062A\u0646\u0628\u0639\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 (\u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0625\u0630\u0627 \u0634\u063A\u0651\u0627\u0644\u060C \u0623\u0648 \u0644\u0644\u0633\u062D\u0627\u0628\u0629)\u060C \u0648\u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0639\u0644\u0649 \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645." : "\u26A0\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0647\u0644\u0623. \u0648\u0635\u0651\u0644 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0631\u0629 \u0644\u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629.") + "</div>" : "") + (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc2(st.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + "</div>" : "") + '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? " err" : "") + '">' + md2(st.out) + '<div class="meta">' + esc2(when(st.at)) + "</div></div>" : "") + "</div></div>" : "") + "</div>";
     }).join("");
     return h;
   }
@@ -41662,12 +41664,13 @@
     let h = head("\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F", "\u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639 \u0648\u0627\u0644\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644");
     h += '<div class="card"><h3>\u{1F4C1} \u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639</h3><div class="mut" style="margin-bottom:8px">\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u064A\u0644\u064A \u0628\u062A\u062E\u062A\u0627\u0631\u0648\u0627 \u0628\u062A\u0634\u062A\u063A\u0644 \u0639\u0644\u064A\u0647 \u0645\u062D\u0627\u062F\u062B\u0627\u062A\u0643 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646.</div><div class="prj' + (!S2.project ? " sel" : "") + '" data-proj=""><div class="pn">\u0628\u062F\u0648\u0646 \u0645\u0634\u0631\u0648\u0639</div></div>' + S2.projects.map((p) => '<div class="prj' + (S2.project === p.id ? " sel" : "") + (p.confidential ? " lock" : "") + '" data-proj="' + esc2(p.id) + '"><div class="pn">' + (p.confidential ? "\u{1F512} " : "\u{1F4C2} ") + esc2(p.name) + "</div>" + (S2.activeProject === p.id ? '<span class="pill ok">\u0641\u0639\u0651\u0627\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</span>' : p.confidential ? "" : '<button class="chip" data-projdesk="' + esc2(p.id) + '">\u0641\u0639\u0651\u0644\u0647 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</button>') + "</div>").join("") + (S2.projects.length ? "" : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u0634\u0627\u0631\u064A\u0639. \u0623\u0636\u0641 \u0645\u0634\u0631\u0648\u0639 \u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.</div>') + "</div>";
     h += '<div class="card"><h3>\u{1F9E0} \u0627\u0644\u0645\u0648\u062F\u064A\u0644 \u0648\u0637\u0631\u064A\u0642\u0629 \u0627\u0644\u0634\u063A\u0644</h3><div class="seg">' + [["auto", "\u062A\u0644\u0642\u0627\u0626\u064A"], ["free", "\u0645\u062C\u0627\u0646\u064A"], ["model", "\u0645\u0648\u062F\u064A\u0644"], ["council", "council"]].map(([k, l]) => '<button data-mode="' + k + '" class="' + (m.kind === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="mut" style="margin-bottom:8px">' + { auto: "\u064A\u062E\u062A\u0627\u0631 \u0623\u0646\u0633\u0628 \u0645\u0648\u062F\u064A\u0644 (\u0645\u062C\u0627\u0646\u064A \u0623\u0648 \u0645\u062F\u0641\u0648\u0639) \u062D\u0633\u0628 \u0627\u0644\u0637\u0644\u0628.", free: "\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0645\u062C\u0627\u0646\u064A\u0629 \u0628\u0633 (\u0627\u0644\u0623\u0631\u062E\u0635 \u0648\u0627\u0644\u0623\u0623\u0645\u0646).", model: "\u0645\u0648\u062F\u064A\u0644 \u0645\u062D\u062F\u062F \u0628\u062A\u062E\u062A\u0627\u0631\u0647 \u0625\u0646\u062A.", council: "\u0643\u0627\u062A\u0628 \u0648\u0645\u0631\u0627\u062C\u0639: \u062C\u0648\u0627\u0628 \u0623\u062F\u0642 \u0628\u0633 \u0623\u0628\u0637\u0623." }[m.kind] + "</div>" + (m.kind === "model" ? '<select class="sel" id="selModel"><option value="">\u2014 \u0627\u062E\u062A\u0631 \u2014</option>' + S2.models.map((v) => opt(m.id, v)).join("") + "</select>" : "") + (m.kind === "council" ? '<div class="mut">\u0627\u0644\u0643\u0627\u062A\u0628</div><select class="sel" id="selAuthor"><option value="">\u062A\u0644\u0642\u0627\u0626\u064A</option>' + S2.models.map((v) => opt(m.author, v)).join("") + '</select><div class="mut">\u0627\u0644\u0645\u0631\u0627\u062C\u0639</div><select class="sel" id="selCritic"><option value="">\u062A\u0644\u0642\u0627\u0626\u064A</option>' + S2.models.map((v) => opt(m.critic, v)).join("") + "</select>" : "") + '<div class="mut">' + S2.models.length + " \u0645\u0648\u062F\u064A\u0644 \u0645\u062A\u0627\u062D</div></div>";
+    h += '<div class="card"><h3>\u{1F3A8} \u0627\u0644\u0645\u0638\u0647\u0631</h3><div class="seg">' + [["light", "\u0641\u0627\u062A\u062D"], ["dark", "\u063A\u0627\u0645\u0642"], ["auto", "\u062D\u0633\u0628 \u0627\u0644\u062C\u0647\u0627\u0632"]].map(([k, l]) => '<button data-theme-mode="' + k + '" class="' + (S2.themeMode === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="seg" style="margin-top:8px">' + [["default", "\u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629"], ["syrian", "\u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u0633\u0648\u0631\u064A\u0629"]].map(([k, l]) => '<button data-pal="' + k + '" class="' + (S2.pal === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="mut" style="margin-top:8px">\u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u0633\u0648\u0631\u064A\u0629: \u0623\u0644\u0648\u0627\u0646 \u0648\u062E\u0637 (\u062D\u064A\u0651\u0627\u0643\u0645 \u0627\u0644\u0644\u0647) \u0648\u0627\u0644\u0646\u0633\u0631 \u0645\u0643\u0627\u0646 \u0627\u0644\u0631\u0648\u0628\u0648\u062A\u060C \u0645\u062A\u0644 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.</div></div>';
     h += '<div class="card"><h3>\u{1F50C} \u0627\u0644\u0627\u062A\u0635\u0627\u0644</h3><div class="mut">\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631: <b>' + esc2(S2.host || d.name) + "</b><br>\u0627\u0644\u062D\u0627\u0644\u0629: " + esc2({ online: "\u0645\u062A\u0635\u0644 \u2705", connecting: "\u0639\u0645 \u064A\u062A\u0635\u0644\u2026", hostdown: "\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0640 relay", offline: "\u063A\u064A\u0631 \u0645\u062A\u0635\u0644" }[S2.conn]) + '<br>\u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646: <span dir="ltr">' + esc2((d.urls || []).map((u) => u.replace(/^wss?:\/\//, "").replace("/ws", "")).join(" , ")) + '</span></div></div><div class="card"><h3>\u0627\u0644\u062E\u0644\u0641\u064A\u0629</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S2.keepAlive ? "checked" : "") + '> \u062E\u0644\u0651\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u062E\u0644\u0641\u064A\u0629 (\u0628\u064A\u0638\u0647\u0631 \u0625\u0634\u0639\u0627\u0631 \u062B\u0627\u0628\u062A) \u0639\u0634\u0627\u0646 \u062A\u0648\u0635\u0644\u0643 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A \u0648\u0627\u0644\u0646\u062A\u0627\u0626\u062C</label></div><div class="card"><h3>\u{1F510} \u0627\u0644\u0623\u0645\u0627\u0646</h3><div class="mut">\u0643\u0644 \u0634\u064A \u0628\u064A\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0634\u0641\u0651\u0631 \u0645\u0646 \u0627\u0644\u0637\u0631\u0641\u064A\u0646. \u0645\u0641\u062A\u0627\u062D \u0647\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u062D\u0641\u0648\u0638 \u0628\u0645\u062E\u0632\u0646 \u0623\u0646\u062F\u0631\u0648\u064A\u062F \u0627\u0644\u0622\u0645\u0646 (Keystore).</div></div><button class="btn ghost" id="reconBtn" style="margin-bottom:10px">\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644</button><button class="btn danger" id="unpairBtn">\u0625\u0644\u063A\u0627\u0621 \u0631\u0628\u0637 \u0647\u0627\u0644\u062C\u0647\u0627\u0632</button><div class="mut" style="text-align:center;margin-top:14px">TRL Agent ' + esc2(version) + " \xB7 Tarek Nahas \xB7 AI</div>";
     return h;
   }
 
   // src/main.js
-  var VERSION = true ? "5.10.4" : "5.10";
+  var VERSION = true ? "5.10.5" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -41741,7 +41744,11 @@
     tasks: [],
     sas: "",
     pairErr: "",
-    agents: [],
+    agents: lsGet("trl.agents", []),
+    gate: lsGet("trl.gate", null),
+    pc: "",
+    themeMode: lsGet("trl.themeMode", "dark"),
+    pal: lsGet("trl.pal", "default"),
     sched: null,
     report: null,
     agentOpen: "",
@@ -41829,6 +41836,7 @@
     if (S.conn !== s) {
       S.conn = s;
       updateDot();
+      if (s !== "online" && s !== "connecting" && S.gate && S.tab === "agents") pcStatus();
     }
   }
   function updateDot() {
@@ -41976,6 +41984,11 @@
         return;
       case "agents":
         S.agents = m.list || [];
+        lsSet("trl.agents", S.agents);
+        if (m.gate && m.gate.url && m.gate.key) {
+          S.gate = m.gate;
+          lsSet("trl.gate", m.gate);
+        }
         if (S.tab === "agents") renderPage();
         return;
       case "sched":
@@ -42144,8 +42157,51 @@
     S.pending.set(r, { agent: id, buf: "", status: st.status });
     if (!sendHost({ k: "agent.run", id: r, agent: id, task, project: S.project, mode: S.mode })) {
       S.pending.delete(r);
+      if (S.gate) {
+        st.status = "\u0639\u0645 \u064A\u0628\u0639\u062A \u0644\u0644\u0628\u0648\u0627\u0628\u0629\u2026";
+        saveAgOut();
+        renderPage();
+        void gateRun(id, task);
+        return;
+      }
       st.running = false;
-      toast("\u0627\u0646\u0642\u0637\u0639 \u0627\u0644\u0627\u062A\u0635\u0627\u0644");
+      toast("\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0647\u0644\u0623 \u0648\u0645\u0627 \u0641\u064A \u0628\u0648\u0627\u0628\u0629 \u0633\u062D\u0627\u0628\u064A\u0629 \u0645\u0641\u0639\u0651\u0644\u0629");
+    }
+    saveAgOut();
+    renderPage();
+  }
+  async function gateCall(path, body) {
+    const g = S.gate;
+    if (!g) return null;
+    try {
+      const r = await fetch(g.url + path, { method: body ? "POST" : "GET", headers: { "x-phone-key": g.key, "content-type": "application/json" }, body: body ? JSON.stringify(body) : void 0 });
+      const j = await r.json().catch(() => ({}));
+      return { status: r.status, ...j };
+    } catch {
+      return null;
+    }
+  }
+  async function pcStatus() {
+    const r = await gateCall("/status");
+    S.pc = r && r.ok ? r.online ? "on" : "off" : "unk";
+    if (S.tab === "agents") renderPage();
+  }
+  async function gateRun(id, task) {
+    const a = S.agents.find((x) => x.id === id);
+    const st = S.agentOut[id] || (S.agentOut[id] = {});
+    const r = await gateCall("/run", { agent: a ? a.name : "", task });
+    st.running = false;
+    st.at = Date.now();
+    st.failed = false;
+    if (!r) {
+      st.failed = true;
+      st.out = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0628\u0648\u0627\u0628\u0629. \u062A\u0623\u0643\u062F \u0645\u0646 \u0627\u0644\u0646\u062A.";
+    } else if (r.status === 200 && r.ok) {
+      st.failed = r.where === "none";
+      st.out = r.where === "cloud" ? "\u2601\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A\u060C \u0641\u0627\u0646\u0628\u0639\u062A\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0627\u0644\u0633\u062D\u0627\u0628\u064A. \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0648\u0635\u0644\u0643 \u0639\u0644\u0649 \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645." : r.where === "pc" ? "\u{1F4E5} \u0648\u0635\u0644\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631. \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0648\u0635\u0644\u0643 \u0639\u0644\u0649 \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645." : "\u{1F534} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A \u0648\u0627\u0644\u0648\u0643\u064A\u0644 \u0647\u0627\u062F \u0645\u0636\u0628\u0648\u0637 \u064A\u0634\u062A\u063A\u0644 \u0645\u062D\u0644\u064A \u0628\u0633.";
+    } else {
+      st.failed = true;
+      st.out = r.error === "agent not found" ? "\u0627\u0644\u0648\u0643\u064A\u0644 \u0645\u0648 \u0645\u0648\u062C\u0648\u062F \u0639\u0627\u0644\u0628\u0648\u0627\u0628\u0629. \u0627\u0641\u062A\u062D \u062A\u0628\u0648\u064A\u0628 \xAB\u0648\u0643\u0644\u0627\u0621\xBB \u0628\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0648\u0636\u063A\u0637 \u0645\u0632\u0627\u0645\u0646\u0629." : r.status === 401 ? "\u0645\u0641\u062A\u0627\u062D \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0642\u062F\u064A\u0645. \u0648\u0635\u0651\u0644 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0631\u0629 \u062A\u0627\u0646\u064A\u0629 \u0644\u062A\u062C\u062F\u064A\u062F\u0648." : r.status === 429 ? "\u0627\u0633\u062A\u0646\u0649 \u062B\u0627\u0646\u064A\u062A\u064A\u0646 \u0648\u062C\u0631\u0651\u0628." : "\u0641\u0634\u0644: " + (r.error || r.status);
     }
     saveAgOut();
     renderPage();
@@ -42180,8 +42236,10 @@
     S.tab = id;
     renderTabs();
     renderPage();
-    if (id === "agents") sendHost({ k: "agents.get" });
-    else if (id === "sched") sendHost({ k: "sched.get" });
+    if (id === "agents") {
+      sendHost({ k: "agents.get" });
+      if (S.gate && S.conn !== "online") pcStatus();
+    } else if (id === "sched") sendHost({ k: "sched.get" });
     else if (id === "report") sendHost({ k: "report.get" });
   }
   function viewClick(t) {
@@ -42227,6 +42285,21 @@
     if (d.projdesk) {
       sendHost({ k: "project.set", id: d.projdesk });
       toast("\u0627\u0646\u0641\u0639\u0651\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631");
+      return true;
+    }
+    if (d.themeMode) {
+      S.themeMode = d.themeMode;
+      lsSet("trl.themeMode", S.themeMode);
+      applyTheme();
+      renderPage();
+      return true;
+    }
+    if (d.pal) {
+      S.pal = d.pal;
+      lsSet("trl.pal", S.pal);
+      applyTheme();
+      renderTabs();
+      renderPage();
       return true;
     }
     if (d.proj !== void 0) {
@@ -42603,6 +42676,7 @@
     }
   }
   function render() {
+    applyTheme();
     const app = $("#app");
     if (!app) return;
     if (S.view !== "scan") stopScanner();
@@ -42644,11 +42718,20 @@
     if (b) b.textContent = "\u2699 " + modeLabel();
     updateDot();
   }
+  var EAGLE2 = '<img class="eagle" src="syria-eagle.svg" alt="">';
+  function applyTheme() {
+    const light = S.themeMode === "light" || S.themeMode === "auto" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches;
+    const r = document.documentElement;
+    r.classList.toggle("light", light);
+    r.classList.toggle("syrian", S.pal === "syrian");
+    const meta = document.querySelector("meta[name=theme-color]");
+    if (meta) meta.setAttribute("content", getComputedStyle(document.body).getPropertyValue("--bg").trim() || "#0f1419");
+  }
   function renderTabs() {
     const t = $("#tabs");
     if (!t) return;
     const n = S.tasks.length;
-    t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + i + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
+    t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + (id === "agents" && S.pal === "syrian" ? EAGLE2 : i) + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
   }
   function renderPage() {
     const p = $("#page");

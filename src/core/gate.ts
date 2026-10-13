@@ -1,6 +1,7 @@
 import { readJson, writeJson } from './json-store'
 import { getSecret, setSecret } from '../store/secure-store'
 import { listAgents } from './agents'
+import { randomBytes } from 'crypto'
 
 // Link to the Cloudflare gate (trl-agent-gate). The gate owns the Telegram webhook, so while this is on the app
 // does NOT call getUpdates: it polls the gate's inbox instead. Each poll also tells the gate "the PC is online",
@@ -62,6 +63,25 @@ export async function syncAgents(): Promise<boolean> {
   const body = JSON.stringify(listAgents().map((a) => ({ name: a.name, prompt: a.prompt, runOn: a.runOn })))
   const r = await gateFetch('/agents', { method: 'PUT', body })
   return !!r && r.ok
+}
+
+// A narrow key for the phone app (it can only ask the gate for status and send a task, exactly like the Telegram bot).
+// Generated here, registered at the gate with the app key, then handed to the paired phone over the encrypted link.
+const PHONE_KEY = 'gate-phone-key'
+let phoneKeyRegistered = ''
+export async function phoneGateInfo(): Promise<{ url: string; key: string } | null> {
+  if (!gateReady()) return null
+  let key = getSecret(PHONE_KEY)
+  if (!key) {
+    key = randomBytes(24).toString('hex')
+    setSecret(PHONE_KEY, key)
+  }
+  if (phoneKeyRegistered !== key) {
+    const r = await gateFetch('/phone-key', { method: 'PUT', body: JSON.stringify({ key }) })
+    if (!r || !r.ok) return null
+    phoneKeyRegistered = key
+  }
+  return { url: gateState().url, key }
 }
 
 /** 1 = approved, 0 = rejected, null = no answer yet. */
