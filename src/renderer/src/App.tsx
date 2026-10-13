@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import type { ReactElement } from 'react'
 import { askConfirm } from '../../ui/components/confirm'
 import {
-  Bot, Clock, Cpu, ListChecks, FolderKanban, FolderOpen, MessageSquare, Moon, Palette, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
-  Sun, Trash2, User, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
+  Bot, Clock, Cpu, ListChecks, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
+  Sun, Trash2, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
+import syriaEagle from './assets/syria-eagle.svg'
 import { ChatWindow } from '../../ui/ChatWindow'
 import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
@@ -26,7 +28,7 @@ import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '
 
 const OWNER = { name: 'Tarek Nahas', email: 'tareknahas@live.com', github: 'https://github.com/tareknahas85-star' }
 
-function AboutBadge({ onSetup }: { onSetup: () => void }) {
+function AboutBadge({ onSetup }: { onSetup: () => void }): ReactElement {
   const [open, setOpen] = useState(false)
   const [info, setInfo] = useState<{ version: string; electron: string; chrome: string; node: string; platform: string } | null>(null)
   const [copied, setCopied] = useState('')
@@ -155,7 +157,7 @@ const readSaved = (): { tabs: Omit<Tab, 'initial'>[]; active: string | null } | 
   }
 }
 
-function Shell() {
+function Shell(): ReactElement {
   const { theme, toggleTheme, palette, togglePalette } = useTheme()
   const [activeNav, setActiveNav] = useState<Nav>('chat')
   const [convs, setConvs] = useState<ConversationSummary[]>([])
@@ -204,16 +206,14 @@ function Shell() {
 
   useEffect(() => {
     const q = query.trim()
-    if (!q) {
-      setHits(null)
-      return
-    }
+    if (!q) return
     const t = setTimeout(() => {
       window.api.conversations.search(q).then((r) => setHits(Object.fromEntries(r.map((x) => [x.id, x.snippet]))))
     }, 250)
     return () => clearTimeout(t)
   }, [query])
-  const shownConvs = hits ? convs.filter((c) => c.id in hits) : convs
+  const hitsNow = query.trim() ? hits : null
+  const shownConvs = hitsNow ? convs.filter((c) => c.id in hitsNow) : convs
 
   const loadConvs = useCallback(() => window.api.conversations.list().then(setConvs), [])
   useEffect(() => window.api.conversations.onChanged(() => void loadConvs()), [loadConvs])
@@ -450,7 +450,7 @@ function Shell() {
             />
           </div>
           <div className="min-h-0 flex-1 space-y-0.5 overflow-y-auto">
-            {shownConvs.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted">{hits ? 'ما في نتائج' : 'ما في محادثات بعد'}</p>}
+            {shownConvs.length === 0 && <p className="px-2 py-4 text-center text-xs text-muted">{hitsNow ? 'ما في نتائج' : 'ما في محادثات بعد'}</p>}
             {shownConvs.map((c) => (
               <div
                 key={c.id}
@@ -477,7 +477,7 @@ function Shell() {
                 <button onClick={() => openConv(c.id)} className="min-w-0 flex-1 text-start">
                   <div className="truncate">{c.title}</div>
                   <div className="text-[11px] text-muted">
-                    {hits ? hits[c.id] : `${new Date(c.updatedAt).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })} · ${c.count} رسالة`}
+                    {hitsNow ? hitsNow[c.id] : `${new Date(c.updatedAt).toLocaleString('ar', { dateStyle: 'medium', timeStyle: 'short' })} · ${c.count} رسالة`}
                   </div>
                 </button>
                 )}
@@ -518,14 +518,12 @@ function Shell() {
         </div>
 
         {flash && <div className="mt-2 rounded-xl bg-primary/15 px-3 py-2 text-xs text-primary">{flash}</div>}
-        <div className="mt-2 space-y-1 border-t border-outline pt-2">
-          <button onClick={toggleTheme} className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2">
+        <div className="mt-2 flex items-center justify-around border-t border-outline pt-2" title={uname}>
+          <button onClick={toggleTheme} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface2">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
-            <span>{theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'}</span>
           </button>
-          <button onClick={togglePalette} className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2">
-            <Palette size={18} />
-            <span>{palette === 'syrian' ? 'الألوان الافتراضية' : 'الهوية السورية'}</span>
+          <button onClick={togglePalette} title={palette === 'syrian' ? 'الألوان الافتراضية' : 'الهوية السورية'} aria-label={palette === 'syrian' ? 'الألوان الافتراضية' : 'الهوية السورية'} className={'flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface2 ' + (palette === 'syrian' ? 'bg-surface2' : '')}>
+            <img src={syriaEagle} alt="" className="h-[20px] w-[20px] object-contain" />
           </button>
           <button
             onClick={() => {
@@ -538,17 +536,12 @@ function Shell() {
               }
               if (v) beep()
             }}
-            className="flex w-full items-center gap-3 rounded-full px-4 py-2.5 text-sm hover:bg-surface2"
+            title={sound ? 'صوت التنبيه: شغال' : 'صوت التنبيه: مطفي'}
+            aria-label={sound ? 'صوت التنبيه: شغال' : 'صوت التنبيه: مطفي'}
+            className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface2"
           >
             {sound ? <Bell size={18} /> : <BellOff size={18} />}
-            <span>{sound ? 'صوت التنبيه: شغال' : 'صوت التنبيه: مطفي'}</span>
           </button>
-          <div className="flex items-center gap-3 px-4 py-2 text-sm">
-            <div className="flex h-7 w-7 items-center justify-center rounded-full bg-surface2">
-              <User size={16} />
-            </div>
-            <span>{uname}</span>
-          </div>
         </div>
       </aside>
 
@@ -642,7 +635,7 @@ function Shell() {
             <div className="fixed inset-0 z-50" onClick={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null) }}>
               <div
                 className="absolute w-56 rounded-xl border border-outline bg-surface p-1 text-sm shadow-card"
-                style={{ left: Math.max(4, Math.min(ctx.x, window.innerWidth - 232)), top: Math.max(4, Math.min(ctx.y, window.innerHeight - 300)) }}
+                style={{ left: Math.max(4, Math.min(ctx.x, window.innerWidth - 232)), top: Math.max(4, Math.min(ctx.y, window.innerHeight - 300)), maxHeight: window.innerHeight - Math.max(4, Math.min(ctx.y, window.innerHeight - 300)) - 8, overflowY: 'auto' }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <button className={item} onClick={() => setCtx({ ...ctx, sub: !ctx.sub })}>
@@ -723,7 +716,7 @@ function Shell() {
   )
 }
 
-function App() {
+function App(): ReactElement {
   return (
     <ThemeProvider>
       <Shell />

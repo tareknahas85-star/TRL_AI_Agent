@@ -125,6 +125,6 @@ export function moreHtml(c) {
     '<div class="card"><h3>الخلفية</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S.keepAlive ? 'checked' : '') + '> خلّي التطبيق متصل بالخلفية (بيظهر إشعار ثابت) عشان توصلك الموافقات والنتائج</label></div>' +
     '<div class="card"><h3>🔐 الأمان</h3><div class="mut">كل شي بين التلفون والكمبيوتر مشفّر من الطرفين. مفتاح هالجهاز محفوظ بمخزن أندرويد الآمن (Keystore).</div></div>' +
     '<button class="btn ghost" id="reconBtn" style="margin-bottom:10px">إعادة الاتصال</button><button class="btn danger" id="unpairBtn">إلغاء ربط هالجهاز</button>' +
-    '<div class="mut" style="text-align:center;margin-top:14px">TRL Agent ' + esc(version) + '</div>'
+    '<div class="mut" style="text-align:center;margin-top:14px">TRL Agent ' + esc(version) + ' · Tarek Nahas · AI</div>'
   return h
 }

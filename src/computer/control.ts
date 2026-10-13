@@ -7,6 +7,7 @@ import path from 'path'
 import type OpenAI from 'openai'
 import { BUILD_ENV_PS } from './build-env'
 import { addOfficeTools } from './office'
+import { addExtraTools } from './extras'
 import { isUnattended } from '../core/progress'
 
 // ---------- config (master switch, default OFF) ----------
@@ -490,6 +491,17 @@ export function addComputerTools(
     }
   )
   addOfficeTools({ def, ask, runPs, getSignal })
+  const gate = async (cmd: string, cwd: string): Promise<string | null> => {
+    const dg = await diskGuard(cmd)
+    if (dg) return dg
+    if (fullAccessOn()) {
+      if (DESTRUCTIVE.test(cmd) && !(await confirmAlways('أمر مدمّر (حذف/فرمتة/ريجستري/مستخدمين)', (cwd ? '[' + cwd + '] ' : '') + cmd)))
+        return 'Error: this destructive command was not confirmed by the user.'
+    } else if (BLOCKED.test(cmd)) return 'Error: blocked by safety policy (delete/shutdown/download/policy changes). Ask the user to turn on Full Access in Settings or do it himself.'
+    if (!isReadOnly(cmd) && !(await ask('بدو يشغّل مهمة خلفية PowerShell', (cwd ? '[' + cwd + '] ' : '') + cmd))) return 'Error: the user denied this command.'
+    return null
+  }
+  addExtraTools({ def, runPs, gate, handlers })
   def('pc_windows', 'List the open windows (title + process).', {}, [], async () =>
     runPs(
       'Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -First 40 ProcessName,Id,MainWindowTitle | Format-Table -AutoSize | Out-String -Width 200',
@@ -584,7 +596,7 @@ for($i=0;$i -lt $n;$i++){ [W32]::mouse_event($d,0,0,0,0); [W32]::mouse_event($u,
       if (!(await ask('بدو يبعت اختصار لوحة مفاتيح', k))) return 'Error: the user denied this.'
       return runPs(
         WIN32 +
-          "Add-Type -AssemblyName System.Windows.Forms; if($A.k -match '^([\^%+]+)([A-Za-z0-9])$'){ $mods=@(); if($Matches[1].Contains('^')){$mods+=0x11}; if($Matches[1].Contains('%')){$mods+=0x12}; if($Matches[1].Contains('+')){$mods+=0x10}; Combo $mods ([int][char]$Matches[2].ToUpper()) } else { [System.Windows.Forms.SendKeys]::SendWait($A.k) }; 'OK: sent'",
+          "Add-Type -AssemblyName System.Windows.Forms; if($A.k -match '^([\\^%+]+)([A-Za-z0-9])$'){ $mods=@(); if($Matches[1].Contains('^')){$mods+=0x11}; if($Matches[1].Contains('%')){$mods+=0x12}; if($Matches[1].Contains('+')){$mods+=0x10}; Combo $mods ([int][char]$Matches[2].ToUpper()) } else { [System.Windows.Forms.SendKeys]::SendWait($A.k) }; 'OK: sent'",
         { k },
         20000
       )

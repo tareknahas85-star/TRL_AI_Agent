@@ -54,6 +54,7 @@ function chartXml(sheet: string, c: ChartSpec): string {
 export async function addCharts(file: string, sheets: { name: string; charts: ChartSpec[] }[]): Promise<number> {
   const withCharts = sheets.map((s, i) => ({ ...s, idx: i + 1 })).filter((s) => s.charts.length)
   if (!withCharts.length) return 0
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const mod: any = await import('jszip')
   const JSZip = mod.default ?? mod
   const zip = await JSZip.loadAsync(await fsp.readFile(file))
@@ -89,7 +90,7 @@ export async function addCharts(file: string, sheets: { name: string; charts: Ch
     let xml: string = await zip.file(sheetPath).async('string')
     if (!/xmlns:r=/.test(xml)) xml = xml.replace('<worksheet ', '<worksheet xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" ')
     const tag = `<drawing r:id="${rid}"/>`
-    const before = xml.search(/<(legacyDrawing|tableParts|extLst)[ >\/]/)
+    const before = xml.search(/<(legacyDrawing|tableParts|extLst)[ >/]/)
     xml = before >= 0 ? xml.slice(0, before) + tag + xml.slice(before) : xml.replace('</worksheet>', tag + '</worksheet>')
     zip.file(sheetPath, xml)
   }

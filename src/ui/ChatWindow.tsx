@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import type { ReactElement } from 'react'
 import { ModelPicker } from './ModelPicker'
 import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, Mic, Paperclip, Play, RotateCcw, Square, X } from 'lucide-react'
 import { Markdown } from './Markdown'
@@ -24,7 +25,7 @@ const TEMPLATES: { label: string; text: string }[] = [
   { label: '⚙️ سكربت PowerShell', text: 'اكتبلي سكربت PowerShell يعمل التالي:\n\n' }
 ]
 
-function Avatar() {
+function Avatar(): ReactElement {
   const { palette } = useTheme()
   if (palette === 'syrian')
     return (
@@ -96,7 +97,7 @@ function StatusBar({
   progress: string
   elapsed: number
   messages: { meta?: string }[]
-}) {
+}): ReactElement {
   const [open, setOpen] = useState(false)
   const [scanning, setScanning] = useState(false)
   const [act, setAct] = useState<{ id: string; title: string; prefix: string; running: boolean; tools: number; names: string[] }[]>([])
@@ -136,7 +137,7 @@ function StatusBar({
           </>
         ) : st && last ? (
           <>
-            <span dir="ltr">{last.model}</span>
+            <span dir="ltr" title="الموديل اللي جاوب فعلاً">جاوب: {last.model}{last.tried.length > 1 ? ` (بعد فشل ${last.tried.slice(0, -1).join(' ← ')})` : ''}</span>
             <span dir="ltr">⏱ {fmtMs(st.totalMs)}</span>
             <span dir="ltr">
               ⇅ {st.promptTokens || '—'}/{st.completionTokens}
@@ -222,7 +223,7 @@ function tierChip(saved: string): { label: string; cls: string } {
   return { label: 'قوي', cls: 'bg-warning/20 text-warning' }
 }
 
-function MsgFooter({ text, at }: { text: string; at?: number }) {
+function MsgFooter({ text, at }: { text: string; at?: number }): ReactElement {
   const [ok, setOk] = useState(false)
   const copy = async (): Promise<void> => {
     try {
@@ -248,7 +249,7 @@ function MsgFooter({ text, at }: { text: string; at?: number }) {
   )
 }
 
-function MetaBar({ meta }: { meta: string }) {
+function MetaBar({ meta }: { meta: string }): ReactElement {
   const m = parseMeta(meta)
   const t = tierChip(m.saved)
   const failed = m.tried.length > 1 ? m.tried.slice(0, -1) : []
@@ -277,7 +278,7 @@ function MetaBar({ meta }: { meta: string }) {
   )
 }
 
-function StatusChips() {
+function StatusChips(): ReactElement | null {
   const [st, setSt] = useState<{ key: boolean; ollama: boolean; localMaster: boolean; mcpOn: number; mcpTotal: number; free: { count: number; limit: number; limited: boolean } } | null>(null)
   useEffect(() => {
     let alive = true
@@ -293,7 +294,7 @@ function StatusChips() {
   }, [])
   if (!st) return null
   const dot = (ok: boolean): string => (ok ? 'bg-success' : 'bg-danger')
-  const item = (ok: boolean, label: string) => (
+  const item = (ok: boolean, label: string): ReactElement => (
     <Chip>
       <span className={`inline-block h-2 w-2 rounded-full ${dot(ok)}`} /> {label}
     </Chip>
@@ -329,7 +330,7 @@ export function ChatWindow({
   onModeChange: (m: ChatMode) => void
   onBusy: (b: boolean) => void
   onSaved: (id: string, title?: string) => void
-}) {
+}): ReactElement {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [loading, setLoading] = useState(false)
@@ -427,9 +428,11 @@ export function ChatWindow({
   useEffect(() => {
     if (!loading) return
     const t0 = Date.now()
-    setElapsed(0)
     const id = setInterval(() => setElapsed(Math.floor((Date.now() - t0) / 1000)), 500)
-    return () => clearInterval(id)
+    return () => {
+      clearInterval(id)
+      setElapsed(0)
+    }
   }, [loading])
 
   useEffect(() => {

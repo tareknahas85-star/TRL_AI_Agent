@@ -19,6 +19,7 @@ import { addSecurityTools } from '../tools/security-tools'
 import { addSandboxTools, needsSandbox } from '../tools/sandbox-tools'
 import { toolPrior } from '../core/learning'
 import { neededConnectors } from '../core/connector-hints'
+import { verifyAfter } from '../computer/extras'
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Pending = { resolve: (v: any) => void; reject: (e: Error) => void; timer: NodeJS.Timeout }
@@ -435,7 +436,10 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
     call: async (name, args) => {
       const h = handlers.get(name)
       let out: string
-      if (h) out = await h(args)
+      if (h) {
+        out = await h(args)
+        out += await verifyAfter(name, args, out)
+      }
       else {
         const info = byName.get(name)
         if (!info) out = 'Error: unknown tool ' + name
