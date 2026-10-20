@@ -22,6 +22,7 @@ export type Schedule = {
   lastStatus?: 'ok' | 'failed' | 'running'
   lastResult?: string
   lastConversationId?: string
+  failStreak?: number // F06: consecutive failed runs; reset on success
 }
 const FILE = 'schedules.json'
 export type Runner = (prompt: string, projectId: string | null, mode: 'free' | 'auto', taskId: string) => Promise<{ content: string; failed?: boolean; meta?: string }>
@@ -72,7 +73,8 @@ function clean(i: Partial<Schedule>, base?: Schedule): Schedule {
     lastRun: base?.lastRun,
     lastStatus: base?.lastStatus,
     lastResult: base?.lastResult,
-    lastConversationId: base?.lastConversationId
+    lastConversationId: base?.lastConversationId,
+    failStreak: base?.failStreak
   }
   if (!t.prompt) throw new Error('نص المهمة فاضي')
   if (t.kind === 'weekly' && !t.days.length) t.days = [new Date().getDay()]
@@ -129,7 +131,7 @@ export async function runScheduleNow(id: string): Promise<boolean> {
       ],
       projectId: t.projectId
     })
-    patch({ lastStatus: ok ? 'ok' : 'failed', lastResult: (r.content || '').slice(0, 4000), lastConversationId: conv.id })
+    patch({ lastStatus: ok ? 'ok' : 'failed', lastResult: (r.content || '').slice(0, 4000), lastConversationId: conv.id, failStreak: ok ? 0 : (t.failStreak ?? 0) + 1 })
     try {
       new Notification({ title: (ok ? '✅ ' : '⚠️ ') + t.name, body: (r.content || '').replace(/\s+/g, ' ').slice(0, 180) }).show()
     } catch {
@@ -137,7 +139,7 @@ export async function runScheduleNow(id: string): Promise<boolean> {
     }
     return ok
   } catch (e) {
-    patch({ lastStatus: 'failed', lastResult: 'Error: ' + (e instanceof Error ? e.message : String(e)) })
+    patch({ lastStatus: 'failed', lastResult: 'Error: ' + (e instanceof Error ? e.message : String(e)), failStreak: (t.failStreak ?? 0) + 1 })
     return false
   } finally {
     running.delete(id)
