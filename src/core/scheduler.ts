@@ -1,6 +1,7 @@
 import { Notification } from 'electron'
 import { readJson, writeJson, newId } from './json-store'
 import { saveConversation } from './workspace'
+import { isScheduleDue, isValidTimeZone } from './schedule-time'
 
 // Recurring tasks: "every day at 12:00 do X". The app lives in the tray, so the scheduler keeps running after the window is closed.
 export type Schedule = {
@@ -9,10 +10,12 @@ export type Schedule = {
   prompt: string
   projectId: string | null
   mode: 'free' | 'auto'
-  kind: 'daily' | 'weekly' | 'interval'
+  kind: 'daily' | 'weekly' | 'interval' | 'once' // once = F01 "at a specific time, one time only"
   time: string // HH:MM (daily/weekly)
   days: number[] // 0=Sunday..6 (weekly)
   everyMin: number // interval
+  tz?: string // F02: IANA zone for daily/weekly/once. Missing = system zone.
+  runAt?: number // once: epoch ms
   enabled: boolean
   createdAt: number
   lastRun?: number
@@ -34,8 +37,24 @@ export const listSchedules = (): Schedule[] => readJson<Schedule[]>(FILE, [])
 const save = (all: Schedule[]): void => writeJson(FILE, all)
 
 function clean(i: Partial<Schedule>, base?: Schedule): Schedule {
-  const kind = i.kind === 'weekly' || i.kind === 'interval' ? i.kind : 'daily'
+  const kind = i.kind === 'weekly' || i.kind === 'interval' || i.kind === 'once' ? i.kind : 'daily'
   const time = /^\d{1,2}:\d{2}$/.test(String(i.time ?? '')) ? String(i.time).padStart(5, '0') : '12:00'
+
+  let tz: string | undefined = base?.tz
+  if (i.tz !== undefined) {
+    const s = String(i.tz ?? '').trim()
+    if (!s) tz = undefined
+    else if (!isValidTimeZone(s)) throw new Error('المنطقة الزمنية مو صحيحة: ' + s)
+    else tz = s
+  }
+
+  let runAt: number | undefined
+  if (kind === 'once') {
+    const v = Number(i.runAt ?? base?.runAt)
+    if (!Number.isFinite(v) || v <= 0) throw new Error('وقت التشغيل مطلوب للمهمة مرة وحدة')
+    runAt = v
+  }
+
   const t: Schedule = {
     id: base?.id ?? newId(),
     name: String(i.name ?? '').trim().slice(0, 80) || 'مهمة',
@@ -46,6 +65,8 @@ function clean(i: Partial<Schedule>, base?: Schedule): Schedule {
     time,
     days: Array.isArray(i.days) ? i.days.map(Number).filter((d) => d >= 0 && d <= 6) : [],
     everyMin: Math.max(5, Math.min(10080, Number(i.everyMin) || 60)),
+    tz,
+    runAt,
     enabled: i.enabled !== false,
     createdAt: base?.createdAt ?? Date.now(),
     lastRun: base?.lastRun,
@@ -79,28 +100,8 @@ export function removeSchedule(id: string): boolean {
   return true
 }
 
-// The slot (timestamp) this task should have fired last, or null when not due by the calendar.
-export function lastDueSlot(t: Schedule, now = new Date()): number | null {
-  if (t.kind === 'interval') return null
-  const [h, m] = t.time.split(':').map(Number)
-  for (let back = 0; back < 8; back++) {
-    const d = new Date(now)
-    d.setDate(d.getDate() - back)
-    d.setHours(h, m, 0, 0)
-    if (d.getTime() > now.getTime()) continue
-    if (t.kind === 'weekly' && !t.days.includes(d.getDay())) continue
-    return d.getTime()
-  }
-  return null
-}
-
 export function isDue(t: Schedule, now = Date.now()): boolean {
-  if (!t.enabled || running.has(t.id)) return false
-  if (t.kind === 'interval') return now - (t.lastRun ?? t.createdAt) >= t.everyMin * 60000
-  const slot = lastDueSlot(t, new Date(now))
-  if (slot == null) return false
-  // Catch up a missed slot only within 12 hours (app was closed), never before the task existed.
-  return slot >= t.createdAt && now - slot < 12 * 3600000 && (t.lastRun ?? 0) < slot
+  return isScheduleDue(t, now, running.has(t.id))
 }
 
 export async function runScheduleNow(id: string): Promise<boolean> {
@@ -120,6 +121,7 @@ export async function runScheduleNow(id: string): Promise<boolean> {
     const r = await runner(t.prompt, t.projectId, t.mode, id)
     const ok = !r.failed && !/^Error:/.test(r.content) && !!r.content
     const at = Date.now()
+    // F05: the conversation is saved first; the task status is only updated after that succeeds.
     const conv = saveConversation({
       messages: [
         { role: 'user', content: '⏰ [' + t.name + '] ' + t.prompt, at },
@@ -142,8 +144,23 @@ export async function runScheduleNow(id: string): Promise<boolean> {
   }
 }
 
+// F05: a run that was interrupted by closing the app leaves "running" on disk. Mark those as failed at startup.
+function recoverInterrupted(): void {
+  const all = listSchedules()
+  let changed = false
+  for (const t of all) {
+    if (t.lastStatus === 'running' && !running.has(t.id)) {
+      t.lastStatus = 'failed'
+      t.lastResult = 'انقطعت المهمة لأن التطبيق انسكر وقت التنفيذ'
+      changed = true
+    }
+  }
+  if (changed) save(all)
+}
+
 export function startScheduler(): void {
   if (timer) return
+  recoverInterrupted()
   const tick = (): void => {
     for (const t of listSchedules()) if (isDue(t)) void runScheduleNow(t.id)
   }

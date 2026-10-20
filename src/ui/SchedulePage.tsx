@@ -5,12 +5,14 @@ import type { ProjectInfo, ScheduleInfo } from '../preload/index.d'
 import { Chip, Empty, Modal, PageShell, Toggle, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
 const DAYS = ['أحد', 'اثنين', 'ثلاثاء', 'أربعاء', 'خميس', 'جمعة', 'سبت']
-const blank = { name: '', prompt: '', projectId: '', mode: 'auto' as 'auto' | 'free', kind: 'daily' as ScheduleInfo['kind'], time: '12:00', days: [] as number[], everyMin: 60 }
+const blank = { name: '', prompt: '', projectId: '', mode: 'auto' as 'auto' | 'free', kind: 'daily' as ScheduleInfo['kind'], time: '12:00', days: [] as number[], everyMin: 60, tz: '', runAt: '' }
 
 function when(t: ScheduleInfo): string {
+  const zone = t.tz ? ` (${t.tz})` : ''
+  if (t.kind === 'once') return `مرة وحدة: ${t.runAt ? new Date(t.runAt).toLocaleString('ar') : '-'}`
   if (t.kind === 'interval') return `كل ${t.everyMin >= 60 && t.everyMin % 60 === 0 ? t.everyMin / 60 + ' ساعة' : t.everyMin + ' دقيقة'}`
-  if (t.kind === 'weekly') return `كل ${t.days.map((d) => DAYS[d]).join('، ')} الساعة ${t.time}`
-  return `كل يوم الساعة ${t.time}`
+  if (t.kind === 'weekly') return `كل ${t.days.map((d) => DAYS[d]).join('، ')} الساعة ${t.time}${zone}`
+  return `كل يوم الساعة ${t.time}${zone}`
 }
 
 export function SchedulePage() {
@@ -34,7 +36,9 @@ export function SchedulePage() {
   }, [load])
 
   const save = async (): Promise<void> => {
-    const r = await window.api.schedules.add({ ...form, projectId: form.projectId || null })
+    if (form.kind === 'once' && !form.runAt) return setError('اختار التاريخ والوقت')
+    const runAt = form.kind === 'once' ? new Date(form.runAt).getTime() : undefined
+    const r = await window.api.schedules.add({ ...form, projectId: form.projectId || null, runAt })
     if (!r.ok) return setError(r.error ?? 'خطأ')
     setAdding(false)
     setForm(blank)
@@ -125,11 +129,14 @@ export function SchedulePage() {
             <textarea rows={4} className={inputCls} placeholder="شو بدك ينفّذ؟ اكتبها متل ما بتكتب بالمحادثة" value={form.prompt} onChange={(e) => setForm({ ...form, prompt: e.target.value })} />
             <div className="flex flex-wrap items-center gap-2 text-sm">
               <select className={inputCls + ' w-auto'} value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as ScheduleInfo['kind'] })}>
+                <option value="once">مرة وحدة</option>
                 <option value="daily">كل يوم</option>
                 <option value="weekly">أيام محددة</option>
                 <option value="interval">كل فترة</option>
               </select>
-              {form.kind !== 'interval' ? (
+              {form.kind === 'once' ? (
+                <input type="datetime-local" dir="ltr" className={inputCls + ' w-auto'} value={form.runAt} onChange={(e) => setForm({ ...form, runAt: e.target.value })} />
+              ) : form.kind !== 'interval' ? (
                 <input type="time" dir="ltr" className={inputCls + ' w-auto'} value={form.time} onChange={(e) => setForm({ ...form, time: e.target.value })} />
               ) : (
                 <>
@@ -139,6 +146,9 @@ export function SchedulePage() {
                 </>
               )}
             </div>
+            {form.kind !== 'interval' && (
+              <input dir="ltr" className={inputCls} placeholder="المنطقة الزمنية، مثلاً Asia/Riyadh (فاضي = منطقة الجهاز)" value={form.tz} onChange={(e) => setForm({ ...form, tz: e.target.value })} />
+            )}
             {form.kind === 'weekly' && (
               <div className="flex flex-wrap gap-1">
                 {DAYS.map((d, i) => (

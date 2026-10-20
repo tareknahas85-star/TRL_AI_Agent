@@ -51,7 +51,9 @@ export type ScheduleInfo = {
   prompt: string
   projectId: string | null
   mode: 'free' | 'auto'
-  kind: 'daily' | 'weekly' | 'interval'
+  kind: 'daily' | 'weekly' | 'interval' | 'once'
+  tz?: string
+  runAt?: number
   time: string
   days: number[]
   everyMin: number

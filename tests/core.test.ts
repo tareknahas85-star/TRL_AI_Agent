@@ -133,3 +133,72 @@ test('F13: فشل الكتابة يترك الملف القديم سليماً',
   assert.equal(fs.readFileSync(file, 'utf-8'), 'OLD')
   assert.deepEqual(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp')), [])
 })
+
+// --- F01–F04: scheduling math (src/core/schedule-time.ts) ---
+import { zonedParts, zonedToUtc, lastDueSlot, intervalSlot, isScheduleDue, isValidTimeZone, systemTz } from '../src/core/schedule-time'
+
+const RIY = 'Asia/Riyadh'
+const NY = 'America/New_York'
+const MIN = 60000
+
+test('F02: تحويل الوقت الجداري لمنطقة IANA (الرياض UTC+3 بدون توقيت صيفي)', () => {
+  assert.equal(zonedToUtc(2026, 10, 20, 12, 0, RIY), Date.UTC(2026, 9, 20, 9, 0))
+  const p = zonedParts(Date.UTC(2026, 9, 20, 9, 0), RIY)
+  assert.equal(p.h, 12)
+  assert.equal(p.dow, 2) // Tuesday
+})
+
+test('F02: التوقيت الصيفي في نيويورك (EDT = UTC-4)', () => {
+  assert.equal(zonedToUtc(2026, 7, 1, 12, 0, NY), Date.UTC(2026, 6, 1, 16, 0))
+  // Day DST starts (2026-03-08): the 12:00 wall time is already EDT
+  assert.equal(zonedToUtc(2026, 3, 8, 12, 0, NY), Date.UTC(2026, 2, 8, 16, 0))
+})
+
+test('F02: منطقة غير صحيحة مرفوضة، والمنطقة الافتراضية موجودة', () => {
+  assert.equal(isValidTimeZone(RIY), true)
+  assert.equal(isValidTimeZone('Mars/Base'), false)
+  assert.ok(systemTz().length > 0)
+})
+
+test('daily: آخر موعد قبل الآن، حتى لو قبل ساعة من الموعد اليوم يرجع لأمس', () => {
+  const t = { enabled: true, kind: 'daily' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, tz: RIY }
+  const at11 = zonedToUtc(2026, 10, 20, 11, 0, RIY)
+  const at13 = zonedToUtc(2026, 10, 20, 13, 0, RIY)
+  assert.equal(lastDueSlot(t, at11), zonedToUtc(2026, 10, 19, 12, 0, RIY))
+  assert.equal(lastDueSlot(t, at13), zonedToUtc(2026, 10, 20, 12, 0, RIY))
+})
+
+test('weekly: يتجاهل الأيام غير المحددة (الاثنين فقط، الآن الثلاثاء)', () => {
+  const t = { enabled: true, kind: 'weekly' as const, time: '12:00', days: [1], everyMin: 60, createdAt: 0, tz: RIY }
+  const tue13 = zonedToUtc(2026, 10, 20, 13, 0, RIY)
+  assert.equal(lastDueSlot(t, tue13), zonedToUtc(2026, 10, 19, 12, 0, RIY)) // Monday 19 Oct
+})
+
+test('F03: الفترة على شبكة ثابتة من وقت الإنشاء وما تنجرف', () => {
+  const created = 0
+  assert.equal(intervalSlot(created, 10, 5 * MIN), null) // first slot is one step after creation
+  assert.equal(intervalSlot(created, 10, 25 * MIN), 20 * MIN)
+  assert.equal(intervalSlot(created, 10, 20 * MIN), 20 * MIN)
+})
+
+test('F03: فترة تشغّل مرة لكل خانة من الشبكة، حتى لو تأخر التشغيل', () => {
+  const t = { enabled: true, kind: 'interval' as const, time: '12:00', days: [], everyMin: 10, createdAt: 0 }
+  assert.equal(isScheduleDue(t, 25 * MIN, false), true) // slot 20 not run yet
+  assert.equal(isScheduleDue({ ...t, lastRun: 21 * MIN }, 25 * MIN, false), false) // slot 20 already covered
+  assert.equal(isScheduleDue({ ...t, lastRun: 21 * MIN }, 31 * MIN, false), true) // slot 30 is new
+})
+
+test('F01: مهمة مرة وحدة تشتغل بالوقت المحدد وما تتكرر', () => {
+  const runAt = Date.UTC(2026, 9, 21, 9, 0)
+  const t = { enabled: true, kind: 'once' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, runAt }
+  assert.equal(isScheduleDue(t, runAt - 1, false), false)
+  assert.equal(isScheduleDue(t, runAt, false), true)
+  assert.equal(isScheduleDue({ ...t, lastRun: runAt + 5000 }, runAt + 60 * MIN, false), false)
+})
+
+test('F04/الأساسي: مهمة معطّلة أو قيد التنفيذ ما تنشغّل', () => {
+  const runAt = Date.UTC(2026, 9, 21, 9, 0)
+  const t = { enabled: true, kind: 'once' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, runAt }
+  assert.equal(isScheduleDue({ ...t, enabled: false }, runAt, false), false)
+  assert.equal(isScheduleDue(t, runAt, true), false)
+})
