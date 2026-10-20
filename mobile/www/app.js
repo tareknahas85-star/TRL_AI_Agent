@@ -41605,7 +41605,7 @@
     h += S2.agents.map((a) => {
       const st = S2.agentOut[a.id] || {};
       const open = S2.agentOpen === a.id;
-      return '<div class="card agent' + (open ? " open" : "") + '"><div class="ag-top" data-agopen="' + esc2(a.id) + '"><div class="av">' + esc2((a.name || "?").trim().slice(0, 1).toUpperCase()) + '</div><div class="ag-i"><b>' + esc2(a.name) + '</b><span class="pill">' + (RUNON[a.runOn] || a.runOn) + "</span>" + (a.hint ? '<div class="mut ag-h">' + esc2(a.hint) + "</div>" : "") + '</div><span class="chev">' + (open ? "\u25BE" : "\u25C2") + "</span></div>" + (open ? '<div class="ag-body"><textarea id="agTask" rows="3" placeholder="\u0627\u0644\u0645\u0647\u0645\u0629 \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u0644\u0648\u0643\u064A\u0644 \u064A\u0646\u0641\u0630\u0647\u0627\u2026">' + esc2(st.task || "") + '</textarea><div class="acts">' + (st.running ? '<button class="btn danger" data-agstop="' + esc2(a.id) + '">\u25A0 \u0625\u064A\u0642\u0627\u0641</button>' : '<button class="btn" data-agrun="' + esc2(a.id) + '">\u25B6 \u0646\u0641\u0651\u0630</button>') + "</div>" + (!st.running && !online ? '<div class="mut" style="margin-top:8px">' + (S2.gate ? "\u26A0\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0648\u0627\u0635\u0644 \u0647\u0644\u0623: \u0644\u0645\u0627 \u062A\u0643\u0628\u0633 \u0646\u0641\u0651\u0630 \u0628\u062A\u0646\u0628\u0639\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 (\u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0625\u0630\u0627 \u0634\u063A\u0651\u0627\u0644\u060C \u0623\u0648 \u0644\u0644\u0633\u062D\u0627\u0628\u0629)\u060C \u0648\u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0639\u0644\u0649 \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645." : "\u26A0\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0647\u0644\u0623. \u0648\u0635\u0651\u0644 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0631\u0629 \u0644\u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629.") + "</div>" : "") + (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc2(st.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + "</div>" : "") + '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? " err" : "") + '">' + md2(st.out) + '<div class="meta">' + esc2(when(st.at)) + "</div></div>" : "") + "</div></div>" : "") + "</div>";
+      return '<div class="card agent' + (open ? " open" : "") + '"><div class="ag-top" data-agopen="' + esc2(a.id) + '"><div class="av">' + esc2((a.name || "?").trim().slice(0, 1).toUpperCase()) + '</div><div class="ag-i"><b>' + esc2(a.name) + '</b><span class="pill">' + (RUNON[a.runOn] || a.runOn) + "</span>" + (a.hint ? '<div class="mut ag-h">' + esc2(a.hint) + "</div>" : "") + '</div><span class="chev">' + (open ? "\u25BE" : "\u25C2") + "</span></div>" + (open ? '<div class="ag-body"><textarea id="agTask" rows="3" placeholder="\u0627\u0644\u0645\u0647\u0645\u0629 \u064A\u0644\u064A \u0628\u062F\u0643 \u0627\u0644\u0648\u0643\u064A\u0644 \u064A\u0646\u0641\u0630\u0647\u0627\u2026">' + esc2(st.task || "") + '</textarea><div class="acts">' + (st.running ? '<button class="btn danger" data-agstop="' + esc2(a.id) + '">\u25A0 \u0625\u064A\u0642\u0627\u0641</button>' : '<button class="btn" data-agrun="' + esc2(a.id) + '">\u25B6 \u0646\u0641\u0651\u0630</button>') + "</div>" + (!st.running && !online ? '<div class="mut" style="margin-top:8px">' + (S2.gate ? "\u26A0\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0648\u0627\u0635\u0644 \u0647\u0644\u0623: \u0644\u0645\u0627 \u062A\u0643\u0628\u0633 \u0646\u0641\u0651\u0630 \u0628\u062A\u0646\u0628\u0639\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 (\u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0625\u0630\u0627 \u0634\u063A\u0651\u0627\u0644\u060C \u0623\u0648 \u0644\u0644\u0633\u062D\u0627\u0628\u0629)\u060C \u0648\u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0638\u0647\u0631 \u0647\u0648\u0646." : "\u26A0\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0647\u0644\u0623. \u0648\u0635\u0651\u0644 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0631\u0629 \u0644\u062A\u0641\u0639\u064A\u0644 \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u0629.") + "</div>" : "") + (st.running ? '<div class="status" id="agStatus"><span class="spin"></span> ' + esc2(st.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + "</div>" : "") + (st.running && st.stale ? '<div class="mut" style="margin-top:8px">\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0627 \u0631\u062F\u0651 \u0644\u0647\u0644\u0623. <button class="btn" data-agcloud="' + esc2(a.id) + '">\u2601\uFE0F \u0634\u063A\u0651\u0644\u0647\u0627 \u0628\u0627\u0644\u0633\u062D\u0627\u0628\u0629</button></div>' : "") + (S2.approvals || []).filter((x) => x.job && x.job === st.job).map((x) => '<div class="card" style="margin-top:8px"><b>\u{1F510} ' + esc2(x.title || "\u0637\u0644\u0628 \u0645\u0648\u0627\u0641\u0642\u0629") + '</b><pre class="code" style="white-space:pre-wrap;max-height:160px;overflow:auto">' + esc2(x.preview || "") + '</pre><div class="acts"><button class="btn" data-apv="' + esc2(x.id) + '|1">\u2705 \u0645\u0648\u0627\u0641\u0642</button> <button class="btn danger" data-apv="' + esc2(x.id) + '|0">\u274C \u0631\u0641\u0636</button></div></div>').join("") + '<div class="agout" id="agOut">' + (st.out ? '<div class="msg bot' + (st.failed ? " err" : "") + '">' + md2(st.out) + '<div class="meta">' + esc2(when(st.at)) + "</div></div>" : "") + "</div></div>" : "") + "</div>";
     }).join("");
     return h;
   }
@@ -41670,7 +41670,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.10.6" : "5.10";
+  var VERSION = true ? "5.10.7" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -42201,25 +42201,81 @@
     S.pc = r && r.ok ? r.online ? "on" : "off" : "unk";
     if (S.tab === "agents") renderPage();
   }
-  async function gateRun(id, task) {
+  async function gateRun(id, task, force) {
     const a = S.agents.find((x) => x.id === id);
     const st = S.agentOut[id] || (S.agentOut[id] = {});
-    const r = await gateCall("/run", { agent: a ? a.name : "", task });
-    st.running = false;
+    const r = await gateCall("/run", { agent: a ? a.name : "", task, force: force ? "cloud" : void 0 });
     st.at = Date.now();
     st.failed = false;
+    st.stale = false;
     if (!r) {
+      st.running = false;
       st.failed = true;
       st.out = "\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0628\u0648\u0627\u0628\u0629. \u062A\u0623\u0643\u062F \u0645\u0646 \u0627\u0644\u0646\u062A.";
+    } else if (r.status === 200 && r.ok && r.where !== "none" && r.job) {
+      st.running = true;
+      st.job = r.job;
+      st.where = r.where;
+      st.task = task;
+      st.polling = true;
+      st.t0 = Date.now();
+      st.seen = 0;
+      st.status = r.where === "cloud" ? "\u2601\uFE0F \u0639\u0645 \u064A\u0634\u062A\u063A\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0627\u0644\u0633\u062D\u0627\u0628\u064A\u2026" : "\u{1F4E5} \u0648\u0635\u0644\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u060C \u0639\u0645 \u064A\u0646\u062A\u0638\u0631\u2026";
+      void gatePoll(id, r.job);
     } else if (r.status === 200 && r.ok) {
-      st.failed = r.where === "none";
-      st.out = r.where === "cloud" ? "\u2601\uFE0F \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A\u060C \u0641\u0627\u0646\u0628\u0639\u062A\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0627\u0644\u0633\u062D\u0627\u0628\u064A. \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0648\u0635\u0644\u0643 \u0639\u0644\u0649 \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645." : r.where === "pc" ? "\u{1F4E5} \u0648\u0635\u0644\u062A \u0627\u0644\u0645\u0647\u0645\u0629 \u0644\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631. \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0628\u062A\u0648\u0635\u0644\u0643 \u0639\u0644\u0649 \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645." : "\u{1F534} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A \u0648\u0627\u0644\u0648\u0643\u064A\u0644 \u0647\u0627\u062F \u0645\u0636\u0628\u0648\u0637 \u064A\u0634\u062A\u063A\u0644 \u0645\u062D\u0644\u064A \u0628\u0633.";
-    } else {
+      st.running = false;
       st.failed = true;
-      st.out = r.error === "agent not found" ? "\u0627\u0644\u0648\u0643\u064A\u0644 \u0645\u0648 \u0645\u0648\u062C\u0648\u062F \u0639\u0627\u0644\u0628\u0648\u0627\u0628\u0629. \u0627\u0641\u062A\u062D \u062A\u0628\u0648\u064A\u0628 \xAB\u0648\u0643\u0644\u0627\u0621\xBB \u0628\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0648\u0636\u063A\u0637 \u0645\u0632\u0627\u0645\u0646\u0629." : r.status === 401 ? "\u0645\u0641\u062A\u0627\u062D \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0642\u062F\u064A\u0645. \u0648\u0635\u0651\u0644 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0631\u0629 \u062A\u0627\u0646\u064A\u0629 \u0644\u062A\u062C\u062F\u064A\u062F\u0648." : r.status === 429 ? "\u0627\u0633\u062A\u0646\u0649 \u062B\u0627\u0646\u064A\u062A\u064A\u0646 \u0648\u062C\u0631\u0651\u0628." : "\u0641\u0634\u0644: " + (r.error || r.status);
+      st.out = "\u{1F534} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A \u0648\u0627\u0644\u0648\u0643\u064A\u0644 \u0647\u0627\u062F \u0645\u0636\u0628\u0648\u0637 \u064A\u0634\u062A\u063A\u0644 \u0645\u062D\u0644\u064A \u0628\u0633.";
+    } else {
+      st.running = false;
+      st.failed = true;
+      st.out = r.error === "agent not found" ? "\u0627\u0644\u0648\u0643\u064A\u0644 \u0645\u0648 \u0645\u0648\u062C\u0648\u062F \u0639\u0627\u0644\u0628\u0648\u0627\u0628\u0629. \u0627\u0641\u062A\u062D \u062A\u0628\u0648\u064A\u0628 \xAB\u0648\u0643\u0644\u0627\u0621\xBB \u0628\u0627\u0644\u0628\u0631\u0646\u0627\u0645\u062C \u0648\u0636\u063A\u0637 \u0645\u0632\u0627\u0645\u0646\u0629." : r.status === 401 ? "\u0645\u0641\u062A\u0627\u062D \u0627\u0644\u0628\u0648\u0627\u0628\u0629 \u0642\u062F\u064A\u0645. \u0648\u0635\u0651\u0644 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0631\u0629 \u062A\u0627\u0646\u064A\u0629 \u0644\u062A\u062C\u062F\u064A\u062F\u0648." : r.status === 429 ? "\u0627\u0633\u062A\u0646\u0649 \u062B\u0627\u0646\u064A\u062A\u064A\u0646 \u0648\u062C\u0631\u0651\u0628." : r.error === "local only" ? "\u0647\u0627\u0644\u0648\u0643\u064A\u0644 \u0645\u062D\u0644\u064A \u0628\u0633." : "\u0641\u0634\u0644: " + (r.error || r.status);
     }
     saveAgOut();
     renderPage();
+  }
+  async function gatePoll(id, job) {
+    const st = S.agentOut[id];
+    const end = Date.now() + 25 * 60 * 1e3;
+    while (st && st.polling && st.job === job && Date.now() < end) {
+      await new Promise((r2) => setTimeout(r2, 3e3));
+      if (!st.polling || st.job !== job) return;
+      const r = await gateCall("/result/" + job);
+      const ev = r && r.ok ? r.events || [] : [];
+      if (ev.length) st.seen = ev.length;
+      const say = [...ev].reverse().find((e) => e.kind === "say");
+      if (say) st.status = say.text;
+      const fin = ev.find((e) => e.kind === "done" || e.kind === "fail");
+      if (fin) {
+        st.polling = false;
+        st.running = false;
+        st.failed = fin.kind === "fail";
+        st.out = fin.text;
+        st.at = Date.now();
+        st.stale = false;
+        S.approvals = (S.approvals || []).filter((x) => x.job !== job);
+        saveAgOut();
+        renderPage();
+        notify((S.agents.find((x) => x.id === id) || {}).name + (st.failed ? ": \u0645\u0627 \u062E\u0644\u0635\u062A" : ": \u062E\u0644\u0635"), fin.text || "");
+        try {
+          navigator.vibrate && navigator.vibrate(60);
+        } catch {
+        }
+        return;
+      }
+      const ap = await gateCall("/approvals");
+      S.approvals = ap && ap.ok ? ap.items || [] : S.approvals;
+      st.stale = st.where === "pc" && !ev.length && Date.now() - st.t0 > 45e3;
+      if (S.tab === "agents") renderPage();
+    }
+    if (st && st.polling && st.job === job) {
+      st.polling = false;
+      st.running = false;
+      st.failed = true;
+      st.out = "\u0627\u0646\u062A\u0647\u0649 \u0648\u0642\u062A \u0627\u0644\u0627\u0646\u062A\u0638\u0627\u0631 \u0628\u062F\u0648\u0646 \u0646\u062A\u064A\u062C\u0629.";
+      saveAgOut();
+      renderPage();
+    }
   }
   function agProg(p) {
     const st = S.agentOut[p.agent];
@@ -42278,8 +42334,37 @@
       return true;
     }
     if (d.agstop) {
-      sendHost({ k: "cancel", tab: "agent-" + d.agstop });
-      toast("\u0637\u0644\u0628\u062A \u0627\u0644\u0625\u064A\u0642\u0627\u0641");
+      const gs = S.agentOut[d.agstop];
+      if (gs && gs.polling) {
+        gs.polling = false;
+        gs.running = false;
+        gs.out = "\u0648\u0642\u0651\u0641\u062A \u0627\u0644\u0645\u062A\u0627\u0628\u0639\u0629 (\u0627\u0644\u0645\u0647\u0645\u0629 \u0645\u0645\u0643\u0646 \u062A\u0643\u0645\u0651\u0644 \u0628\u0627\u0644\u062E\u0644\u0641\u064A\u0629).";
+        saveAgOut();
+        renderPage();
+      } else {
+        sendHost({ k: "cancel", tab: "agent-" + d.agstop });
+        toast("\u0637\u0644\u0628\u062A \u0627\u0644\u0625\u064A\u0642\u0627\u0641");
+      }
+      return true;
+    }
+    if (d.agcloud) {
+      const cs = S.agentOut[d.agcloud];
+      if (cs) {
+        cs.polling = false;
+        cs.status = "\u0639\u0645 \u064A\u0628\u0639\u062A\u0647\u0627 \u0644\u0644\u0633\u062D\u0627\u0628\u0629\u2026";
+        saveAgOut();
+        renderPage();
+        void gateRun(d.agcloud, cs.task, true);
+      }
+      return true;
+    }
+    if (d.apv) {
+      const [aid, v] = d.apv.split("|");
+      S.approvals = (S.approvals || []).filter((x) => x.id !== aid);
+      renderPage();
+      void gateCall("/approval/" + aid, { v: Number(v) }).then((r) => {
+        if (!r || !r.ok) toast("\u0645\u0627 \u0627\u0646\u0631\u0633\u0644 \u0627\u0644\u0631\u062F\u060C \u062C\u0631\u0651\u0628 \u0645\u0631\u0629 \u062A\u0627\u0646\u064A\u0629");
+      });
       return true;
     }
     if (d.sopen !== void 0) {

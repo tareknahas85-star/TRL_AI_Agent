@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useState } from 'react'
+﻿import { Fragment, useCallback, useEffect, useState } from 'react'
 import { askConfirm } from './components/confirm'
 import { CheckCircle2, FolderOpen, Lock, Plus, Trash2 } from 'lucide-react'
-import type { ProjectInfo } from '../preload/index.d'
+import type { ConversationSummary, ProjectInfo } from '../preload/index.d'
 import { Chip, Empty, PageShell, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
-export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => void; onOpen: (p: ProjectInfo) => void; openIds: string[] }) {
+export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, onNewInProject }: { onChanged: () => void; onOpen: (p: ProjectInfo) => void; openIds: string[]; convs: ConversationSummary[]; onOpenConv: (id: string) => void; onNewInProject: (p: ProjectInfo) => void }) {
   const [data, setData] = useState<{ projects: ProjectInfo[]; activeId: string | null }>({ projects: [], activeId: null })
   const [path, setPath] = useState('')
   const [error, setError] = useState('')
@@ -58,8 +58,9 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
         <div className="space-y-2">
           {data.projects.map((p) => {
             const active = openIds.includes(p.id)
+            const mine = convs.filter((c) => c.projectId === p.id).sort((x, y) => (y.updatedAt ?? 0) - (x.updatedAt ?? 0))
             return (
-              <div key={p.id} className={cardCls + ` flex items-center justify-between gap-3 ${active ? 'ring-2 ring-primary' : ''}`}>
+              <Fragment key={p.id}><div className={cardCls + ` flex items-center justify-between gap-3 ${active ? 'ring-2 ring-primary' : ''}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-semibold">{p.name}</span>
@@ -99,6 +100,18 @@ export function ProjectsPage({ onChanged, onOpen, openIds }: { onChanged: () => 
                   </button>
                 </div>
               </div>
+              <div className="mb-2 mr-4 space-y-1 border-r-2 border-outline pr-3">
+                {mine.slice(0, 10).map((c) => (
+                  <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                    <span className="min-w-0 truncate">{c.title || 'محادثة بدون عنوان'}</span>
+                    <button className={ghostBtn} onClick={() => onOpenConv(c.id)}>كمّل</button>
+                  </div>
+                ))}
+                {mine.length === 0 && <p className="text-xs text-muted">ما في محادثات سابقة بهالمشروع</p>}
+                <button className={ghostBtn} onClick={() => onNewInProject(p)}>
+                  <Plus size={14} /> محادثة جديدة
+                </button>
+              </div>            </Fragment>
             )
           })}
         </div>

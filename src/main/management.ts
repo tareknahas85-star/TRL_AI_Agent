@@ -1,6 +1,9 @@
 import { fetchRemoteModels, importRemoteModels, setCustomModelKey, setCustomModelPosition } from '../core/custom-models'
 import { lintSkill } from '../skills/lint'
 import { freeOnly, setFreeOnly } from '../core/spend'
+import { getRoles, setRoles } from '../core/roles'
+import { getClaudeUsage, setClaudeCap } from '../core/claude-usage'
+import { getEngineSeries } from '../core/usage-log'
 import { freeUsage } from '../core/model-health'
 import { moveCatalogModel } from '../core/catalog'
 import { deleteMemoryEntry, importMemory, listMemory, memoryPrompt, saveMemoryEntry, toggleMemoryEntry } from '../core/memory'
@@ -12,6 +15,7 @@ import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled
 import { addSchedule, listSchedules, removeSchedule, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
 import { importServers, parseAny, scanSources } from '../mcp/import'
 import { importPlugins, scanPlugins } from '../mcp/plugins'
+import { accountLogin, accountsStatus, getFullAutonomy, setFullAutonomy, type AcctKind } from '../core/cli-agent'
 import { claudeCliStatus, claudePersonalLogin, getClaudeAcctCfg, setClaudeAcctCfg } from '../core/cli-models'
 import fsp from 'fs/promises'
 import {
@@ -341,6 +345,10 @@ export function registerManagementHandlers(): void {
     if (typeof id === 'string') void runScheduleNow(id)
     return typeof id === 'string'
   })
+  ipcMain.handle('accounts:status', () => accountsStatus())
+  ipcMain.handle('accounts:login', (_e, k: unknown) => accountLogin(k === 'gemini' || k === 'codex' || k === 'claude' ? (k as AcctKind) : 'gemini'))
+  ipcMain.handle('agentMode:get', () => getFullAutonomy())
+  ipcMain.handle('agentMode:set', (_e, v: unknown) => setFullAutonomy(v === true))
   ipcMain.handle('claudeAcct:get', async () => ({ cfg: getClaudeAcctCfg(), work: await claudeCliStatus('work'), personal: await claudeCliStatus('personal') }))
   ipcMain.handle('claudeAcct:set', (_e, p: unknown) => {
     const o = (p ?? {}) as { active?: string; auto?: boolean }
@@ -358,6 +366,11 @@ export function registerManagementHandlers(): void {
   })
   ipcMain.handle('effort:get', () => getEffort())
   ipcMain.handle('effort:set', (_e, v: unknown) => setEffort(v))
+ipcMain.handle('roles:get', () => getRoles())
+ipcMain.handle('roles:set', (_e, v: unknown) => setRoles((v ?? {}) as Partial<ReturnType<typeof getRoles>>))
+ipcMain.handle('usage:series', () => getEngineSeries(14))
+ipcMain.handle('claudeUsage:get', () => getClaudeUsage())
+ipcMain.handle('claudeUsage:cap', (_e, v: unknown) => setClaudeCap((v ?? {}) as { capRuns?: number; capMinutes?: number }))
   ipcMain.handle('projects:remove', (_e, id: unknown) => typeof id === 'string' && removeProject(id))
   ipcMain.handle('projects:setActive', (_e, id: unknown) =>
     id === null || typeof id === 'string' ? setActiveProject(id) : false

@@ -1,10 +1,11 @@
-import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+﻿import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { analyzeRequest, warmLocalMaster, type Analysis } from '../core/master'
 import { ensureOllama } from '../core/ollama'
 import { calculateSavedCost } from '../core/fallback'
 import { executeWithSkill } from '../skills/executor'
 import { runCouncil, resetCouncilTrace, getLastCouncilTrace, type CouncilInfo } from '../core/council'
 import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
+import { CODEX_CLI, CODEX_MODEL_PREFIX, GEMINI_CLI, codexCliPath, codexModelsList, geminiCliPath } from '../core/cli-agent'
 import { registerManagementHandlers } from './management'
 import { activeProject, getConversation, listProjects, saveConversation } from '../core/workspace'
 import { listAgents } from '../core/agents'
@@ -125,6 +126,9 @@ export function registerIpcHandlers(): void {
       .models.filter((m) => m.enabled)
       .map((m) => ({ value: m.id, label: m.name || m.id, tier: m.tier })),
     // Subscription accounts through their official CLI (only offered when the tool is installed).
+    ...(geminiCliPath() ? [{ value: GEMINI_CLI, label: 'Gemini (حساب غووغل)', tier: 'SUBSCRIPTION' }] : []),
+    ...(codexCliPath() ? [{ value: CODEX_CLI, label: 'ChatGPT Codex (حسابك، الافتراضي)', tier: 'SUBSCRIPTION' }] : []),
+    ...(codexCliPath() ? codexModelsList().map((slug) => ({ value: CODEX_MODEL_PREFIX + slug, label: 'ChatGPT Codex: ' + slug, tier: 'SUBSCRIPTION' })) : []),
     ...(claudeCliPath() ? [CLAUDE_CLI, ...CLAUDE_CLI_MODELS.map((x) => x.id)].map((id) => ({ value: id, label: cliModelName(id), tier: 'SUBSCRIPTION' })) : [])
   ]
   const parseMode = (raw: unknown): RunMode => {

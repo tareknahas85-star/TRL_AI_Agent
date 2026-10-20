@@ -28,7 +28,7 @@ export function runInContext<T>(tabId: string, mode: RunMode, progress: Sink, st
   info.set(tabId, ri)
   runHub.emit('change')
   const tracked: Sink = (t) => {
-    ri.last = t
+    ri.last = t.replace(/^\u27e6[^\u27e7]*\u27e7\s*/, '')
     runHub.emit('change')
     progress(t)
   }
@@ -39,6 +39,8 @@ export function runInContext<T>(tabId: string, mode: RunMode, progress: Sink, st
   })
 }
 
+/** 5.15.0: نشاط موسوم بنموذج/دور عشان اللوحة الحية تعرض مين عم يعمل شو. الصيغة: ⟦engine|role⟧ text */
+export const emitAgent = (engine: string, role: string, text: string): void => emitProgress('\u27e6' + engine + '|' + role + '\u27e7 ' + text)
 export const emitProgress = (text: string): void => {
   try {
     als.getStore()?.progress(text)

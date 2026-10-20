@@ -45,7 +45,7 @@ export const setClaudeAcctCfg = (p: Partial<AcctCfg>): AcctCfg => {
 export const personalClaudeDir = (): string => path.join(app.getPath('userData'), 'claude-personal')
 const hasCreds = (a: ClaudeAcct): boolean => a === 'work' || fs.existsSync(path.join(personalClaudeDir(), '.credentials.json'))
 
-function cleanEnv(acct: ClaudeAcct = 'work'): NodeJS.ProcessEnv {
+export function cleanEnv(acct: ClaudeAcct = 'work'): NodeJS.ProcessEnv {
   const env = { ...process.env }
   delete env.ANTHROPIC_API_KEY
   delete env.ANTHROPIC_AUTH_TOKEN

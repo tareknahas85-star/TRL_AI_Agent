@@ -1,5 +1,5 @@
 appId: com.myrouter.app
-productName: AI Router OS
+productName: TRL_AI_Agent
 directories:
   buildResources: build
   output: release
@@ -12,6 +12,9 @@ files:
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
   - '!{HANDOFF.md,*.tgz,*.tsbuildinfo,.env.example}'
   - '!{dist-installer,release,out-test,.git}/**'
+  - '!*.{log,apk}'
+  - '!build-*.txt'
+  - '!{mobile,relay,tests,scripts,.github,.vscode}/**'
 extraResources:
   - from: src/skills/delegate-skills
     to: skills

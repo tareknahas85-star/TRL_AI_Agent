@@ -17,6 +17,8 @@ import { needsDocTools, needsLocation, needsSecurity } from '../core/guidance'
 import { addDocTools } from '../tools/doc-tools'
 import { addSecurityTools } from '../tools/security-tools'
 import { addSandboxTools, needsSandbox } from '../tools/sandbox-tools'
+import { addNotebookTools, needsNotebook } from '../tools/notebook-tools'
+import { addGoogleMediaTools, needsGoogleMedia } from '../tools/google-media-tools'
 import { toolPrior } from '../core/learning'
 import { neededConnectors } from '../core/connector-hints'
 import { verifyAfter } from '../computer/extras'
@@ -339,6 +341,10 @@ export async function buildToolset(userInput: string, projectPath?: string, opts
     else if (!getPrefs().securityToolsEnabled) locNote.push('security tools (pwned_password_check, virustotal_hash_lookup) are switched off; tell the user to enable them in Settings > General > Security checks')
     else addSecurityTools(defs, handlers)
   }
+
+  // NotebookLM study analysis through the user's own signed-in Chrome profile; never in a confidential project (sources leave this PC).
+  if (needsNotebook(userInput) && !opts.confidential) addNotebookTools(defs, handlers)
+  if (needsGoogleMedia(userInput) && !opts.confidential) addGoogleMediaTools(defs, handlers)
 
   // Isolated code sandbox (WSL Ubuntu): Windows only, every run needs approval, never in a confidential project.
   if (needsSandbox(userInput) && !opts.confidential && process.platform === 'win32') addSandboxTools(defs, handlers)

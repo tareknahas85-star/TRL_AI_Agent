@@ -25,8 +25,29 @@ const TEMPLATES: { label: string; text: string }[] = [
   { label: '⚙️ سكربت PowerShell', text: 'اكتبلي سكربت PowerShell يعمل التالي:\n\n' }
 ]
 
-function Avatar(): ReactElement {
+type Brand = 'claude' | 'openai' | 'gemini'
+const brandOf = (model: string): Brand | null =>
+  /claude|sonnet|opus|haiku/i.test(model) ? 'claude' : /gemini|nano-banana|veo/i.test(model) ? 'gemini' : /gpt|codex|openai|\bo[1-9]\b/i.test(model) ? 'openai' : null
+
+function BrandAvatar({ brand }: { brand: Brand }): ReactElement {
+  const bg = brand === 'claude' ? '#D97757' : brand === 'openai' ? '#10A37F' : '#1A73E8'
+  return (
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: bg }} title={brand === 'claude' ? 'Claude' : brand === 'openai' ? 'ChatGPT' : 'Gemini'}>
+      {brand === 'claude' ? (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4" /></svg>
+      ) : brand === 'openai' ? (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z" /><path d="M12 8l3.9 2.25v4.5L12 17l-3.9-2.25v-4.5z" /></svg>
+      ) : (
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M12 2c.6 5.4 4.6 9.4 10 10-5.4.6-9.4 4.6-10 10-.6-5.4-4.6-9.4-10-10 5.4-.6 9.4-4.6 10-10z" /></svg>
+      )}
+    </div>
+  )
+}
+
+function Avatar({ model, pin }: { model?: string; pin?: boolean } = {}): ReactElement {
   const { palette } = useTheme()
+  const brand = pin && model ? brandOf(model) : null
+  if (brand) return <BrandAvatar brand={brand} />
   if (palette === 'syrian')
     return (
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: '#054239' }}>
@@ -85,6 +106,46 @@ function parseMeta(meta: string): { model: string; skill: string; saved: string;
   return out
 }
 
+type AgentCard = { key: string; engine: string; role: string; last: string; at: number; started: number; n: number }
+const AGENT_TAG = /^\u27e6([^|\u27e7]*)\|([^\u27e7]*)\u27e7\s*([\s\S]*)$/
+const engineName = (e: string): string =>
+  e.startsWith('cli:claude') ? 'Claude' + (/opus/i.test(e) ? ' Opus' : /sonnet/i.test(e) ? ' Sonnet' : '') : e === 'cli:gemini' ? 'Gemini' : e === 'cli:codex' ? 'Codex / GPT' : e
+
+/** لوحة حيّة: مين النموذج الشغّال، شو دورو، آخر عملية، ومن أي وقت (لونها بيتحوّل إذا سكت كتير). */
+function AgentPanel({ agents }: { agents: AgentCard[] }): ReactElement | null {
+  const [now, setNow] = useState(Date.now())
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(t)
+  }, [])
+  if (!agents.length) return null
+  return (
+    <div className="mt-2 w-full max-w-xl space-y-1.5">
+      {agents.map((a) => {
+        const idle = Math.max(0, Math.round((now - a.at) / 1000))
+        const tone = idle < 60 ? 'bg-green-500' : idle < 180 ? 'bg-amber-500' : 'bg-red-500'
+        return (
+          <div key={a.key} className="flex items-start gap-2 rounded-xl border border-outline bg-surface px-3 py-1.5 text-[11px]">
+            <span className={'mt-1 h-2 w-2 shrink-0 rounded-full ' + tone} />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-x-2">
+                <b>{engineName(a.engine)}</b>
+                <span className="text-muted">{a.role}</span>
+                <span className="text-muted" dir="ltr">
+                  {Math.round((now - a.started) / 60000)}m · {a.n} عملية
+                </span>
+                <span className={idle >= 180 ? 'text-warning' : 'text-muted'}>آخر نشاط قبل {idle}s</span>
+              </div>
+              <div className="truncate text-muted" dir="auto">
+                {a.last}
+              </div>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 const fmtMs = (ms: number): string => (ms >= 1000 ? (ms / 1000).toFixed(1) + 's' : Math.round(ms) + 'ms')
 
 function StatusBar({
@@ -337,6 +398,7 @@ export function ChatWindow({
   const bottomRef = useRef<HTMLDivElement>(null)
   const convIdRef = useRef<string | null>(conversationId)
   const [progress, setProgress] = useState('')
+  const [agents, setAgents] = useState<AgentCard[]>([])
   const [elapsed, setElapsed] = useState(0)
   const [atts, setAtts] = useState<AttachmentInfo[]>([])
   const [dragOver, setDragOver] = useState(false)
@@ -411,7 +473,26 @@ export function ChatWindow({
     el.style.height = Math.min(el.scrollHeight, 160) + 'px'
   }, [input])
 
-  useEffect(() => window.api.onProgress((id, t) => id === tabId && setProgress(t)), [tabId])
+  useEffect(
+    () =>
+      window.api.onProgress((id, t) => {
+        if (id !== tabId) return
+        const m = AGENT_TAG.exec(t)
+        if (!m) return setProgress(t)
+        const [, engine, role, text] = m
+        setProgress(text)
+        const nowMs = Date.now()
+        setAgents((prev) => {
+          const key = engine + '|' + role
+          const i = prev.findIndex((a) => a.key === key)
+          if (i < 0) return [...prev, { key, engine, role, last: text, at: nowMs, started: nowMs, n: 1 }]
+          const next = prev.slice()
+          next[i] = { ...next[i], last: text, at: nowMs, n: next[i].n + 1 }
+          return next
+        })
+      }),
+    [tabId]
+  )
   useEffect(() => {
     onBusy(loading)
   }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -419,6 +500,10 @@ export function ChatWindow({
   const [needsChoice, setNeedsChoice] = useState(false)
   const [skillCard, setSkillCard] = useState<{ tools: string[]; request: string; answer: string; name: string; msg: string } | null>(null)
   const [effort, setEffortUi] = useState('auto')
+  const [roles, setRolesUi] = useState<{ executor: string; reviewer: string }>({ executor: 'auto', reviewer: 'auto' })
+  useEffect(() => {
+    window.api.roles.get().then((r) => setRolesUi({ executor: r.executor, reviewer: r.reviewer })).catch(() => undefined)
+  }, [active])
   useEffect(() => {
     window.api.effort.get().then(setEffortUi).catch(() => undefined)
   }, [active])
@@ -479,6 +564,7 @@ export function ChatWindow({
 
   const runRequest = async (retry: boolean, base: ChatMessage[], retryMode?: ChatMode): Promise<void> => {
     setProgress('')
+    setAgents([])
     setStreamText('')
     streamRef.current = ''
     partialRef.current = ''
@@ -511,9 +597,9 @@ export function ChatWindow({
         setRetryNote(r.content)
         next = base
       } else if (retry) {
-        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta, at: Date.now() }]
+        next = [...base.slice(0, -1), { role: 'assistant', content: r.content, meta: r.meta, at: Date.now(), pin: opts.mode.kind === 'model' }]
       } else {
-        next = [...base, { role: 'assistant', content: r.content, meta: r.meta, at: Date.now() }]
+        next = [...base, { role: 'assistant', content: r.content, meta: r.meta, at: Date.now(), pin: opts.mode.kind === 'model' }]
       }
     } catch (e) {
       next = [...base, { role: 'assistant', content: 'Error: ' + (e instanceof Error ? e.message : String(e)), at: Date.now() }]
@@ -611,7 +697,7 @@ export function ChatWindow({
               </div>
             ) : (
               <div key={i} className="flex gap-3">
-                <Avatar />
+                <Avatar model={msg.meta ? parseMeta(msg.meta).model : undefined} pin={msg.pin} />
                 <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
                   <Markdown text={msg.content} />
                   <FileChips text={msg.content} />
@@ -658,6 +744,11 @@ export function ChatWindow({
                   ))}
                 </span>
               </div>
+            </div>
+          )}
+          {loading && agents.length > 0 && (
+            <div className="flex justify-center">
+              <AgentPanel agents={agents} />
             </div>
           )}
           <div ref={bottomRef} />
@@ -745,6 +836,14 @@ export function ChatWindow({
         <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
           <span>الموديل:</span>
           <ModelPicker mode={mode} picker={picker} onModeChange={onModeChange} />
+          <span>المنفّذ:</span>
+          <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.executor} title="المحرّك اللي بينفّذ المهام (auto = الترتيب الافتراضي)" onChange={(e) => { setRolesUi({ ...roles, executor: e.target.value }); window.api.roles.set({ executor: e.target.value }).catch(() => undefined) }}>
+            <option value="auto">تلقائي</option><option value="cli:gemini">Gemini</option><option value="cli:claude">Claude</option><option value="cli:codex">Codex</option>
+          </select>
+          <span>المراجع:</span>
+          <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.reviewer} title="المراجع المستقل (لازم يكون من عيلة غير المنفّذ)" onChange={(e) => { setRolesUi({ ...roles, reviewer: e.target.value }); window.api.roles.set({ reviewer: e.target.value }).catch(() => undefined) }}>
+            <option value="auto">تلقائي</option><option value="cli:gemini">Gemini</option><option value="cli:claude">Claude</option><option value="cli:codex">Codex</option>
+          </select>
           <span>التفكير:</span>
           <select
             className="rounded-full border border-outline bg-surface px-2 py-0.5"

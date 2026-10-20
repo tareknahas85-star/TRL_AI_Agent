@@ -84,16 +84,22 @@ let phoneAsk: ((a: { title: string; detail: string; danger: boolean }) => PhoneA
 export const setPhoneApprovalHook = (fn: typeof phoneAsk): void => {
   phoneAsk = fn
 }
+// 5.14.0: إذا ما حدا جاوب خلال 5 دقايق بنعتبرها رفض تلقائي (بدل ما تضل المهمة واقفة للأبد) والموديل بيكمّل بطريقة تانية أو بيبلّغ إنو محجوب.
+const APPROVAL_TIMEOUT_MS = 5 * 60 * 1000
 async function boxOrPhone(win: BrowserWindow | undefined, opts: Electron.MessageBoxOptions, info: { title: string; detail: string; danger: boolean }): Promise<{ response: number } | { phoneOk: boolean }> {
   const pa = phoneAsk?.(info) ?? null
-  if (!pa) return { response: (await (win ? dialog.showMessageBox(win, opts) : dialog.showMessageBox(opts))).response }
   const ac = new AbortController()
   const o2 = { ...opts, signal: ac.signal }
   const box = (win ? dialog.showMessageBox(win, o2) : dialog.showMessageBox(o2)).then((r) => ({ response: r.response }))
-  const ph = pa.promise.then((v) => (v === null ? new Promise<never>(() => undefined) : { phoneOk: v }))
-  const first = await Promise.race([box, ph])
+  const ph: Promise<{ phoneOk: boolean }> = pa ? pa.promise.then((v) => (v === null ? new Promise<never>(() => undefined) : { phoneOk: v })) : new Promise<never>(() => undefined)
+  let tm: NodeJS.Timeout | undefined
+  const timeout = new Promise<{ phoneOk: boolean }>((res) => {
+    tm = setTimeout(() => res({ phoneOk: false }), APPROVAL_TIMEOUT_MS)
+  })
+  const first = await Promise.race([box, ph, timeout])
+  if (tm) clearTimeout(tm)
   if ('phoneOk' in first) ac.abort()
-  else pa.cancel()
+  else pa?.cancel()
   return first
 }
 
@@ -450,7 +456,16 @@ export function addComputerTools(
       const p = rp(s(a.path))
       const exists = fs.existsSync(p)
       if (exists && a.overwrite !== true) return 'Error: file already exists. Pass overwrite:true to replace it (a backup copy is made) or choose a new name.'
-      if (!(await ask('بدو يعمل ملف', p + '\n\n' + s(a.content).slice(0, 600)))) return 'Error: the user denied this.'
+      // 5.14.0: حارس الوثائق — ممنوع تقليص ملف موجود بشكل كبير (غالباً موديل ضعيف عم يكتب فوق شغل غيره)
+      if (exists) {
+        try {
+          const oldSize = fs.statSync(p).size
+          const newSize = Buffer.byteLength(s(a.content))
+          if (oldSize >= 2048 && newSize < oldSize * 0.6 && !/^\s*\/\/\s*SHRINK_OK/.test(s(a.content))) {
+            return 'Error: refused — the new content (' + newSize + ' bytes) is much smaller than the existing file (' + oldSize + ' bytes). This looks like an accidental overwrite of someone else\'s work. Read the file first and edit/append only the parts you need (keep the rest), or write your text to a different file name.'
+          }
+        } catch { /* ignore */ }
+      }      if (!(await ask('بدو يعمل ملف', p + '\n\n' + s(a.content).slice(0, 600)))) return 'Error: the user denied this.'
       try {
         await fsp.mkdir(path.dirname(p), { recursive: true })
         let bak = ''
