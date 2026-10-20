@@ -1,5 +1,5 @@
 {
-  "name": "my-ai-router",
+  "name": "TRL_AI_Agent",
   "version": "5.16.0",
   "description": "An Electron application with React and TypeScript",
   "main": "./out/main/index.js",
