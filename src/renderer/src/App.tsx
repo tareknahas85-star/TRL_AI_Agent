@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+﻿import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { askConfirm } from '../../ui/components/confirm'
 import {
@@ -605,7 +605,7 @@ function Shell(): ReactElement {
             />
           )}
       {activeNav === 'projects' && (
-          <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} />
+          <ProjectsPage onChanged={loadProjects} onOpen={openProject} openIds={tabs.map((t) => t.projectId).filter(Boolean) as string[]} convs={convs} onOpenConv={(id) => void openConv(id)} onNewInProject={(pr) => newTab(pr.id, pr.name)} />
         )}
         {activeNav === 'agents' && <AgentsPage />}
         {activeNav === 'todo' && <TodoPage />}

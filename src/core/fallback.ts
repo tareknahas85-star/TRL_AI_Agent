@@ -1,4 +1,4 @@
-import { hostOf } from './hosts'
+﻿import { hostOf } from './hosts'
 import OpenAI from 'openai'
 import fs from 'fs'
 import { dataFile } from './json-store'
@@ -6,7 +6,9 @@ import { bumpFreeCount, modelBlockReason, noteModelFailure } from './model-healt
 import { notePinOutcome } from './free-pin'
 import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
-import { emitProgress, emitStream, currentSignal } from './progress'
+import { emitProgress, emitStream, emitAgent, currentSignal } from './progress'
+import { activeProject } from './workspace'
+import { quarantineEmptyFragments, appendRunLog } from './run-report'
 import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel } from './custom-models'
 import { textProtocol, textToolLoop } from './text-tools'
 import { effortExtra, getEffort, type EffortRoute } from './effort'
@@ -80,9 +82,102 @@ export type FallbackResult = {
   failures?: { model: string; reason: string }[]
   modelDetail?: string
   effort?: string
+  engine?: string
+  startedAt?: number
 }
 
+import { independentReview, repairFromReview } from './review'
+import { isAgentEngine, runClaudeAgent, runCodexAgent, runGeminiAgent, geminiLoggedIn, codexModelOf, CODEX_CLI, GEMINI_CLI, ENGINE_ORDER } from './cli-agent'
+import { getRoles } from './roles'
+import { recordEngineRun } from './usage-log'
+
+/** 5.16: حد دورات الإصلاح بعد المراجعة (مراجعة ← إصلاح ← مراجعة)، بعدها بيوقف ويكتب الحالة. */
+const MAX_REPAIR_ROUNDS = 2
+
+/** 5.16: حالة الإنجاز من البرنامج (مو من كلام الموديل): بدون مراجعة مستقلة PASS ما بتعتبر مكتملة. */
+function completionStatus(content: string): string {
+  if (!/مراجعة مستقلة \(آلية\)/.test(content)) return 'غير مكتمل: ما في مراجعة مستقلة'
+  if (/الحكم: FAIL/.test(content)) return 'غير مكتمل: المراجع رفض النتيجة'
+  if (/الحكم: PASS/.test(content)) return 'مراجَع (PASS)، لازم فحص يدوي قبل الاعتماد'
+  return 'غير متحقق: المراجعة ما رجعت حكم واضح'
+}
+
+/** 5.14.0: سجل تشغيل آلي (من البرنامج مو من الموديل) بيتضاف لآخر رد مهام التنفيذ: مين اشتغل، شو فشل، وليش. */
+// 5.16.1: الأسئلة القصيرة (بدون ملفات أو أوامر) بتروح لـ Gemini API مباشرة، بدل ما تشغّل agy كوكيل كامل (أبطأ بكتير).
+// agy بيبقى آخر خيار إذا فشل الـ API.
+const FAST_GEMINI_API_MODEL = 'google/gemini-3.8-flash'
+const FAST_Q_MAX_CHARS = 200
+const ACTION_HINT = /```|[\\/]|https?:|\.\w{2,4}\b|ملف|مجلد|افتح|اكتب|اعمل|عدّل|عدل|احذف|ثبّت|ثبت|شغّل|شغل|نفّذ|نفذ|ابحث|ارسل|أرسل|create|write|open|run|edit|install|delete|fix|build|deploy|file|folder|code|script/i
+function fastGeminiRoute(models: string[], userInput: string): string[] {
+  const text = (userInput || '').trim()
+  if (!models.includes(GEMINI_CLI) || !geminiLoggedIn()) return models
+  if (!text || text.length > FAST_Q_MAX_CHARS || ACTION_HINT.test(text)) return models
+  return [FAST_GEMINI_API_MODEL, ...models.filter((m) => m !== GEMINI_CLI && m !== FAST_GEMINI_API_MODEL), GEMINI_CLI]
+}
 export async function executeWithFallback(
+  models: string[],
+  userInput: string,
+  analysis: Analysis,
+  systemPrompt?: string,
+  toolset?: Toolset | null,
+  history: { role: 'user' | 'assistant'; content: string }[] = [],
+  opts: { requireTools?: boolean; escalate?: boolean } = {}
+): Promise<FallbackResult> {
+  const r = await executeWithFallbackInner(fastGeminiRoute(models, userInput), userInput, analysis, systemPrompt, toolset, history, opts)
+  // 5.16: عدّاد الاستخدام لكل موديل (النماذج عبر API). CLI محسوبة من cli-agent، فنتجاهلها هون لتفادي العد مرتين.
+  if (r.success && r.startedAt && r.modelUsed && !(r.engine ?? '').startsWith('cli:')) recordEngineRun(r.modelUsed, (Date.now() - r.startedAt) / 60000)
+  try {
+    const action = !!(toolset?.defs.length || opts.requireTools)
+    const fails = r.failures || []
+    const longRun = !!r.engine && !!r.startedAt && Date.now() - r.startedAt > 8 * 60 * 1000
+    if (action && r.success && longRun && r.engine) {
+      const ctx = { signal: currentSignal(), emit: emitProgress, effort: getEffort() }
+      let rv = await independentReview(r.engine, userInput, r.content, ctx)
+      let extra = ''
+      for (let round = 1; rv && (rv.verdict === 'FAIL' || rv.high > 0) && round <= MAX_REPAIR_ROUNDS; round++) {
+        const fx = await repairFromReview(r.engine, userInput, rv, ctx)
+        if (!fx) break
+        extra += '\n\nبعد المراجعة (دورة ' + round + ' من ' + MAX_REPAIR_ROUNDS + '): المحرّك أصلح وهذا ملخصو (مو معتمد بدون فحص):\n' + fx.text
+        rv = (await independentReview(r.engine, userInput, r.content + extra, ctx)) ?? rv
+      }
+      if (rv) {
+        r.content +=
+          '\n\n---\nمراجعة مستقلة (آلية):\nالمراجع: ' + rv.reviewer + (rv.independent ? ' (عائلة موديل مختلفة عن المنفّذ)' : ' (تنبيه: مو مستقل، نفس عائلة المنفّذ لأنو ما في بديل متاح)') +
+          '\nالملاحظات: ' + rv.findings + ' (خطيرة: ' + rv.high + ') — الحكم: ' + rv.verdict +
+          (rv.findings === 0 ? '\nتنبيه: صفر ملاحظات حتى بعد إعادة التدقيق، لا تعتبرها موافقة نهائية.' : '') +
+          '\n' + rv.text.slice(0, 3500) + extra
+      }
+    }
+    const proj = action && r.success && longRun ? activeProject() : null
+    if (proj && r.startedAt && fs.existsSync(proj.path)) {
+      const moved = quarantineEmptyFragments(proj.path, r.startedAt)
+      const mins = Math.round((Date.now() - r.startedAt) / 60000)
+      const log =
+        '## سجل التشغيل الآلي (من البرنامج مو من الموديل)\n' +
+        '- حالة الإنجاز: ' + completionStatus(r.content) + '\n' +
+        '- المدة الفعلية: ' + mins + ' دقيقة\n' +
+        '- المحرّك اللي أنهى: ' + (r.modelDetail || r.engine || r.modelUsed) + '\n' +
+        '- تحويلات/فشل (' + (r.failures || []).length + '):\n' +
+        ((r.failures || []).slice(-10).map((x) => '  - ' + x.model + ': ' + x.reason.replace(/\s+/g, ' ').slice(0, 160)).join('\n') || '  - ما في') + '\n' +
+        '- ملفات فاضية بأسماء شظايا نُقلت لـ _zero-byte-quarantine: ' + (moved.length ? moved.join(', ') : 'ما في') + '\n'
+      const where = appendRunLog(proj.path, log)
+      if (where) r.content += '\n\n(السجل الآلي انضاف لـ ' + where + (moved.length ? '، ونُقل ' + moved.length + ' ملف فاضي للحجر' : '') + ')'
+    }
+    if (action && r.success && fails.length) {
+      const lines = fails.slice(-10).map((x) => '- ' + x.model + ': ' + x.reason.replace(/\s+/g, ' ').slice(0, 140))
+      r.content +=
+        '\n\n---\nسجل التشغيل (آلي من البرنامج، مو من الموديل):\n' +
+        'اللي كمّل وأنهى: ' + (r.modelDetail || r.modelUsed) + '\n' +
+        'محاولات فاشلة/تحويلات (' + fails.length + '):\n' + lines.join('\n') +
+        '\nإذا في تعارض بين كلام الموديل فوق وهالسجل، صدّق السجل وافحص الملفات الفعلية.'
+    }
+  } catch {
+    /* report is best-effort */
+  }
+  return r
+}
+
+async function executeWithFallbackInner(
   models: string[],
   userInput: string,
   _analysis: Analysis,
@@ -140,8 +235,15 @@ export async function executeWithFallback(
     calls.slice(-8).map((c) => c.key.slice(0, 160) + ' => ' + c.out.slice(0, 160).replace(/\s+/g, ' ')).join(' | ') + '. Continue from the current state and finish the job.'
   let lastFailed: { content: string; model: string; reason: string } | null = null
   let freeLimitNoted = false
+  let weakSkipped = false
+  let strongFailed = false
   while (queue.length) {
     const model = queue.shift() as string
+    // 5.14.0: بعد ما تفشل محرّكات CLI القوية بنص مهمة تنفيذ، موديل custom/ضعيف ما بيكمّل (هيك خرّب Run 1): بنوقف بتقرير صادق
+    if (strongFailed && model.startsWith(CUSTOM_PREFIX)) {
+      failures.push({ model, reason: 'تخطّيناه عمداً: المحرّكات القوية فشلت بنص مهمة تنفيذ طويلة، وموديل custom ما بيكمّلها لأنو خرّب شغل سابق. أعد المحاولة لما ترجع المحرّكات القوية (الحالة محفوظة بملفات المشروع و STATE.md).' })
+      continue
+    }
     const blocked = modelBlockReason(model)
     if (blocked) {
       if (blocked === 'free-daily-limit' && !freeLimitNoted) {
@@ -156,6 +258,12 @@ export async function executeWithFallback(
       failures.push({ model, reason: 'موديل صغير (أقل من 4B) ما بيمسك الأدوات، تخطّيناه (الموديلات الصغيرة بس للأوامر البسيطة بدون أدوات، مو للشغل الحقيقي)' })
       continue
     }
+    // Action tasks (tools / file / device work) must never silently land on a weak model: skip it with a visible reason when stronger ones exist.
+    if ((toolset?.defs.length || opts.requireTools) && models.length > 1 && !isCliModel(model) && isWeakForActions(model)) {
+      failures.push({ model, reason: 'موديل ضعيف لمهام التنفيذ، تخطّيناه عمداً (ما بنخلي مهمة تنفيذ تنزل لموديل ما بيمسك الأدوات)' })
+      weakSkipped = true
+      continue
+    }
     triedModels.push(model)
     skipModel = false
     try {
@@ -164,6 +272,61 @@ export async function executeWithFallback(
       if (isCliModel(model)) {
         const t0 = Date.now()
         const alias = cliModelAlias(model)
+        // Action tasks: the official CLI (Claude Code / Codex) runs the whole job itself with its own tools, signed in with the account.
+        if (isAgentEngine(model) && (toolset?.defs.length || opts.requireTools)) {
+          const engProg: string[] = []
+          let engHandoff = ''
+          const runEngine = (m: string): Promise<{ text: string; model?: string; tools: string[] }> => {
+            const p = buildCliPrompt(undefined, history, userInput)
+            const proj = activeProject()
+            const projDir = proj && fs.existsSync(proj.path) ? proj.path : undefined
+            const base = { signal, cwd: projDir, system: (systemPrompt || '') + handoff + engHandoff, onProgress: (t: string): void => { engProg.push(t); if (engProg.length > 30) engProg.shift(); emitAgent(m, 'منفّذ', t) } }
+            return m === CODEX_CLI || codexModelOf(m) ? runCodexAgent(p, { ...base, model: codexModelOf(m) }) : m === GEMINI_CLI ? runGeminiAgent(p, base) : runClaudeAgent(p, { ...base, model: m === model ? alias : undefined, effort: getEffort() })
+          }
+          // The chosen engine first, then the others in the preferred order (Google, Claude, ChatGPT) if it fails.
+          let ar: { text: string; model?: string; tools: string[] } | null = null
+          // Executor role (Settings > roles): when set, the action engine runs first; the chat model is the fallback.
+          const roleExec = getRoles().executor
+          const execEngine = roleExec !== 'auto' && isAgentEngine(roleExec) ? roleExec : model
+          let usedEng = execEngine
+          let lastErr: unknown = null
+          for (const eng of [execEngine, ...ENGINE_ORDER.filter((e) => e !== execEngine && !(e === 'cli:claude' && model.startsWith('cli:claude')))]) {
+            try {
+              if (eng !== model) emitProgress('جرّب محرّك تاني: ' + eng)
+              ar = await runEngine(eng)
+              usedEng = eng
+              if (eng !== model) failures.push({ model, reason: 'فشل، كمّل ' + eng })
+              break
+            } catch (e) {
+              lastErr = e
+              if (signal?.aborted) throw e
+              failures.push({ model: eng, reason: String((e as Error).message).slice(0, 140) })
+              // 5.14.0: تسليم الحالة للمحرّك التالي (بدل ما يبلّش من الصفر ويخرّب)
+              engHandoff = '\n\nHANDOFF (engine switch): the previous engine (' + eng + ') stopped (' + String((e as Error).message).slice(0, 100) + ') in the middle of this same task. Its changes may already be on disk. FIRST read STATE.md in the project folder (if present) and inspect the real files; then continue from there. Do NOT restart from scratch and do NOT rewrite or shrink existing documents. Its last activity: ' + engProg.slice(-12).map((x) => x.slice(0, 140).replace(/\s+/g, ' ')).join(' | ') + '.'
+            }
+          }
+          if (!ar) {
+            handoff += engHandoff
+            strongFailed = true
+            throw lastErr instanceof Error ? lastErr : new Error('كل المحرّكات فشلت')
+          }
+          if (ar.model) modelDetail = ar.model
+          toolsUsed.push(...ar.tools)
+          emitStream('chunk', ar.text)
+          return {
+            content: ar.text,
+            modelUsed: model,
+            modelDetail,
+            engine: usedEng,
+            startedAt: t0,
+            effort: getEffort() === 'auto' ? '' : getEffort(),
+            success: true,
+            triedModels,
+            toolsUsed,
+            failures,
+            usage: { promptTokens: 0, completionTokens: Math.ceil(ar.text.length / 3.5), genMs: Date.now() - t0, estimated: true }
+          }
+        }
         const hasPc = !!toolset?.defs.some((d) => (d as { function?: { name?: string } }).function?.name?.startsWith('pc_'))
         const sysBase = (systemPrompt || '') + VERIFY_HINT + (hasPc ? PC_HINT + AGENT_HINT : '') + handoff
         if (toolset?.defs.length) {
@@ -244,11 +407,20 @@ export async function executeWithFallback(
       if (!model.startsWith(CUSTOM_PREFIX)) modelDetail = modelId
       effortApplied = Object.keys(extra).length ? getEffort() : ''
       const isEffortErr = (e: unknown): boolean => Object.keys(extra).length > 0 && [400, 422].includes((e as { status?: number })?.status ?? 0)
+      let viaOr = false
       const chat = async (params: Record<string, unknown>): Promise<OpenAI.Chat.ChatCompletion> => {
+        if (viaOr) return (await openai.chat.completions.create({ ...params, model } as never, { signal })) as OpenAI.Chat.ChatCompletion
         if (route === 'openrouter' && (model.endsWith(':free') || model === 'openrouter/free')) bumpFreeCount()
         try {
           return (await client.chat.completions.create({ ...params, ...extra } as never, { signal })) as OpenAI.Chat.ChatCompletion
         } catch (e) {
+          // Direct Gemini API may not know this model id (OpenRouter naming differs): retry the same model through OpenRouter.
+          if (route === 'gemini' && [400, 404].includes((e as { status?: number })?.status ?? 0) && !isEffortErr(e)) {
+            viaOr = true
+            extra = {}
+            effortApplied = ''
+            return (await openai.chat.completions.create({ ...params, model } as never, { signal })) as OpenAI.Chat.ChatCompletion
+          }
           if (!isEffortErr(e)) throw e
           extra = {}
           effortApplied = ''
@@ -472,6 +644,15 @@ export async function executeWithFallback(
       failures
     }
   }
+  if (weakSkipped && (toolset?.defs.length || opts.requireTools)) {
+    return {
+      content: '❌ ما قدرت نفّذ المهمة: المحرّكات القوية فشلت أو مو متاحة، وما بدي أنزّلها لموديل ضعيف يخرّب الشغل أو يقلّك "تم" وهو ما نفّذ.\nشوف سبب فشل كل محرّك بالتفاصيل، وأعد المحاولة بعد ما ترجع الحسابات (Claude / ChatGPT / مفتاح Gemini).',
+      modelUsed: 'none',
+      success: false,
+      triedModels,
+      failures
+    }
+  }
   return {
     content: 'All models failed. Please check your API keys.',
     modelUsed: 'none',
@@ -582,4 +763,11 @@ function unverifiedClaimWarning(
     `السبب: ${why}\n` +
     'الحل: غيّر الموديل لواحد بيدعم الأدوات، أو فعّل صلاحية الكتابة / التحكم بالكمبيوتر من الإعدادات، وجرّب مرة تانية.'
   )
+}
+
+// Models that cannot be trusted to drive tools: free-tier routes and small/nano variants. Strong families (gemini/gpt/claude) stay allowed.
+function isWeakForActions(model: string): boolean {
+  if (model.startsWith('custom:')) return false // the user added it himself: trust his choice
+  if (/claude|sonnet|opus|haiku/i.test(model)) return false
+  return /:free$|^openrouter\/free$|nemo|nano|tiny|small|lite/i.test(model)
 }

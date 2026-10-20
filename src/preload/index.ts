@@ -197,10 +197,29 @@ const api = {
     remove: (id: string) => ipcRenderer.invoke('schedules:remove', id),
     run: (id: string) => ipcRenderer.invoke('schedules:run', id)
   },
+  engineAccounts: {
+    status: () => ipcRenderer.invoke('accounts:status'),
+    login: (k: string) => ipcRenderer.invoke('accounts:login', k)
+  },
+  agentMode: {
+    get: () => ipcRenderer.invoke('agentMode:get'),
+    set: (v: boolean) => ipcRenderer.invoke('agentMode:set', v)
+  },
   claudeAcct: {
     get: () => ipcRenderer.invoke('claudeAcct:get'),
     set: (p: { active?: string; auto?: boolean }) => ipcRenderer.invoke('claudeAcct:set', p),
     login: () => ipcRenderer.invoke('claudeAcct:login')
+  },
+  usage: {
+    series: () => ipcRenderer.invoke('usage:series')
+  },
+  claudeUsage: {
+    get: () => ipcRenderer.invoke('claudeUsage:get'),
+    cap: (v: { capRuns?: number; capMinutes?: number }) => ipcRenderer.invoke('claudeUsage:cap', v)
+  },
+  roles: {
+    get: () => ipcRenderer.invoke('roles:get'),
+    set: (v: Record<string, string>) => ipcRenderer.invoke('roles:set', v)
   },
   effort: {
     get: () => ipcRenderer.invoke('effort:get'),

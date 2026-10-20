@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type ReactElement, type ReactNode } from 'react'
+import { UsageChart } from './UsageChart'
 import { UsagePanel } from './UsagePanel'
 import { askConfirm } from './components/confirm'
 import { Loader2, Plug, Plus, Trash2 } from 'lucide-react'
@@ -26,7 +27,7 @@ const PROVIDERS = [
   { id: 'gemini', name: 'Gemini', key: 'GEMINI_API_KEY' },
   { id: 'openai', name: 'OpenAI', key: 'OPENAI_API_KEY' },
   { id: 'anthropic', name: 'Anthropic', key: 'ANTHROPIC_API_KEY' },
-  { id: 'claude', name: 'Claude (اشتراك)' },
+  { id: 'claude', name: 'الحسابات الأساسية' },
   { id: 'local', name: 'محلي (Ollama / LM Studio)' },
   { id: 'custom', name: 'موديلات مخصصة' }
 ] as const
@@ -242,6 +243,7 @@ export function ModelsPage() {
             <>
               {head('عام: المجاني والتكلفة')}
               <SpendPanel />
+              <UsageChart />
               <p className="mt-3 text-xs text-muted">الراوتر بيجرّب الموديلات حسب الطبقة (مجاني، رخيص، قوي) وبينتقل للتالي إذا فشل واحد.</p>
             </>
           )}
@@ -252,6 +254,7 @@ export function ModelsPage() {
               <HostField id="openrouter" />
               <CatalogPanel />
               <FreeProbePanel />
+              <UsageChart />
               <h3 className="mb-2 mt-6 text-sm font-semibold text-muted">الموديلات المدمجة (حسب الطبقة)</h3>
               <div className="grid gap-3 md:grid-cols-3">
                 {BUILTIN.map((t) => (
@@ -310,7 +313,7 @@ export function ModelsPage() {
           )}
           {prov === 'claude' && (
             <>
-              {head('Claude (اشتراك)')}
+              {head('الحسابات الأساسية (غووغل / Claude / ChatGPT)')}
               <ClaudeAccountsPanel />
             </>
           )}

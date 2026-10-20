@@ -62,7 +62,7 @@ export type ScheduleInfo = {
   lastResult?: string
   lastConversationId?: string
 }
-export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number }
+export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number; pin?: boolean }
 export type ConversationSummary = {
   id: string
   title: string
@@ -345,11 +345,24 @@ declare global {
         get: () => Promise<Record<string, { value: string; default: string; custom: boolean }>>
         set: (id: string, url: string) => Promise<{ ok: boolean; error?: string; value: string }>
       }
+      engineAccounts: { status: () => Promise<{ gemini: { installed: boolean; loggedIn: boolean }; codex: { installed: boolean; loggedIn: boolean }; claude: { installed: boolean; loggedIn: boolean } }>; login: (k: string) => Promise<{ ok: boolean; error?: string }> }
+      agentMode: { get: () => Promise<boolean>; set: (v: boolean) => Promise<boolean> }
       claudeAcct: {
         get: () => Promise<{ cfg: { active: 'work' | 'personal'; auto: boolean }; work: { installed: boolean; loggedIn: boolean; email?: string; plan?: string }; personal: { installed: boolean; loggedIn: boolean; email?: string; plan?: string } }>
         set: (p: { active?: string; auto?: boolean }) => Promise<{ active: 'work' | 'personal'; auto: boolean }>
         login: () => Promise<{ ok: boolean; error?: string }>
       }
+      roles: {
+        get: () => Promise<{ manager: string; executor: string; reviewer: string }>
+        set: (v: Record<string, string>) => Promise<{ manager: string; executor: string; reviewer: string }>
+      },
+      usage: {
+        series: () => Promise<{ days: string[]; engines: { engine: string; points: { day: string; runs: number; minutes: number }[]; totalRuns: number; totalMinutes: number }[] }>
+      },
+      claudeUsage: {
+        get: () => Promise<{ runs: number; minutes: number; capRuns: number; capMinutes: number; pct: number | null }>
+        cap: (v: { capRuns?: number; capMinutes?: number }) => Promise<{ runs: number; minutes: number; capRuns: number; capMinutes: number; pct: number | null }>
+      },
       effort: {
     get: () => Promise<string>
     set: (v: string) => Promise<string>

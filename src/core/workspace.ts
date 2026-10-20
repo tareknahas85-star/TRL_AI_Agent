@@ -89,7 +89,7 @@ export function activeProject(): Project | null {
 }
 
 // ---------- Conversations ----------
-export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number }
+export type StoredMessage = { role: 'user' | 'assistant'; content: string; meta?: string; at?: number; pin?: boolean }
 export type Conversation = {
   id: string
   title: string
