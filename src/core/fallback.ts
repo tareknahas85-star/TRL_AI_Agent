@@ -2,11 +2,14 @@
 import OpenAI from 'openai'
 import fs from 'fs'
 import { dataFile } from './json-store'
-import { bumpFreeCount, modelBlockReason, noteModelFailure } from './model-health'
+import { bumpFreeCount, modelBlockReason, noteModelFailure, noteRateLimit, noteModelOk, rateLimitWaitSec } from './model-health'
+import { strongPaidModels } from './router'
+import { refuseDowngrade, STRONG_WAIT_MAX_SEC } from './strong-policy'
 import { notePinOutcome } from './free-pin'
 import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, emitAgent, currentSignal } from './progress'
+import { rotateLogFile } from './log-rotate'
 import { activeProject } from './workspace'
 import { quarantineEmptyFragments, appendRunLog } from './run-report'
 import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel } from './custom-models'
@@ -63,6 +66,7 @@ function loggedFailures(): { model: string; reason: string }[] {
   const push = arr.push.bind(arr)
   arr.push = (...items) => {
     try {
+      rotateLogFile(dataFile('router.log'))
       fs.appendFileSync(dataFile('router.log'), items.map((i) => new Date().toISOString() + ' ' + i.model + ' :: ' + i.reason.replace(/\s+/g, ' ')).join('\n') + '\n')
     } catch {
       /* logging is best-effort */
@@ -70,6 +74,14 @@ function loggedFailures(): { model: string; reason: string }[] {
     return push(...items)
   }
   return arr
+}
+
+// Waits for a cooldown to end; returns early if the user cancels the request.
+function sleepUnlessAborted(ms: number, signal?: AbortSignal): Promise<void> {
+  return new Promise((resolve) => {
+    const t = setTimeout(resolve, ms)
+    signal?.addEventListener('abort', () => { clearTimeout(t); resolve() }, { once: true })
+  })
 }
 
 export type FallbackResult = {
@@ -80,6 +92,7 @@ export type FallbackResult = {
   toolsUsed?: string[]
   usage?: { promptTokens: number; completionTokens: number; genMs: number; estimated: boolean }
   failures?: { model: string; reason: string }[]
+  policyRefused?: boolean // strong models were busy and the request was not sent to a weaker one; the user can approve it
   modelDetail?: string
   effort?: string
   engine?: string
@@ -227,6 +240,13 @@ async function executeWithFallbackInner(
 
   let skipModel = false
   const queue = [...models]
+  // Strong-first policy: a complex or action request never drops to a weaker model while a strong one is busy.
+  const strongRequired = !_analysis.allowWeaker && (_analysis.complexity === 'complex' || !!opts.requireTools)
+  const strongSet = new Set(strongPaidModels())
+  const isStrongOrTrusted = (m: string): boolean => strongSet.has(m) || isCliModel(m) || m.startsWith(CUSTOM_PREFIX)
+  const strongInList = models.filter(isStrongOrTrusted)
+  let policyWaited = false
+  let strongBlocked = false
   let handoff = ''
   let modelDetail = ''
   let effortApplied = ''
@@ -239,12 +259,38 @@ async function executeWithFallbackInner(
   let strongFailed = false
   while (queue.length) {
     const model = queue.shift() as string
+    // Strong-first policy: before trying a weaker model, check whether a strong one is busy (cooling down or failed in this request).
+    if (strongRequired) {
+      const busy = strongInList.filter((m) => rateLimitWaitSec(m) > 0 || failures.some((f) => f.model === m))
+      if (refuseDowngrade(model, strongInList, busy, isStrongOrTrusted(model))) {
+        const cooling = busy.filter((m) => rateLimitWaitSec(m) > 0)
+        const waitSec = cooling.length ? Math.max(...cooling.map((m) => rateLimitWaitSec(m))) : 0
+        // Wait once for the strong models to recover, if every busy one is cooling down and the wait is short.
+        if (!policyWaited && cooling.length === busy.length && waitSec > 0 && waitSec <= STRONG_WAIT_MAX_SEC) {
+          policyWaited = true
+          emitProgress('الموديلات القوية مشغولة، بنستنى ' + waitSec + ' ثانية ونرجع لها')
+          await sleepUnlessAborted(waitSec * 1000, signal)
+          if (signal?.aborted) break
+          queue.unshift(...cooling)
+          queue.push(model) // the weaker model goes back to the end; it is checked again and refused if strong is still busy
+          continue
+        }
+        failures.push({ model, reason: 'موديل أضعف، ما نزلنا له: الطلب معقد والموديلات القوية مشغولة' })
+        strongBlocked = true
+        continue
+      }
+    }
     // 5.14.0: بعد ما تفشل محرّكات CLI القوية بنص مهمة تنفيذ، موديل custom/ضعيف ما بيكمّل (هيك خرّب Run 1): بنوقف بتقرير صادق
     if (strongFailed && model.startsWith(CUSTOM_PREFIX)) {
       failures.push({ model, reason: 'تخطّيناه عمداً: المحرّكات القوية فشلت بنص مهمة تنفيذ طويلة، وموديل custom ما بيكمّلها لأنو خرّب شغل سابق. أعد المحاولة لما ترجع المحرّكات القوية (الحالة محفوظة بملفات المشروع و STATE.md).' })
       continue
     }
     const blocked = modelBlockReason(model)
+    if (blocked === 'rate-limited') {
+      // F07: this model hit a rate limit recently; do not spend a request on it until the cooldown ends.
+      failures.push({ model, reason: 'مشغول مؤقتاً (حد المزوّد)، ما جرّبناه لحد ما يخلص التبريد بعد ' + rateLimitWaitSec(model) + ' ثانية' })
+      continue
+    }
     if (blocked) {
       if (blocked === 'free-daily-limit' && !freeLimitNoted) {
         freeLimitNoted = true
@@ -590,6 +636,7 @@ async function executeWithFallbackInner(
       if (content) {
         console.log(`[Fallback] Success with: ${model}`)
         notePinOutcome(model, triedModels)
+        noteModelOk(model)
         // Safety net that does not depend on the model being honest: it claimed an action but used no tool.
         const warn = unverifiedClaimWarning(model, userInput, content, toolsUsed, toolset, toolsRejected && !textMode, false, history)
         if (warn) content = warn + '\n\n' + content
@@ -618,10 +665,22 @@ async function executeWithFallbackInner(
       if (signal?.aborted) break
       console.warn(`[Fallback] Failed ${model}:`, error instanceof Error ? error.message : error)
       const reason = (error instanceof Error ? error.message : String(error)).slice(0, 90)
+      noteRateLimit(model, error)
       noteModelFailure(model, error instanceof Error ? error.message : String(error))
       failures.push({ model, reason })
       emitProgress('فشل ' + model + ' — ينتقل للتالي')
       continue
+    }
+  }
+  if (strongBlocked && !toolsUsed.length) {
+    // Strong-first policy: we refused to drop to a weaker model. The UI shows a button; the user decides.
+    return {
+      content: '⏳ الطلب معقد والموديلات القوية مشغولة حالياً، ما نزّلناه لموديل أضعف عشان ما يطلع الجواب أقل من المطلوب. جرّب بعد دقيقة، أو اضغط زر "كمّل بموديل أخف" تحت إذا بدك جواب أسرع (بيكون أقل جودة).',
+      modelUsed: 'none',
+      success: false,
+      triedModels,
+      failures,
+      policyRefused: true
     }
   }
   if (lastFailed) {
@@ -647,6 +706,16 @@ async function executeWithFallbackInner(
   if (weakSkipped && (toolset?.defs.length || opts.requireTools)) {
     return {
       content: '❌ ما قدرت نفّذ المهمة: المحرّكات القوية فشلت أو مو متاحة، وما بدي أنزّلها لموديل ضعيف يخرّب الشغل أو يقلّك "تم" وهو ما نفّذ.\nشوف سبب فشل كل محرّك بالتفاصيل، وأعد المحاولة بعد ما ترجع الحسابات (Claude / ChatGPT / مفتاح Gemini).',
+      modelUsed: 'none',
+      success: false,
+      triedModels,
+      failures
+    }
+  }
+  if (failures.length && failures.every((f) => /429|rate.?limit|too many|مشغول|overload/i.test(f.reason))) {
+    // F07/F08: every candidate is rate-limited right now; say so instead of blaming the API keys.
+    return {
+      content: '⏳ كل الموديلات المتاحة مشغولة أو وصلت حد المزوّد حالياً. جرّب بعد دقيقة أو دقيقتين، أو اختار موديل ثاني من الإعدادات.',
       modelUsed: 'none',
       success: false,
       triedModels,

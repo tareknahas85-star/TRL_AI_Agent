@@ -47,6 +47,7 @@ export type Analysis = {
   skill?: string // optional imported skill picked by the maestro
   source?: string // which maestro answered: local | openrouter | fallback
   masterModel?: string
+  allowWeaker?: boolean // set only when the user approved continuing with a lighter model after a strong-model refusal
 }
 
 

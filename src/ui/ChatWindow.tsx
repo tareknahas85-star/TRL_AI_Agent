@@ -498,6 +498,7 @@ export function ChatWindow({
   }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
   const [picker, setPicker] = useState<{ value: string; label: string; tier: string }[]>([])
   const [needsChoice, setNeedsChoice] = useState(false)
+  const [policyRefused, setPolicyRefused] = useState(false)
   const [skillCard, setSkillCard] = useState<{ tools: string[]; request: string; answer: string; name: string; msg: string } | null>(null)
   const [effort, setEffortUi] = useState('auto')
   const [roles, setRolesUi] = useState<{ executor: string; reviewer: string }>({ executor: 'auto', reviewer: 'auto' })
@@ -562,7 +563,7 @@ export function ChatWindow({
     [tabId]
   )
 
-  const runRequest = async (retry: boolean, base: ChatMessage[], retryMode?: ChatMode): Promise<void> => {
+  const runRequest = async (retry: boolean, base: ChatMessage[], retryMode?: ChatMode, allowWeaker?: boolean): Promise<void> => {
     setProgress('')
     setAgents([])
     setStreamText('')
@@ -570,15 +571,17 @@ export function ChatWindow({
     partialRef.current = ''
     setRetryNote('')
     setNeedsChoice(false)
+    setPolicyRefused(false)
     setSkillCard(null)
     setLoading(true)
     let next: ChatMessage[] = base
     try {
-      const opts = { tabId, projectId: project?.id ?? null, mode: retryMode ?? mode }
+      const opts = { tabId, projectId: project?.id ?? null, mode: retryMode ?? mode, ...(allowWeaker ? { allowWeaker: true } : {}) }
       const r = retry
         ? await window.api.retryChat(opts)
         : await window.api.chat(lastUserRef.current, base.slice(0, -1).map((m) => ({ role: m.role, content: m.content })), opts)
       if (r.needsChoice) setNeedsChoice(true)
+      if (r.policyRefused) setPolicyRefused(true)
       if (r.skillHint && !r.cancelled) {
         const slug = (lastUserRef.current.match(/[A-Za-z0-9]+/g) ?? []).slice(0, 4).join('-').toLowerCase().slice(0, 40)
         setSkillCard({ tools: r.skillHint.tools, request: lastUserRef.current, answer: r.content, name: slug || 'task-' + Date.now().toString(36), msg: '' })
@@ -625,10 +628,10 @@ export function ChatWindow({
     await runRequest(false, withUser)
   }
 
-  const handleRetry = async (retryMode?: ChatMode): Promise<void> => {
+  const handleRetry = async (retryMode?: ChatMode, allowWeaker?: boolean): Promise<void> => {
     if (loading) return
     setRetrying(true)
-    await runRequest(true, messages, retryMode)
+    await runRequest(true, messages, retryMode, allowWeaker)
     setRetrying(false)
   }
 
@@ -804,12 +807,23 @@ export function ChatWindow({
         {needsChoice && !loading && (
           <div className="mx-auto mb-2 max-w-3xl rounded-card border border-warning/50 bg-warning/10 p-3 text-xs">
             <div className="mb-2 font-medium">
-              {mode.kind === 'model' ? 'الموديل المحدد ما رد.' : 'الموديلات المجانية خلصت أو ما ردت.'} شو بتحب نعمل؟
+              {policyRefused
+                ? 'الموديلات القوية مشغولة، والطلب معقد فما نزّلناه تلقائياً.'
+                : mode.kind === 'model'
+                  ? 'الموديل المحدد ما رد.'
+                  : 'الموديلات المجانية خلصت أو ما ردت.'}{' '}
+              شو بتحب نعمل؟
             </div>
             <div className="flex flex-wrap items-center gap-2">
-              <button className="rounded-full bg-primary px-3 py-1 text-white" onClick={() => handleRetry({ kind: 'auto' })}>
-                ⚡ موافق، كمّل بالمدفوع (تلقائي) — مرة وحدة
-              </button>
+              {policyRefused ? (
+                <button className="rounded-full bg-warning px-3 py-1 text-white" onClick={() => handleRetry({ kind: 'auto' }, true)}>
+                  ⬇️ موافق، كمّل بموديل أخف (جواب أسرع وأقل جودة)
+                </button>
+              ) : (
+                <button className="rounded-full bg-primary px-3 py-1 text-white" onClick={() => handleRetry({ kind: 'auto' })}>
+                  ⚡ موافق، كمّل بالمدفوع (تلقائي) — مرة وحدة
+                </button>
+              )}
               <select
                 className="rounded-full border border-outline bg-surface px-2 py-1"
                 value=""

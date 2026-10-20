@@ -7,6 +7,8 @@ import { crossedLevel, usagePct, recordClaudeRun, getClaudeUsage, setClaudeCap }
 import { getRoles, setRoles } from '../src/core/roles'
 import { workDir, quarantineEmptyFragments } from '../src/core/run-report'
 import { recordEngineRun, getEngineSeries } from '../src/core/usage-log'
+import { createStreamBatcher } from '../src/core/stream-batch'
+import { rotateLogFile, LOG_MAX_BYTES } from '../src/core/log-rotate'
 
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'trl-t-'))
 
@@ -201,4 +203,142 @@ test('F04/الأساسي: مهمة معطّلة أو قيد التنفيذ ما 
   const t = { enabled: true, kind: 'once' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, runAt }
   assert.equal(isScheduleDue({ ...t, enabled: false }, runAt, false), false)
   assert.equal(isScheduleDue(t, runAt, true), false)
+})
+
+// --- F06: backoff for failed tasks ---
+import { retryDelayMs, MAX_FAILS } from '../src/core/schedule-time'
+
+test('F06: تأخير الإعادة يتضاعف ومحدود بـ 6 ساعات', () => {
+  assert.equal(retryDelayMs(0), 0)
+  assert.equal(retryDelayMs(1), 5 * MIN)
+  assert.equal(retryDelayMs(2), 10 * MIN)
+  assert.equal(retryDelayMs(3), 20 * MIN)
+  assert.equal(retryDelayMs(4), 40 * MIN)
+  assert.equal(retryDelayMs(30), 6 * 3600000)
+})
+
+test('F06: مهمة يومية فشلت تنعاد بعد التأخير، ومهمة ما فشلت ما تنعاد', () => {
+  const slot = zonedToUtc(2026, 10, 20, 12, 0, RIY)
+  const base = { enabled: true, kind: 'daily' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, tz: RIY, lastRun: slot + 10000 }
+  assert.equal(isScheduleDue({ ...base, failStreak: 1 }, slot + 2 * MIN, false), false) // still backing off
+  assert.equal(isScheduleDue({ ...base, failStreak: 1 }, slot + 6 * MIN, false), true) // retry after 5 min
+  assert.equal(isScheduleDue({ ...base, failStreak: 0 }, slot + 6 * MIN, false), false) // no failure, no retry
+})
+
+test('F06: بعد الحد الأقصى من الفشلات ما تنعاد تلقائياً', () => {
+  const slot = zonedToUtc(2026, 10, 20, 12, 0, RIY)
+  const t = { enabled: true, kind: 'daily' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, tz: RIY, lastRun: slot + 10000, failStreak: MAX_FAILS }
+  assert.equal(isScheduleDue(t, slot + 6 * 3600000, false), false)
+})
+
+test('F06: فترة فشلت تنعاد بعد التأخير دون ما تكرر الخانة الناجحة', () => {
+  const t = { enabled: true, kind: 'interval' as const, time: '12:00', days: [], everyMin: 10, createdAt: 0, lastRun: 20 * MIN + 5000, failStreak: 1 }
+  assert.equal(isScheduleDue(t, 25 * MIN + 4000, false), false) // retry not ready yet (delay is 5 min after the failed run)
+  assert.equal(isScheduleDue(t, 25 * MIN + 5000, false), true) // exactly 5 min after the failed run: ready
+  assert.equal(isScheduleDue(t, 26 * MIN, false), true)
+})
+
+test('F06: مهمة مرة وحدة فشلت تنعاد بتأخير', () => {
+  const runAt = Date.UTC(2026, 9, 21, 9, 0)
+  const t = { enabled: true, kind: 'once' as const, time: '12:00', days: [], everyMin: 60, createdAt: 0, runAt, lastRun: runAt + 1, failStreak: 1 }
+  assert.equal(isScheduleDue(t, runAt + MIN, false), false)
+  assert.equal(isScheduleDue(t, runAt + 6 * MIN, false), true)
+})
+
+// --- F07–F08: LLM backoff + Retry-After (src/core/rate-limit.ts, pure) ---
+import { isRateLimitError, parseRetryAfterMs, cooldownMs, RL_CAP_MS } from '../src/core/rate-limit'
+
+test('F07: خطأ الحد (429/503 أو نص الحد) يُعتبر حد؛ الفوترة والرصيد لا', () => {
+  assert.equal(isRateLimitError(429, ''), true)
+  assert.equal(isRateLimitError(503, 'overloaded'), true)
+  assert.equal(isRateLimitError(undefined, 'Rate limit reached for model'), true)
+  assert.equal(isRateLimitError(400, 'bad request'), false)
+  assert.equal(isRateLimitError(429, 'insufficient credit balance'), false)
+  assert.equal(isRateLimitError(429, 'free-models-per-day'), false) // handled by the daily-limit logic
+})
+
+test('F08: Retry-After بثواني، وبتاريخ HTTP، وقيم غلط', () => {
+  const now = Date.UTC(2026, 9, 20, 10, 0, 0)
+  assert.equal(parseRetryAfterMs('120', now), 120000)
+  assert.equal(parseRetryAfterMs(new Date(now + 90000).toUTCString(), now), 90000)
+  assert.equal(parseRetryAfterMs(null, now), null)
+  assert.equal(parseRetryAfterMs('abc', now), null)
+  assert.equal(parseRetryAfterMs('0', now), 0)
+})
+
+test('F07: التبريد يتضاعف بدون Retry-After: 30ث، 60ث، 120ث … وبسقف 30 دقيقة', () => {
+  assert.equal(cooldownMs(1, null), 30000)
+  assert.equal(cooldownMs(2, null), 60000)
+  assert.equal(cooldownMs(3, null), 120000)
+  assert.equal(cooldownMs(30, null), RL_CAP_MS)
+})
+
+test('F08: Retry-After يتقدّم على الحساب الافتراضي، لكن بالسقف، وصفر يعني ما فيه قيمة', () => {
+  assert.equal(cooldownMs(1, 120000), 120000)
+  assert.equal(cooldownMs(1, 99999999), RL_CAP_MS)
+  assert.equal(cooldownMs(1, 0), 30000) // zero is not a usable value: fall back to the default
+})
+
+// --- Strong-first policy: a complex request never drops to a weaker model while a strong one is busy ---
+import { refuseDowngrade, STRONG_WAIT_MAX_SEC } from '../src/core/strong-policy'
+
+test('policy: موديل قوي ما يتمنع أبداً', () => {
+  assert.equal(refuseDowngrade('anthropic/claude', ['anthropic/claude'], ['anthropic/claude'], true), false)
+})
+
+test('policy: لو ما في قوي بالقائمة أصلاً (إعداد مجاني فقط) ما نمنع', () => {
+  assert.equal(refuseDowngrade('openrouter/free-x', [], [], false), false)
+})
+
+test('policy: موديل أضعف + قوي مشغول = ممنوع النزول', () => {
+  assert.equal(refuseDowngrade('google/gemini-cheap', ['anthropic/claude'], ['anthropic/claude'], false), true)
+})
+
+test('policy: حد الانتظار 60 ثانية', () => {
+  assert.equal(STRONG_WAIT_MAX_SEC, 60)
+})
+
+test('F30: الدفعات تحفظ الترتيب ومافي تكرار', () => {
+  const sent: string[] = []
+  const b = createStreamBatcher((k, t) => sent.push(k + ':' + (t ?? '')), 1000)
+  b.chunk('مرحبا ')
+  b.chunk('من ')
+  b.chunk('الكمبيوتر')
+  b.flush()
+  assert.deepEqual(sent, ['chunk:مرحبا من الكمبيوتر'])
+  b.flush()
+  assert.equal(sent.length, 1, 'flush بدون نص ما يرسل شي')
+})
+
+test('F30: reset يمسح النص المعلّق قبل ما يوصل (ما يطلع نص محاولة فاشلة)', () => {
+  const sent: string[] = []
+  const b = createStreamBatcher((k, t) => sent.push(k + ':' + (t ?? '')), 1000)
+  b.chunk('نص فشل')
+  b.reset()
+  b.chunk('نص جديد')
+  b.flush()
+  assert.deepEqual(sent, ['reset:', 'chunk:نص جديد'])
+})
+
+test('F30: الدفعة تنرسل تلقائياً بعد المهلة بدون flush', async () => {
+  const sent: string[] = []
+  const b = createStreamBatcher((k, t) => sent.push(k + ':' + (t ?? '')), 10)
+  b.chunk('أ')
+  b.chunk('ب')
+  await new Promise((r) => setTimeout(r, 40))
+  assert.deepEqual(sent, ['chunk:أب'])
+})
+
+test('F30: سجل أكبر من الحد يتدوّر لملف .1، والصغير ما ينقل', () => {
+  const dir = tmp()
+  const file = path.join(dir, 'router.log')
+  fs.writeFileSync(file, 'x'.repeat(200))
+  rotateLogFile(file, 100)
+  assert.equal(fs.existsSync(file + '.1'), true)
+  assert.equal(fs.existsSync(file), false)
+  fs.writeFileSync(file, 'small')
+  rotateLogFile(file, 100)
+  assert.equal(fs.readFileSync(file, 'utf8'), 'small')
+  assert.equal(LOG_MAX_BYTES, 2 * 1024 * 1024)
+  rotateLogFile(path.join(dir, 'missing.log'))
 })

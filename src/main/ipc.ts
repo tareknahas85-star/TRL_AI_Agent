@@ -33,6 +33,7 @@ import { recordTurn as recordLearning } from '../core/learning'
 import { needsFreshInfo, needsLocation } from '../core/guidance'
 import { memoryPrompt } from '../core/memory'
 import { runInContext, cancelRun, isUnattended, type RunMode } from '../core/progress'
+import { createStreamBatcher } from '../core/stream-batch'
 import { listCatalog } from '../core/catalog'
 import { CUSTOM_PREFIX, getCustomModel, listCustomModels } from '../core/custom-models'
 import { getApiKey, setApiKey } from '../store/secure-store'
@@ -162,7 +163,7 @@ export function registerIpcHandlers(): void {
     else running--
   }
 
-  type Opts = { tabId: string; projectId: string | null; mode: RunMode }
+  type Opts = { tabId: string; projectId: string | null; mode: RunMode; allowWeaker?: boolean }
 
   const runChat = async (sender: WebContents, input: string, retry: boolean, rawHistory: unknown, o: Opts) => {
     if (o.mode.kind !== 'model' && !(o.mode.kind === 'council' && o.mode.author && o.mode.critic) && !process.env.OPENROUTER_API_KEY) {
@@ -177,11 +178,12 @@ export function registerIpcHandlers(): void {
         /* window closed */
       }
     }
-    return runInContext(
+    const streamOut = createStreamBatcher((kind, t) => send('chat:stream', kind, t))
+    const out = await runInContext(
       o.tabId,
       o.mode,
       (t) => send('chat:progress', t),
-      (k, t) => send('chat:stream', k, t),
+      (k, t) => (k === 'reset' ? streamOut.reset() : streamOut.chunk(t ?? '')),
       async (signal) => {
         if (running >= MAX_PARALLEL) send('chat:progress', 'بانتظار دوره (طلبين شغالين)…')
         await acquire()
@@ -195,7 +197,7 @@ export function registerIpcHandlers(): void {
           const history: Hist = retry && prev ? prev.history : cleanHistory(rawHistory)
           const projectId = retry && prev ? prev.projectId : o.projectId
           if (retry && prev) {
-            analysis = prev.analysis
+            analysis = o.allowWeaker ? { ...prev.analysis, allowWeaker: true } : prev.analysis
             // Picking an explicit model again is a fresh choice, so earlier failures do not exclude it.
             exclude = o.mode.kind === 'model' ? prev.tried.filter((t) => t !== (o.mode as { id: string }).id) : o.mode.kind === 'council' && o.mode.author ? prev.tried.filter((t) => t !== (o.mode as { author?: string }).author) : prev.tried
             userMsg = prev.userMsg
@@ -269,7 +271,7 @@ export function registerIpcHandlers(): void {
           const warn = result.modelUsed === 'none' ? '' : claimsWarning(missingFileClaims(result.content, project?.path))
           const tl = result.toolsUsed ?? []
           const skillHint = result.modelUsed !== 'none' && !project?.confidential && o.tabId !== TG_TAB && !o.tabId.startsWith('sched-') && tl.length >= 4 ? { tools: tl } : undefined
-          return { content: result.content + warn, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none', skillHint, ...(process.env.AIR_BENCH === '1' ? { bench: getLastCouncilTrace() } : {}) }
+          return { content: result.content + warn, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none', policyRefused: !!result.policyRefused, skillHint, ...(process.env.AIR_BENCH === '1' ? { bench: getLastCouncilTrace() } : {}) }
         } catch (e) {
           if (signal.aborted) return { content: '', cancelled: true }
           return { content: 'Error: ' + (e instanceof Error ? e.message : String(e)), failed: retry }
@@ -278,14 +280,17 @@ export function registerIpcHandlers(): void {
         }
       }
     )
+    streamOut.flush()
+    return out
   }
 
   const tabOf = (o: unknown): Opts => {
-    const r = (o ?? {}) as { tabId?: unknown; projectId?: unknown; mode?: unknown }
+    const r = (o ?? {}) as { tabId?: unknown; projectId?: unknown; mode?: unknown; allowWeaker?: unknown }
     return {
       tabId: typeof r.tabId === 'string' && r.tabId ? r.tabId : 'default',
       projectId: typeof r.projectId === 'string' ? r.projectId : null,
-      mode: parseMode(r.mode)
+      mode: parseMode(r.mode),
+      allowWeaker: r.allowWeaker === true
     }
   }
 

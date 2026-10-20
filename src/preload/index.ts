@@ -4,8 +4,8 @@ import { electronAPI } from '@electron-toolkit/preload'
 // Custom APIs for renderer. All core logic (OpenRouter calls, skills, tools, key storage)
 // runs in the main process; the UI only talks to it through these calls.
 type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
-type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode }
-type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean }
+type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode; allowWeaker?: boolean }
+type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean; policyRefused?: boolean }
 
 const api = {
   chat: (userInput: string, history: { role: 'user' | 'assistant'; content: string }[] | undefined, opts: ChatOpts): Promise<ChatResult> =>
