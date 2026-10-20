@@ -4,6 +4,7 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers, hydrateEnvFromStore } from './ipc'
+import { installIpcSenderGuard } from './ipc-guard'
 import { closeAllMcp } from '../mcp/runtime'
 import { shutdownRemote } from '../remote/host'
 import { stopOwnedOllama } from '../core/ollama'
@@ -92,6 +93,12 @@ app.whenReady().then(() => {
   // see https://github.com/alex8088/electron-toolkit/tree/master/packages/utils
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
+  })
+
+  // F11: every IPC sender must be the app's own renderer (before any handler is registered).
+  installIpcSenderGuard({
+    devUrl: is.dev ? process.env['ELECTRON_RENDERER_URL'] : undefined,
+    rendererDir: join(__dirname, '../renderer')
   })
 
   // IPC test

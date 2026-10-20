@@ -79,3 +79,31 @@ test('سجل الاستخدام لكل محرّك: يسجّل ويجمع، وك�
   assert.equal(s.engines.find((e) => e.engine === 'cli:codex')!.totalRuns, 1)
   assert.equal(s.engines.find((e) => e.engine === 'cli:claude'), undefined)
 })
+// --- F11: IPC sender trust (src/main/ipc-trust.ts) ---
+import { pathToFileURL } from 'url'
+import { isTrustedSenderUrl } from '../src/main/ipc-trust'
+
+test('IPC: مرسل بدون عنوان مرفوض', () => {
+  assert.equal(isTrustedSenderUrl(undefined, { rendererDir: '/x' }), false)
+  assert.equal(isTrustedSenderUrl('', { rendererDir: '/x' }), false)
+})
+
+test('IPC: ملف داخل مجلد الـ renderer مقبول، وخارجه مرفوض', () => {
+  const rend = path.join(os.tmpdir(), 'rend')
+  const opts = { rendererDir: rend }
+  assert.equal(isTrustedSenderUrl(pathToFileURL(path.join(rend, 'index.html')).href, opts), true)
+  assert.equal(isTrustedSenderUrl(pathToFileURL(path.join(os.tmpdir(), 'evil', 'x.html')).href, opts), false)
+})
+
+test('IPC: اسم مجلد يبدأ بنفس الاسم (rend2) ما يخدع الفحص', () => {
+  const rend = path.join(os.tmpdir(), 'rend')
+  assert.equal(isTrustedSenderUrl(pathToFileURL(rend + '2/index.html').href, { rendererDir: rend }), false)
+})
+
+test('IPC: التطوير يقبل نفس الأصل فقط', () => {
+  const opts = { rendererDir: '/x', devUrl: 'http://localhost:5173' }
+  assert.equal(isTrustedSenderUrl('http://localhost:5173/index.html', opts), true)
+  assert.equal(isTrustedSenderUrl('http://evil.example/index.html', opts), false)
+  assert.equal(isTrustedSenderUrl('http://localhost:5173/index.html', { rendererDir: '/x' }), false)
+  assert.equal(isTrustedSenderUrl('not a url', opts), false)
+})
