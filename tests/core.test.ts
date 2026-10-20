@@ -107,3 +107,29 @@ test('IPC: التطوير يقبل نفس الأصل فقط', () => {
   assert.equal(isTrustedSenderUrl('http://localhost:5173/index.html', { rendererDir: '/x' }), false)
   assert.equal(isTrustedSenderUrl('not a url', opts), false)
 })
+
+// --- F13: atomic write (src/core/json-atomic.ts) ---
+import { writeFileAtomic } from '../src/core/json-atomic'
+
+test('F13: الكتابة الذرّية تنشئ الملف وتستبدله بدون بقايا مؤقتة', () => {
+  const dir = tmp()
+  const file = path.join(dir, 'data.json')
+  writeFileAtomic(file, '{"a":1}')
+  assert.equal(fs.readFileSync(file, 'utf-8'), '{"a":1}')
+  writeFileAtomic(file, '{"a":2}')
+  assert.equal(fs.readFileSync(file, 'utf-8'), '{"a":2}')
+  const leftovers = fs.readdirSync(dir).filter((f) => f.endsWith('.tmp'))
+  assert.deepEqual(leftovers, [])
+})
+
+test('F13: فشل الكتابة يترك الملف القديم سليماً', () => {
+  const dir = tmp()
+  const file = path.join(dir, 'data.json')
+  writeFileAtomic(file, 'OLD')
+  // Target is a directory: rename must fail, and the old content must survive.
+  const blocker = path.join(dir, 'blocked')
+  fs.mkdirSync(blocker)
+  assert.throws(() => writeFileAtomic(blocker, 'NEW'))
+  assert.equal(fs.readFileSync(file, 'utf-8'), 'OLD')
+  assert.deepEqual(fs.readdirSync(dir).filter((f) => f.endsWith('.tmp')), [])
+})
