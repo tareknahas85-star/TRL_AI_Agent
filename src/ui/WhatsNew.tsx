@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { Modal } from './components/ui'
 
-const VERSION = '5.16.2'
+const VERSION = '5.16.3'
 const SEEN = 'air.whatsnew.seen'
 const NOTES: string[] = [
   'متصفح جانبي (🌐) بجنب المحادثة. لما تسكّر اللوحة، النافذة بترجع لعرضها الأصلي.',
