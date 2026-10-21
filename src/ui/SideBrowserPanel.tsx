@@ -1,6 +1,6 @@
 // F28: side browser panel UI. The page itself is a native view drawn by the main process, below this toolbar.
 // This component draws the toolbar (address bar + actions) and the drag handle, and reports width changes.
-import { useEffect, useState, type FormEvent, type PointerEvent as ReactPointerEvent } from 'react'
+import { useEffect, useState, type FormEvent, type PointerEvent as ReactPointerEvent, type ReactElement } from 'react'
 import { ArrowRight, RotateCw, Trash2, X } from 'lucide-react'
 import { askConfirm } from './components/confirm'
 import { clampSideWidth } from '../core/side-url'
@@ -13,7 +13,7 @@ type Props = {
   onClose: () => void
 }
 
-export function SideBrowserPanel({ width, onWidthChange, onClose }: Props) {
+export function SideBrowserPanel({ width, onWidthChange, onClose }: Props): ReactElement {
   const [address, setAddress] = useState('')
   const [page, setPage] = useState<SideState>({ open: false, url: null, width, canGoBack: false })
   const [error, setError] = useState<string | null>(null)

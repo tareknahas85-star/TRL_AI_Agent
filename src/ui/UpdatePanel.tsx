@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 import { describeUpdate, type UpdateResult } from '../core/update-state'
 
-export function UpdatePanel() {
+export function UpdatePanel(): ReactElement {
   const [st, setSt] = useState({ enabled: true, version: '' })
   const [r, setR] = useState<UpdateResult | null>(null)
   const [busy, setBusy] = useState(false)
@@ -13,7 +13,7 @@ export function UpdatePanel() {
     <section className="mt-4 rounded-card border border-outline bg-surface p-4 shadow-card">
       <h3 className="text-base font-semibold">التحديثات</h3>
       <p className="mt-1 text-xs text-muted">
-        إصدارك الحالي: {st.version}. بيفحص GitHub Releases مرة باليوم (طلب واحد مجهول، ما بيبعت شي عنك). إذا لقى إصدار أجدد بيسألك: "حدّث هلأ" أو "بعدين". ما بيركّب شي إلا إذا وافقت.
+        إصدارك الحالي: {st.version}. بيفحص GitHub Releases مرة باليوم (طلب واحد مجهول، ما بيبعت شي عنك). إذا لقى إصدار أجدد بيسألك: &quot;حدّث هلأ&quot; أو &quot;بعدين&quot;. ما بيركّب شي إلا إذا وافقت.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         <label className="flex items-center gap-2">

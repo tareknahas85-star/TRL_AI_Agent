@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactElement } from 'react'
 
 type Prompt = { latest?: string; current: string; url?: string }
 type Progress = { stage: string; percent?: number; message?: string }
 
 // Asks "update now or later" when a newer version exists. Nothing installs without the "now" click.
-export function UpdatePrompt() {
+export function UpdatePrompt(): ReactElement | null {
   const [prompt, setPrompt] = useState<Prompt | null>(null)
   const [progress, setProgress] = useState<Progress | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -56,7 +56,7 @@ export function UpdatePrompt() {
         <p className="mt-2 text-sm leading-relaxed">
           الإصدار <span dir="ltr">{prompt.latest}</span> متوفر (إنت على <span dir="ltr">{prompt.current}</span>). تبي تحدّث هلأ؟
         </p>
-        <p className="mt-1 text-xs text-muted">إذا قلت "هلأ"، بينزّل التحديث وبيعيد تشغيل البرنامج. إذا قلت "بعدين"، بيسألك مرة تانية بعد 24 ساعة.</p>
+        <p className="mt-1 text-xs text-muted">إذا قلت &quot;هلأ&quot;، بينزّل التحديث وبيعيد تشغيل البرنامج. إذا قلت &quot;بعدين&quot;، بيسألك مرة تانية بعد 24 ساعة.</p>
 
         {label && <p className="mt-3 text-sm text-primary">{label}</p>}
         {err && <p role="alert" className="mt-3 text-sm text-danger">{err}</p>}
