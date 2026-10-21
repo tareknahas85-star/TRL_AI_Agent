@@ -74,7 +74,7 @@ export function FileChips({ text }: { text: string }) {
       </div>
       {err && <div className="mt-1 text-[11px] text-warning">{err}</div>}
       {view && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" onClick={() => setView(null)}>
+        <div data-side-overlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6" onClick={() => setView(null)}>
           <div className="flex max-h-full w-full max-w-3xl flex-col rounded-card border border-outline bg-surface shadow-card" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between gap-2 border-b border-outline px-4 py-2 text-sm">
               <span dir="ltr" className="truncate font-medium">

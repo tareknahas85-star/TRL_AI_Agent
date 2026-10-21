@@ -3,6 +3,11 @@
 
 export const STRONG_WAIT_MAX_SEC = 60 // longest we wait for a strong model's cooldown before asking the user
 
+// Whether this request must stay on strong models. The user can lift it once (allowWeaker) after a refusal.
+export function strongRequiredFor(allowWeaker: boolean, complexity: string, requireTools: boolean): boolean {
+  return !allowWeaker && (complexity === 'complex' || requireTools)
+}
+
 export function refuseDowngrade(
   _model: string,
   strongInList: string[],

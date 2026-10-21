@@ -26,8 +26,7 @@ win:
   executableName: my-ai-router
   target:
     - nsis
-    - portable
-  icon: build/icon.ico
+  icon: build/icon.png
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
@@ -65,5 +64,7 @@ appImage:
   artifactName: TRL_AI_Agent-${version}-linux.${ext}
 npmRebuild: false
 publish:
-  provider: generic
-  url: https://example.com/auto-updates
+  provider: github
+  owner: tareknahas85-star
+  repo: TRL_AI_Agent
+  releaseType: release

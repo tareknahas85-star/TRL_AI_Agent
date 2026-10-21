@@ -10,7 +10,7 @@ export function Modal({ title, onClose, children }: { title: string; onClose: ()
     return () => window.removeEventListener('keydown', h)
   }, [onClose])
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+    <div data-side-overlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
       <div
         className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-card bg-surface p-6 text-fg shadow-card ring-1 ring-outline"
         onClick={(e) => e.stopPropagation()}

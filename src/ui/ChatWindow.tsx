@@ -392,7 +392,23 @@ export function ChatWindow({
   onBusy: (b: boolean) => void
   onSaved: (id: string, title?: string) => void
 }): ReactElement {
-  const [input, setInput] = useState('')
+  // F17: the unsent draft is saved per tab as you type, so a crash or quit never loses it.
+  const draftKey = 'air.draft.v1.' + tabId
+  const [input, setInput] = useState(() => {
+    try {
+      return localStorage.getItem(draftKey) ?? ''
+    } catch {
+      return ''
+    }
+  })
+  useEffect(() => {
+    try {
+      if (input) localStorage.setItem(draftKey, input)
+      else localStorage.removeItem(draftKey)
+    } catch {
+      // storage unavailable: the draft just won't survive a restart
+    }
+  }, [input, draftKey])
   const [messages, setMessages] = useState<ChatMessage[]>(initialMessages)
   const [loading, setLoading] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)

@@ -58,7 +58,7 @@ export function CommandPalette({
   if (!open) return null
   const Icon = { page: Sparkles, chat: MessageSquare, action: SquarePen }
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4 pt-[12vh]" dir="rtl" onClick={() => setOpen(false)}>
+    <div data-side-overlay className="fixed inset-0 z-[70] flex items-start justify-center bg-black/50 p-4 pt-[12vh]" dir="rtl" onClick={() => setOpen(false)}>
       <div className="w-full max-w-lg overflow-hidden rounded-card bg-surface text-fg shadow-card ring-1 ring-outline" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-2 border-b border-outline px-4 py-3">
           <Search size={16} className="shrink-0 text-muted" />

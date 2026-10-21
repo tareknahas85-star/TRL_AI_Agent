@@ -3,11 +3,12 @@ import type { ReactElement } from 'react'
 import { askConfirm } from '../../ui/components/confirm'
 import {
   Bot, Clock, Cpu, ListChecks, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
-  Sun, Trash2, Download, Search, X, Bell, BellOff, Pencil, FolderPlus
+  Sun, Trash2, Download, Search, X, Bell, BellOff, Pencil, FolderPlus, Globe
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
 import syriaEagle from './assets/syria-eagle.svg'
 import { ChatWindow } from '../../ui/ChatWindow'
+import { SideBrowserPanel } from '../../ui/SideBrowserPanel'
 import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
@@ -22,6 +23,7 @@ import { ToolsPage } from '../../ui/ToolsPage'
 import { TodoPage } from '../../ui/TodoPage'
 import { CommandPalette } from '../../ui/CommandPalette'
 import { WhatsNew } from '../../ui/WhatsNew'
+import { UpdatePrompt } from '../../ui/UpdatePrompt'
 import { ThemeProvider, useTheme } from '../../ui/ThemeContext'
 import { Hub } from '../../ui/components/ui'
 import type { ChatMode, ConversationSummary, ProjectInfo, StoredMessage } from '../../preload/index.d'
@@ -59,7 +61,7 @@ function AboutBadge({ onSetup }: { onSetup: () => void }): ReactElement {
         </div>
       </button>
       {open && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setOpen(false)}>
+        <div data-side-overlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setOpen(false)}>
           <div className="w-[380px] max-w-[92vw] rounded-card border border-outline bg-surface p-5 shadow-card" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-start gap-3">
               <img src={appIcon} alt="" className="h-14 w-14 rounded-2xl shadow-card" />
@@ -160,6 +162,20 @@ const readSaved = (): { tabs: Omit<Tab, 'initial'>[]; active: string | null } | 
 function Shell(): ReactElement {
   const { theme, toggleTheme, palette, togglePalette } = useTheme()
   const [activeNav, setActiveNav] = useState<Nav>('chat')
+  // F28: side browser panel. Its width is kept in sync with the main process (which owns the native view).
+  const [sidePanel, setSidePanel] = useState<{ open: boolean; width: number }>({ open: false, width: 420 })
+  const toggleSidePanel = async (): Promise<void> => {
+    if (sidePanel.open) {
+      closeSidePanel()
+      return
+    }
+    const s = await window.api.side.state()
+    setSidePanel({ open: true, width: s.width })
+  }
+  const closeSidePanel = (): void => {
+    void window.api.side.close()
+    setSidePanel((p) => ({ ...p, open: false }))
+  }
   const [convs, setConvs] = useState<ConversationSummary[]>([])
   const [projects, setProjects] = useState<ProjectInfo[]>([])
   const [tabs, setTabs] = useState<Tab[]>([])
@@ -305,6 +321,12 @@ function Shell(): ReactElement {
   }
   const doCloseTab = (id: string): void => {
     const idx = tabs.findIndex((t) => t.id === id)
+    // F17: a closed tab's unsent draft goes with it.
+    try {
+      localStorage.removeItem('air.draft.v1.' + id)
+    } catch {
+      // storage unavailable: nothing to clean up
+    }
     let next = tabs.filter((t) => t.id !== id)
     if (!next.length) next = [{ id: newId(), convId: null, initial: [], projectId: null, mode: defaultMode.current, title: 'محادثة جديدة' }]
     setTabs(next)
@@ -416,7 +438,7 @@ function Shell(): ReactElement {
   }, [])
 
   return (
-    <div className="flex h-screen w-full bg-bg text-fg">
+    <div className="flex h-screen w-full bg-bg text-fg" style={{ paddingLeft: sidePanel.open ? sidePanel.width : 0 }}>
       <aside className="flex w-[280px] shrink-0 flex-col border-e border-outline bg-surface p-3">
         <AboutBadge onSetup={() => setWizard(true)} />
 
@@ -522,6 +544,9 @@ function Shell(): ReactElement {
           <button onClick={toggleTheme} title={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} aria-label={theme === 'dark' ? 'الوضع الفاتح' : 'الوضع الداكن'} className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface2">
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
+          <button onClick={() => void toggleSidePanel()} title="المتصفح الجانبي" aria-label="المتصفح الجانبي" aria-pressed={sidePanel.open} className={'flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface2 ' + (sidePanel.open ? 'bg-surface2 text-primary' : '')}>
+            <Globe size={18} />
+          </button>
           <button onClick={togglePalette} title={palette === 'syrian' ? 'الألوان الافتراضية' : 'الهوية السورية'} aria-label={palette === 'syrian' ? 'الألوان الافتراضية' : 'الهوية السورية'} className={'flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface2 ' + (palette === 'syrian' ? 'bg-surface2' : '')}>
             <img src={syriaEagle} alt="" className="h-[20px] w-[20px] object-contain" />
           </button>
@@ -545,7 +570,9 @@ function Shell(): ReactElement {
         </div>
       </aside>
 
+      {sidePanel.open && <SideBrowserPanel width={sidePanel.width} onWidthChange={(w) => setSidePanel((p) => ({ ...p, width: w }))} onClose={closeSidePanel} />}
       <main className="flex min-w-0 flex-1 flex-col">
+
         <div className="flex items-center gap-1 overflow-x-auto border-b border-outline bg-surface px-2 pt-2" role="tablist">
           {tabs.map((t) => {
             const on = t.id === activeTabId && activeNav === 'chat'
@@ -625,6 +652,7 @@ function Shell(): ReactElement {
         {activeNav === 'settings' && <Settings variant="page" />}
         <CommandPalette pages={NAV_ITEMS.map((n) => ({ id: n.id, label: n.label }))} convs={convs.map((c) => ({ id: c.id, title: c.title }))} onPage={(id) => setActiveNav(id as Nav)} onOpenConv={(id) => void openConv(id)} onNewChat={() => { newTab(null); setActiveNav('chat') }} />
         <WhatsNew />
+        <UpdatePrompt />
       </main>
       {ctx &&
         (() => {
@@ -632,7 +660,7 @@ function Shell(): ReactElement {
           if (!c) return null
           const item = 'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start hover:bg-surface2'
           return (
-            <div className="fixed inset-0 z-50" onClick={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null) }}>
+            <div data-side-overlay className="fixed inset-0 z-50" onClick={() => setCtx(null)} onContextMenu={(e) => { e.preventDefault(); setCtx(null) }}>
               <div
                 className="absolute w-56 rounded-xl border border-outline bg-surface p-1 text-sm shadow-card"
                 style={{ left: Math.max(4, Math.min(ctx.x, window.innerWidth - 232)), top: Math.max(4, Math.min(ctx.y, window.innerHeight - 300)), maxHeight: window.innerHeight - Math.max(4, Math.min(ctx.y, window.innerHeight - 300)) - 8, overflowY: 'auto' }}

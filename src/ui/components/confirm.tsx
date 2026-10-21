@@ -35,7 +35,7 @@ export function ConfirmHost() {
   })
   if (!cur) return null
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" dir="rtl" onClick={() => close(false)}>
+    <div data-side-overlay className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" dir="rtl" onClick={() => close(false)}>
       <div
         role="alertdialog"
         aria-modal="true"

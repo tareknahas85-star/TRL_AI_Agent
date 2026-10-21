@@ -9,6 +9,8 @@ import { workDir, quarantineEmptyFragments } from '../src/core/run-report'
 import { recordEngineRun, getEngineSeries } from '../src/core/usage-log'
 import { createStreamBatcher } from '../src/core/stream-batch'
 import { rotateLogFile, LOG_MAX_BYTES } from '../src/core/log-rotate'
+import { checkSideUrl, clampSideWidth, windowWidthFor } from '../src/core/side-url'
+import { interpretRelease, interpretFailure, describeUpdate, isNewer, shouldPrompt, POSTPONE_MS } from '../src/core/update-state'
 
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'trl-t-'))
 
@@ -341,4 +343,153 @@ test('F30: سجل أكبر من الحد يتدوّر لملف .1، والصغي
   assert.equal(fs.readFileSync(file, 'utf8'), 'small')
   assert.equal(LOG_MAX_BYTES, 2 * 1024 * 1024)
   rotateLogFile(path.join(dir, 'missing.log'))
+})
+
+test('F28: رابط بدون بروتوكول يصير https', () => {
+  const r = checkSideUrl('example.com/path?q=1')
+  assert.deepEqual(r, { ok: true, url: 'https://example.com/path?q=1' })
+})
+
+test('F28: http و https مقبولين', () => {
+  assert.equal(checkSideUrl('http://example.com').ok, true)
+  assert.equal(checkSideUrl('https://example.com').ok, true)
+})
+
+test('F28: بروتوكولات خطرة مرفوضة (file, javascript, data)', () => {
+  assert.equal(checkSideUrl('file:///C:/Windows/system.ini').ok, false)
+  assert.equal(checkSideUrl('javascript:alert(1)').ok, false)
+  assert.equal(checkSideUrl('data:text/html,<b>x</b>').ok, false)
+})
+
+test('F28: رابط فيه كلمة مرور مرفوض', () => {
+  const r = checkSideUrl('https://user:secret@example.com')
+  assert.equal(r.ok, false)
+})
+
+test('F28: فاضي أو طويل زيادة مرفوض', () => {
+  assert.equal(checkSideUrl('   ').ok, false)
+  assert.equal(checkSideUrl('https://example.com/' + 'a'.repeat(3000)).ok, false)
+})
+
+test('F28: نص مش رابط مرفوض', () => {
+  assert.equal(checkSideUrl('هذا مش رابط ..').ok, false)
+})
+
+test('F28: عرض اللوحة يتقيّد بحدودها فقط', () => {
+  assert.equal(clampSideWidth(100), 320)
+  assert.equal(clampSideWidth(2000), 900)
+  assert.equal(clampSideWidth(500), 500)
+})
+
+test('F28: قيمة مش رقم ترجع للحد الأدنى', () => {
+  assert.equal(clampSideWidth(Number.NaN), 320)
+})
+
+test('F28: النافذة تتوسّع لتتسع اللوحة مع الشات والشريط', () => {
+  // 900px نافذة + لوحة 420px = لازم 280 + 420 + 420 = 1120
+  assert.equal(windowWidthFor(900, 420, 1920), 1120)
+})
+
+test('F28: النافذة ما تتصغّر أبداً', () => {
+  assert.equal(windowWidthFor(1600, 420, 1920), 1600)
+})
+
+test('F28: النافذة ما تتجاوز عرض الشاشة', () => {
+  assert.equal(windowWidthFor(900, 900, 1280), 1280)
+})
+
+test('F23: الإصدار الأحدث يُعلَن كـ available مع الرابط', () => {
+  const r = interpretRelease(200, { tag_name: 'v5.17.0', html_url: 'https://github.com/x/y/releases/tag/v5.17.0' }, '5.16.0')
+  assert.equal(r.status, 'available')
+  assert.equal(r.latest, 'v5.17.0')
+  assert.equal(r.url, 'https://github.com/x/y/releases/tag/v5.17.0')
+})
+
+test('F23: نفس الإصدار أو أقدم = current', () => {
+  assert.equal(interpretRelease(200, { tag_name: 'v5.16.0' }, '5.16.0').status, 'current')
+  assert.equal(interpretRelease(200, { tag_name: 'v5.15.9' }, '5.16.0').status, 'current')
+})
+
+test('F23: 404 = لا يوجد إصدار منشور', () => {
+  assert.equal(interpretRelease(404, null, '5.16.0').status, 'no-release')
+})
+
+test('F23: 200 بدون tag_name = لا يوجد إصدار', () => {
+  assert.equal(interpretRelease(200, {}, '5.16.0').status, 'no-release')
+})
+
+test('F23: 403 مع remaining=0 = تجاوز الحد، ويقرأ وقت الإعادة', () => {
+  const r = interpretRelease(403, null, '5.16.0', { remaining: '0', reset: '1800000000' }, 0)
+  assert.equal(r.status, 'rate-limited')
+  assert.equal(r.retryAt, 1800000000 * 1000)
+})
+
+test('F23: 429 = تجاوز الحد، وبدون وقت إعادة يقدّر ساعة من الآن', () => {
+  const r = interpretRelease(429, null, '5.16.0', {}, 1000)
+  assert.equal(r.status, 'rate-limited')
+  assert.equal(r.retryAt, 1000 + 3600_000)
+})
+
+test('F23: 500 أو أي رد غير ناجح = error', () => {
+  assert.equal(interpretRelease(500, null, '5.16.0').status, 'error')
+})
+
+test('F23: انتهاء المهلة = timeout', () => {
+  const err = new Error('The operation was aborted due to timeout')
+  err.name = 'TimeoutError'
+  assert.equal(interpretFailure(err, '5.16.0').status, 'timeout')
+})
+
+test('F23: انقطاع الاتصال (fetch يرمي TypeError) = offline', () => {
+  assert.equal(interpretFailure(new TypeError('fetch failed'), '5.16.0').status, 'offline')
+})
+
+test('F23: أي خطأ آخر = error', () => {
+  assert.equal(interpretFailure(new Error('boom'), '5.16.0').status, 'error')
+})
+
+test('F23: isNewer تقارن الأرقام لا النص', () => {
+  assert.equal(isNewer('5.10.0', '5.9.0'), true)
+  assert.equal(isNewer('5.9.0', '5.10.0'), false)
+  assert.equal(isNewer('v6.0.0', '5.16.0'), true)
+  assert.equal(isNewer('5.16.0', '5.16.0'), false)
+})
+
+test('F23: كل حالة لها نص عربي مختلف وواضح', () => {
+  const statuses = ['current', 'available', 'no-release', 'rate-limited', 'offline', 'timeout', 'error'] as const
+  const texts = statuses.map((s) => describeUpdate({ status: s, current: '5.16.0', latest: 'v5.17.0' }))
+  assert.equal(new Set(texts).size, statuses.length)
+  for (const t of texts) assert.ok(t.length > 0)
+})
+
+test('F23: يسأل المستخدم فقط إذا في إصدار أجدد ومو مؤجّل', () => {
+  const avail = { status: 'available' as const, current: '5.16.0', latest: 'v5.17.0' }
+  assert.equal(shouldPrompt(avail, 0, 1000), true)
+})
+
+test('F23: ما يسأل إذا الإصدار الحالي هو الأحدث', () => {
+  assert.equal(shouldPrompt({ status: 'current', current: '5.16.0' }, 0, 1000), false)
+})
+
+test('F23: ما يسأل إذا كان المستخدم قال "بعدين" ولسا ما انتهت المهلة', () => {
+  const avail = { status: 'available' as const, current: '5.16.0', latest: 'v5.17.0' }
+  const snoozeUntil = 1000 + POSTPONE_MS
+  assert.equal(shouldPrompt(avail, snoozeUntil, 1000 + POSTPONE_MS - 1), false)
+  assert.equal(shouldPrompt(avail, snoozeUntil, 1000 + POSTPONE_MS), true)
+})
+
+test('F23: المهلة المؤجّلة = 24 ساعة', () => {
+  assert.equal(POSTPONE_MS, 24 * 3600 * 1000)
+})
+
+import { strongRequiredFor } from '../src/core/strong-policy'
+
+test('allowWeaker: الطلب المعقّد يبقى على موديلات قوية إلا إذا المستخدم وافق على الخفيف', () => {
+  assert.equal(strongRequiredFor(false, 'complex', false), true)
+  assert.equal(strongRequiredFor(true, 'complex', false), false)
+})
+
+test('allowWeaker: طلب فيه أدوات يبقى قوي حتى لو البساطة', () => {
+  assert.equal(strongRequiredFor(false, 'simple', true), true)
+  assert.equal(strongRequiredFor(false, 'simple', false), false)
 })

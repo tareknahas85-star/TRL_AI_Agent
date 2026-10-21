@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react'
-
-type R = { ok: boolean; current: string; latest?: string; newer?: boolean; url?: string; note?: string }
+import { describeUpdate, type UpdateResult } from '../core/update-state'
 
 export function UpdatePanel() {
   const [st, setSt] = useState({ enabled: true, version: '' })
-  const [r, setR] = useState<R | null>(null)
+  const [r, setR] = useState<UpdateResult | null>(null)
   const [busy, setBusy] = useState(false)
   useEffect(() => {
     window.api.update.get().then(setSt)
   }, [])
+  const isAvailable = r?.status === 'available'
   return (
     <section className="mt-4 rounded-card border border-outline bg-surface p-4 shadow-card">
       <h3 className="text-base font-semibold">التحديثات</h3>
       <p className="mt-1 text-xs text-muted">
-        إصدارك الحالي: {st.version}. بيفحص GitHub Releases مرة باليوم (طلب واحد مجهول، ما بيبعت شي عنك) وبينبّهك إذا في إصدار أجدد. ما بيركّب شي لحاله؛ بتنزّل وبتثبّت إنت.
+        إصدارك الحالي: {st.version}. بيفحص GitHub Releases مرة باليوم (طلب واحد مجهول، ما بيبعت شي عنك). إذا لقى إصدار أجدد بيسألك: "حدّث هلأ" أو "بعدين". ما بيركّب شي إلا إذا وافقت.
       </p>
       <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
         <label className="flex items-center gap-2">
@@ -29,14 +29,17 @@ export function UpdatePanel() {
           }}
           className="rounded-full border border-outline px-3 py-1.5 hover:bg-surface2 disabled:opacity-50"
         >
-          افحص هلأ
+          {busy ? 'عم يفحص…' : 'افحص هلأ'}
         </button>
         {r && (
-          <span className={r.newer ? 'text-warning' : 'text-muted'}>
-            {!r.ok ? 'تعذّر الفحص: ' + (r.note ?? '') : r.newer ? `في إصدار أجدد: ${r.latest}` : (r.note ?? 'إنت على آخر إصدار')}
+          <span
+            role="status"
+            className={r.status === 'available' ? 'text-warning' : r.status === 'current' || r.status === 'no-release' ? 'text-muted' : 'text-danger'}
+          >
+            {describeUpdate(r)}
           </span>
         )}
-        {r?.newer && r.url && (
+        {isAvailable && r.url && (
           <button onClick={() => void window.api.update.open(r.url!)} className="rounded-full bg-primary px-3 py-1.5 text-white">
             افتح صفحة التنزيل
           </button>

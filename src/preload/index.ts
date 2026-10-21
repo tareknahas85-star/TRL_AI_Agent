@@ -6,6 +6,7 @@ import { electronAPI } from '@electron-toolkit/preload'
 type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
 type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode; allowWeaker?: boolean }
 type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean; policyRefused?: boolean }
+type SideStateInfo = { open: boolean; url: string | null; width: number; canGoBack: boolean }
 
 const api = {
   chat: (userInput: string, history: { role: 'user' | 'assistant'; content: string }[] | undefined, opts: ChatOpts): Promise<ChatResult> =>
@@ -233,6 +234,23 @@ const api = {
     remove: (id: string) => ipcRenderer.invoke('projects:remove', id),
     setActive: (id: string | null) => ipcRenderer.invoke('projects:setActive', id)
   },
+  // F28: side browser panel. Its page has no preload, so only this main window can call these.
+  side: {
+    open: (url: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> => ipcRenderer.invoke('side:open', url),
+    navigate: (url: string): Promise<{ ok: true; url: string } | { ok: false; error: string }> => ipcRenderer.invoke('side:navigate', url),
+    close: (): Promise<SideStateInfo> => ipcRenderer.invoke('side:close'),
+    back: (): Promise<SideStateInfo> => ipcRenderer.invoke('side:back'),
+    reload: (): Promise<SideStateInfo> => ipcRenderer.invoke('side:reload'),
+    setWidth: (w: number): Promise<SideStateInfo> => ipcRenderer.invoke('side:setWidth', w),
+    setOverlay: (on: boolean): Promise<SideStateInfo> => ipcRenderer.invoke('side:setOverlay', on),
+    clearData: (): Promise<boolean> => ipcRenderer.invoke('side:clearData'),
+    state: (): Promise<SideStateInfo> => ipcRenderer.invoke('side:state'),
+    onChanged: (cb: (s: SideStateInfo) => void): (() => void) => {
+      const h = (_e: unknown, s: SideStateInfo): void => cb(s)
+      ipcRenderer.on('side:changed', h)
+      return () => ipcRenderer.removeListener('side:changed', h)
+    }
+  },
   files: {
     exists: (paths: string[]): Promise<boolean[]> => ipcRenderer.invoke('file:exists', paths),
     preview: (p: string) => ipcRenderer.invoke('file:preview', p),
@@ -248,6 +266,18 @@ const api = {
     get: () => ipcRenderer.invoke('update:get'),
     set: (enabled: boolean) => ipcRenderer.invoke('update:set', enabled),
     check: () => ipcRenderer.invoke('update:check'),
+    now: () => ipcRenderer.invoke('update:now'),
+    later: () => ipcRenderer.invoke('update:later'),
+    onPrompt: (cb: (p: { latest?: string; current: string; url?: string }) => void): (() => void) => {
+      const h = (_e: unknown, p: { latest?: string; current: string; url?: string }): void => cb(p)
+      ipcRenderer.on('update:prompt', h)
+      return () => ipcRenderer.removeListener('update:prompt', h)
+    },
+    onProgress: (cb: (p: { stage: string; percent?: number; message?: string }) => void): (() => void) => {
+      const h = (_e: unknown, p: { stage: string; percent?: number; message?: string }): void => cb(p)
+      ipcRenderer.on('update:progress', h)
+      return () => ipcRenderer.removeListener('update:progress', h)
+    },
     open: (url: string) => ipcRenderer.invoke('update:open', url)
   },
   transfer: {

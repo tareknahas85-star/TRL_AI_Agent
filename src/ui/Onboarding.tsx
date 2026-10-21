@@ -98,7 +98,7 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
   const ghost = btn + ' border border-outline hover:bg-surface2'
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+    <div data-side-overlay className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
       <div className="w-[480px] max-w-[94vw] rounded-card border border-outline bg-surface p-6 shadow-card">
         <div className="mb-4 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs text-muted">

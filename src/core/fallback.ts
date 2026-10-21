@@ -4,7 +4,7 @@ import fs from 'fs'
 import { dataFile } from './json-store'
 import { bumpFreeCount, modelBlockReason, noteModelFailure, noteRateLimit, noteModelOk, rateLimitWaitSec } from './model-health'
 import { strongPaidModels } from './router'
-import { refuseDowngrade, STRONG_WAIT_MAX_SEC } from './strong-policy'
+import { refuseDowngrade, STRONG_WAIT_MAX_SEC, strongRequiredFor } from './strong-policy'
 import { notePinOutcome } from './free-pin'
 import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
@@ -241,7 +241,7 @@ async function executeWithFallbackInner(
   let skipModel = false
   const queue = [...models]
   // Strong-first policy: a complex or action request never drops to a weaker model while a strong one is busy.
-  const strongRequired = !_analysis.allowWeaker && (_analysis.complexity === 'complex' || !!opts.requireTools)
+  const strongRequired = strongRequiredFor(!!_analysis.allowWeaker, _analysis.complexity, !!opts.requireTools)
   const strongSet = new Set(strongPaidModels())
   const isStrongOrTrusted = (m: string): boolean => strongSet.has(m) || isCliModel(m) || m.startsWith(CUSTOM_PREFIX)
   const strongInList = models.filter(isStrongOrTrusted)

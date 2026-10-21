@@ -1,5 +1,6 @@
 import { ElectronAPI } from '@electron-toolkit/preload'
 
+export type SideStateInfo = { open: boolean; url: string | null; width: number; canGoBack: boolean }
 export type CheckItemInfo = { id: string; label: string; state: 'ok' | 'fail' | 'skip'; message: string; ms: number }
 export type CheckResultInfo = { kind: string; items: CheckItemInfo[]; ok: number; fail: number; skipped: number; cancelled: boolean }
 export type PrefsInfo = { locationEnabled: boolean; learningEnabled: boolean; learningPaused: boolean; onboardingDone: boolean; interests: string[]; catalogEnabled: string[]; askBeforeNewTools: boolean; approvedTools: string[]; securityToolsEnabled: boolean }
@@ -240,6 +241,18 @@ declare global {
         show: () => Promise<void>
         flash: () => Promise<void>
       }
+      side: {
+        open: (url: string) => Promise<{ ok: true; url: string } | { ok: false; error: string }>
+        navigate: (url: string) => Promise<{ ok: true; url: string } | { ok: false; error: string }>
+        close: () => Promise<SideStateInfo>
+        back: () => Promise<SideStateInfo>
+        reload: () => Promise<SideStateInfo>
+        setWidth: (w: number) => Promise<SideStateInfo>
+        setOverlay: (on: boolean) => Promise<SideStateInfo>
+        clearData: () => Promise<boolean>
+        state: () => Promise<SideStateInfo>
+        onChanged: (cb: (s: SideStateInfo) => void) => () => void
+      }
       files: {
         exists: (paths: string[]) => Promise<boolean[]>
         preview: (p: string) => Promise<FilePreviewInfo>
@@ -254,7 +267,11 @@ declare global {
       update: {
         get: () => Promise<{ enabled: boolean; version: string }>
         set: (enabled: boolean) => Promise<{ enabled: boolean; version: string }>
-        check: () => Promise<{ ok: boolean; current: string; latest?: string; newer?: boolean; url?: string; note?: string }>
+        check: () => Promise<import('../core/update-state').UpdateResult>
+        now: () => Promise<{ ok: boolean; note?: string }>
+        later: () => Promise<boolean>
+        onPrompt: (cb: (p: { latest?: string; current: string; url?: string }) => void) => () => void
+        onProgress: (cb: (p: { stage: string; percent?: number; message?: string }) => void) => () => void
         open: (url: string) => Promise<boolean>
       }
       transfer: {

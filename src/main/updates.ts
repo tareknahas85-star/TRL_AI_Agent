@@ -1,40 +1,48 @@
-import { app, ipcMain, Notification, shell } from 'electron'
+import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { autoUpdater } from 'electron-updater'
 import { readJson, writeJson } from '../core/json-store'
+import { interpretRelease, interpretFailure, shouldPrompt, POSTPONE_MS, type UpdateResult } from '../core/update-state'
 
-// Update check (no silent install): asks GitHub Releases once a day for a newer version and tells you.
-// Only one anonymous GET to api.github.com; it sends nothing about you or your files.
+// Update flow:
+// 1) A daily check against GitHub Releases (one anonymous GET, sends nothing about you).
+// 2) If a newer version exists, the app ASKS: "update now" or "later". Nothing is downloaded or installed without that yes.
+// 3) "Now": download the new version, then restart and install. "Later": asked again after 24 hours.
 const REPO = 'tareknahas85-star/TRL_AI_Agent'
 const FILE = 'updates.json'
-type Cfg = { enabled: boolean; lastCheck: number; notified: string }
-type Res = { ok: boolean; current: string; latest?: string; newer?: boolean; url?: string; note?: string }
+type Cfg = { enabled: boolean; lastCheck: number; snoozeUntil: number }
 
-const cfg = (): Cfg => ({ enabled: true, lastCheck: 0, notified: '', ...readJson<Partial<Cfg>>(FILE, {}) })
-const nums = (v: string): number[] => (v.replace(/^v/i, '').match(/\d+/g) ?? []).map(Number)
-export const isNewer = (a: string, b: string): boolean => {
-  const x = nums(a)
-  const y = nums(b)
-  for (let i = 0; i < Math.max(x.length, y.length); i++) {
-    const d = (x[i] ?? 0) - (y[i] ?? 0)
-    if (d !== 0) return d > 0
-  }
-  return false
+const cfg = (): Cfg => ({ enabled: true, lastCheck: 0, snoozeUntil: 0, ...readJson<Partial<Cfg>>(FILE, {}) })
+
+// electron-updater must never download or install on its own.
+autoUpdater.autoDownload = false
+autoUpdater.autoInstallOnAppQuit = false
+
+let wantInstall = false
+
+function send(channel: string, payload: unknown): void {
+  for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send(channel, payload)
 }
 
-export async function checkUpdate(): Promise<Res> {
+export async function checkUpdate(): Promise<UpdateResult> {
   const current = app.getVersion()
   try {
     const r = await fetch(`https://api.github.com/repos/${REPO}/releases/latest`, {
       headers: { accept: 'application/vnd.github+json', 'user-agent': 'TRL_AI_Agent' },
       signal: AbortSignal.timeout(10000)
     })
-    if (r.status === 404) return { ok: true, current, newer: false, note: 'ما في إصدارات منشورة على GitHub لسا' }
-    if (!r.ok) return { ok: false, current, note: 'GitHub رد ' + r.status }
-    const j = (await r.json()) as { tag_name?: string; html_url?: string }
-    const latest = j.tag_name ?? ''
-    return { ok: true, current, latest, newer: !!latest && isNewer(latest, current), url: j.html_url }
+    let body: { tag_name?: unknown; html_url?: unknown } | null = null
+    if (r.ok) body = (await r.json()) as { tag_name?: unknown; html_url?: unknown }
+    return interpretRelease(r.status, body, current, {
+      remaining: r.headers.get('x-ratelimit-remaining'),
+      reset: r.headers.get('x-ratelimit-reset')
+    })
   } catch (e) {
-    return { ok: false, current, note: e instanceof Error ? e.message : String(e) }
+    return interpretFailure(e, current)
   }
+}
+
+function askUser(r: UpdateResult): void {
+  send('update:prompt', { latest: r.latest, current: r.current, url: r.url })
 }
 
 async function auto(): Promise<void> {
@@ -42,16 +50,35 @@ async function auto(): Promise<void> {
   if (!c.enabled || Date.now() - c.lastCheck < 22 * 3600 * 1000) return
   const r = await checkUpdate()
   const next = { ...c, lastCheck: Date.now() }
-  if (r.ok && r.newer && r.latest && c.notified !== r.latest) {
-    next.notified = r.latest
-    try {
-      new Notification({ title: 'TRL_AI_Agent: في تحديث', body: `إصدار ${r.latest} متوفر (إنت على ${r.current}). افتح الإعدادات ← عام.` }).show()
-    } catch {
-      /* notification is best effort */
-    }
-  }
+  if (shouldPrompt(r, c.snoozeUntil)) askUser(r)
   writeJson(FILE, next)
 }
+
+// Download and install progress, pushed to the window.
+autoUpdater.on('update-available', () => {
+  // Downloading starts only when the user said "now".
+  if (!wantInstall) return
+  send('update:progress', { stage: 'downloading', percent: 0 })
+  void autoUpdater.downloadUpdate().catch((err: Error) => {
+    wantInstall = false
+    send('update:progress', { stage: 'error', message: err.message })
+  })
+})
+autoUpdater.on('download-progress', (p) => send('update:progress', { stage: 'downloading', percent: Math.round(p.percent) }))
+autoUpdater.on('update-not-available', () => {
+  wantInstall = false
+  send('update:progress', { stage: 'none' })
+})
+autoUpdater.on('error', (err) => {
+  wantInstall = false
+  send('update:progress', { stage: 'error', message: err?.message ?? 'خطأ غير معروف' })
+})
+autoUpdater.on('update-downloaded', () => {
+  if (!wantInstall) return
+  send('update:progress', { stage: 'installing' })
+  // Restart now and install. The window closes, the installer runs.
+  autoUpdater.quitAndInstall(false, true)
+})
 
 export function registerUpdateHandlers(): void {
   ipcMain.handle('update:get', () => ({ enabled: cfg().enabled, version: app.getVersion() }))
@@ -62,7 +89,30 @@ export function registerUpdateHandlers(): void {
   ipcMain.handle('update:check', async () => {
     const r = await checkUpdate()
     writeJson(FILE, { ...cfg(), lastCheck: Date.now() })
+    // A manual check always shows the question, even during a snooze.
+    if (r.status === 'available') askUser(r)
     return r
+  })
+  ipcMain.handle('update:now', async () => {
+    if (!app.isPackaged) {
+      return { ok: false, note: 'التحديث من داخل البرنامج بيشتغل بالنسخة المركّبة بس، مش بوضع التطوير' }
+    }
+    wantInstall = true
+    try {
+      send('update:progress', { stage: 'checking' })
+      await autoUpdater.checkForUpdates()
+      // The rest happens in the events above: download, then install.
+      return { ok: true }
+    } catch (e) {
+      wantInstall = false
+      const message = e instanceof Error ? e.message : String(e)
+      send('update:progress', { stage: 'error', message })
+      return { ok: false, note: message }
+    }
+  })
+  ipcMain.handle('update:later', () => {
+    writeJson(FILE, { ...cfg(), snoozeUntil: Date.now() + POSTPONE_MS })
+    return true
   })
   ipcMain.handle('update:open', (_e, url: unknown) => {
     if (typeof url === 'string' && url.startsWith(`https://github.com/${REPO}/`)) void shell.openExternal(url)

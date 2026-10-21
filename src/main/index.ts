@@ -5,6 +5,8 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerIpcHandlers, hydrateEnvFromStore } from './ipc'
 import { installIpcSenderGuard } from './ipc-guard'
+import { registerSideIpc } from './side-ipc'
+import { onWindowResized } from './side-browser'
 import { closeAllMcp } from '../mcp/runtime'
 import { shutdownRemote } from '../remote/host'
 import { stopOwnedOllama } from '../core/ollama'
@@ -66,6 +68,8 @@ function createWindow(): void {
       mainWindow.hide()
     }
   })
+  // F28: keep the side browser panel sized to the window.
+  mainWindow.on('resize', () => onWindowResized(mainWindow))
 
   mainWindow.webContents.setWindowOpenHandler((details) => {
     shell.openExternal(details.url)
@@ -106,6 +110,7 @@ app.whenReady().then(() => {
 
   hydrateEnvFromStore()
   registerIpcHandlers()
+  registerSideIpc(() => mainWin)
   ipcMain.handle('app:show', () => showMain())
   ipcMain.handle('app:flash', () => {
     if (mainWin && !mainWin.isDestroyed() && !mainWin.isFocused()) mainWin.flashFrame(true)
