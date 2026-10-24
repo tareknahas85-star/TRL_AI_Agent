@@ -736,6 +736,7 @@ async function executeWithFallbackInner(
 export function calculateSavedCost(modelUsed: string, analysis: Analysis): string {
   void analysis
   // Show user how much he saved
+  if (modelUsed.startsWith('ollama:')) return 'وفرت 100% - موديل محلي على جهازك'
   if (modelUsed.includes(':free')) return 'وفرت 100% - استخدمت موديل مجاني'
   if (modelUsed.includes('flash') || modelUsed.includes('mini'))
     return 'وفرت ~80% - استخدمت موديل رخيص'

@@ -3,6 +3,7 @@ import fs from 'fs'
 import path from 'path'
 
 const BASE = 'http://127.0.0.1:11434'
+export const OLLAMA_BASE = BASE
 let owned: ChildProcess | null = null
 
 async function up(): Promise<boolean> {
@@ -89,6 +90,17 @@ export async function listOllamaModels(): Promise<string[]> {
     if (!r.ok) return []
     const j = (await r.json()) as { models?: { name: string }[] }
     return (j.models ?? []).map((m) => m.name)
+  } catch {
+    return []
+  }
+}
+
+export async function listOllamaModelsDetailed(): Promise<{ name: string; size: number }[]> {
+  try {
+    const r = await fetch(BASE + '/api/tags', { signal: AbortSignal.timeout(3000) })
+    if (!r.ok) return []
+    const j = (await r.json()) as { models?: { name: string; size?: number }[] }
+    return (j.models ?? []).map((m) => ({ name: m.name, size: m.size ?? 0 }))
   } catch {
     return []
   }

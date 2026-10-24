@@ -5,7 +5,8 @@ import { executeWithFallback, BUILD_REQ } from '../core/fallback'
 import { loadSkill } from './loader'
 import { buildToolset } from '../mcp/runtime'
 import type { Project } from '../core/workspace'
-import { currentMode } from '../core/progress'
+import { currentMode, currentSignal } from '../core/progress'
+import { isTrivialChat, localSuitable, liveContext, tryLocalChat, preferGood, noteResult } from '../core/trivial'
 import { computerEnabled } from '../computer/control'
 import { FRESH_HINT, LOCATION_HINT, SHAMI_HINT, needsFreshInfo, needsLocation } from '../core/guidance'
 
@@ -66,6 +67,21 @@ export async function executeWithSkill(userInput: string, analysis: Analysis, ex
   }
   if (exclude.length && !modelsToTry.length) {
     return { content: 'ما في موديل تاني بهالفئة لنجرّبه.', modelUsed: 'none', success: false, triedModels: [] as string[] }
+  }
+  // 5.17.3: الطلب الصغير (تحية/سؤال قصير/تاريخ/طقس) بدون أدوات: المحلي أولاً، وبعدو أول مجاني شغّال.
+  // ما بينطبق على مشروع سري ولا على موديل مختار يدوياً ولا على طلبات الملفات/التنفيذ.
+  if (!project?.confidential && !picked1 && !buildReq && (!mode || mode.kind === 'free' || mode.kind === 'auto') && isTrivialChat(userInput)) {
+    const live = await liveContext(userInput)
+    // بدون أدوات: نشيل تعليمات "استدعِ أداة" (FRESH/LOCATION) لأنها بتضلّل الموديل، والمعلومة الحيّة جاية من البرنامج.
+    const sys = systemPrompt.replace(FRESH_HINT, '').replace(LOCATION_HINT, '') + live
+    const loc = localSuitable(userInput) ? await tryLocalChat(userInput, history, sys, currentSignal()) : null
+    if (loc) {
+      const id = 'ollama:' + loc.model
+      return { content: loc.content, modelUsed: id, success: true, triedModels: [id], toolsUsed: [] as string[], failures: [] as { model: string; reason: string }[], modelDetail: loc.model + ' (محلي)', startedAt: Date.now() - loc.ms }
+    }
+    const res = await executeWithFallback(preferGood(modelsToTry), userInput, analysis, sys, null, history, {})
+    noteResult((res.failures ?? []).map((f) => f.model), res.success ? res.modelUsed : undefined)
+    return res
   }
   let toolset: Awaited<ReturnType<typeof buildToolset>> = null
   // With an active project, file tools are offered whenever the request looks project/file related, even if the master did not flag tools.

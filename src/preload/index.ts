@@ -114,6 +114,7 @@ const api = {
       openDownload: () => ipcRenderer.invoke('ollama:openDownload'),
       pull: (name: string) => ipcRenderer.invoke('ollama:pull', name),
       delete: (name: string) => ipcRenderer.invoke('ollama:delete', name),
+      setChatModel: (name: string | null): Promise<string | null> => ipcRenderer.invoke('ollama:setChatModel', name),
       onProgress: (cb: (p: { model: string; status: string; percent: number; total?: number; completed?: number }) => void) => {
         const handler = (_e: unknown, p: { model: string; status: string; percent: number; total?: number; completed?: number }): void => cb(p)
         ipcRenderer.on('ollama:progress', handler)

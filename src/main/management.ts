@@ -2,6 +2,7 @@ import { fetchRemoteModels, importRemoteModels, setCustomModelKey, setCustomMode
 import { lintSkill } from '../skills/lint'
 import { freeOnly, setFreeOnly } from '../core/spend'
 import { freeFirst, setFreeFirst } from '../core/free-provider'
+import { localChatModel, setLocalChatModel } from '../core/local-chat'
 import { apinexRefreshNow } from '../core/apinex'
 import { getRoles, setRoles } from '../core/roles'
 import { getClaudeUsage, setClaudeCap } from '../core/claude-usage'
@@ -167,8 +168,10 @@ export function registerManagementHandlers(): void {
     state: await ollamaState(),
     models: await listOllamaModels(),
     suggested: SUGGESTED_OLLAMA_MODELS,
-    downloadUrl: OLLAMA_DOWNLOAD_URL
+    downloadUrl: OLLAMA_DOWNLOAD_URL,
+    chatModel: localChatModel()
   }))
+  ipcMain.handle('ollama:setChatModel', (_e, v: unknown) => setLocalChatModel(v))
   ipcMain.handle('ollama:start', () => ensureOllama())
   ipcMain.handle('ollama:openDownload', () => shell.openExternal(OLLAMA_DOWNLOAD_URL))
   ipcMain.handle('ollama:pull', async (e, name: unknown) => {

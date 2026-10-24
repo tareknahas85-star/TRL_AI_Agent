@@ -545,6 +545,7 @@ type OllamaInfo = {
   models: string[]
   suggested: string[]
   downloadUrl: string
+  chatModel: string | null
 }
 
 // Manages Ollama from inside the app: detect, start, download and delete models.
@@ -633,6 +634,26 @@ function OllamaPanel({ onChanged }: { onChanged: () => void }): ReactElement | n
       <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-semibold text-success">Ollama شغّال</span>
         <button className={ghostBtn} disabled={busy !== null} onClick={() => void refresh()}>فحص</button>
+      </div>
+
+      <div className="space-y-1">
+        <div className="text-xs text-muted">موديل المحادثة الخفيفة (تحية، تاريخ، طقس)</div>
+        <select
+          dir="ltr"
+          className="w-full rounded-md border border-border bg-transparent px-2 py-1 font-mono text-xs"
+          value={st.chatModel === 'auto' || (st.chatModel && st.models.includes(st.chatModel)) ? st.chatModel! : ''}
+          disabled={busy !== null}
+          onChange={(e) => void window.api.models.ollama.setChatModel(e.target.value || null).then(() => refresh())}
+        >
+          <option value="">بدون محلي: أول موديل مجاني شغّال (الافتراضي)</option>
+          <option value="auto">تلقائي: البرنامج بيقيس وبيختار الأسرع من موديلاتك</option>
+          {st.models.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted">الموديلات المحلية الصغيرة (1–2B) أضعف بالعربي وبتغلط بالمعلومات، وممكن تتأخر على كرت صغير. إذا فعّلت محلي وكان بطيء أو رد غلط، البرنامج بيكمل لأول موديل مجاني تلقائياً.</p>
       </div>
 
       <div className="space-y-2">

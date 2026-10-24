@@ -199,7 +199,8 @@ declare global {
         fetchRemote: (id: string, all?: boolean) => Promise<{ ok: boolean; models?: { id: string; recommended: boolean; added: boolean; free: boolean }[]; error?: string }>
         importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => Promise<number>
   ollama: {
-    status: () => Promise<{ state: 'missing' | 'stopped' | 'running'; models: string[]; suggested: string[]; downloadUrl: string }>
+    status: () => Promise<{ state: 'missing' | 'stopped' | 'running'; models: string[]; suggested: string[]; downloadUrl: string; chatModel: string | null }>
+    setChatModel: (name: string | null) => Promise<string | null>
     start: () => Promise<boolean>
     openDownload: () => Promise<void>
     pull: (name: string) => Promise<{ ok: boolean; error?: string }>

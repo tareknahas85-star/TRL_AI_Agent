@@ -521,3 +521,95 @@ test('allowWeaker: طلب فيه أدوات يبقى قوي حتى لو البس
   assert.equal(strongRequiredFor(false, 'simple', true), true)
   assert.equal(strongRequiredFor(false, 'simple', false), false)
 })
+
+// 5.17.3: بوابة "الرسالة البسيطة" (بدون أدوات، المحلي أولاً) + ذاكرة آخر موديل نجح/فشل
+import { isTrivialChat, localSuitable, hasCjk, cityFrom, DEFAULT_CITY, pickLocalModel, noteLocal, needsNoThink, stripThink, preferGood, noteResult, resetTrivialState } from '../src/core/trivial'
+
+test('isTrivialChat: تحيات وأسئلة قصيرة بسيطة', () => {
+  for (const s of ['مرحبا', 'هلا والله', 'شو اسمك؟', 'hello', 'كيفك اليوم', 'شو هو docker؟', 'كيف الطقس', 'شو الطقس بدمشق', 'شو تاريخ اليوم', 'كم الساعة']) assert.equal(isTrivialChat(s), true, s)
+})
+
+test('isTrivialChat: أي إشارة لملف/مشروع/تنفيذ/معلومة حديثة/مرفق تمنع البسيط', () => {
+  const no = [
+    'افتح ملف README',
+    'ابني لي مشروع جديد',
+    'شغّل الأمر',
+    'اقرأ هالمجلد',
+    'راجع الكود',
+    'شو سعر الدولار اليوم؟',
+    'hi\n[ملفات مرفقة: a.txt]',
+    'run the tests',
+    'a'.repeat(120),
+    ''
+  ]
+  for (const s of no) assert.equal(isTrivialChat(s), false, s)
+})
+
+test('localSuitable: المحلي بس للمحادثة الخفيفة', () => {
+  assert.equal(localSuitable('مرحبا'), true)
+  assert.equal(localSuitable('كيف الطقس'), true)
+  assert.equal(localSuitable('شو هو docker؟'), false)
+})
+
+test('pickLocalModel: بدون ترتيب حسب الاسم: اختيار المستخدم، ثم الأسرع المقيس، ثم الأصغر حجماً', () => {
+  resetTrivialState()
+  const m = (name: string, gb: number) => ({ name, size: gb * 1e9 })
+  const list = [m('nomic-embed-text:latest', 0.2), m('big-model:9b', 5), m('tiny:1b', 1), m('mid:4b', 2.5)]
+  const t0 = 5_000_000
+  // ما في قياس: الأصغر (ويتجاهل embedding)
+  assert.equal(pickLocalModel(list, { now: t0 }), 'tiny:1b')
+  // اختيار المستخدم دايماً أول
+  assert.equal(pickLocalModel(list, { chosen: 'big-model:9b', now: t0 }), 'big-model:9b')
+  // اختيار مو موجود: بنتجاهله ونرجع للتلقائي
+  assert.equal(pickLocalModel(list, { chosen: 'gone:1b', now: t0 }), 'tiny:1b')
+  // قياس فعلي: الأسرع بيفوز حتى لو أكبر
+  noteLocal('tiny:1b', true, 4000, t0)
+  noteLocal('mid:4b', true, 900, t0)
+  assert.equal(pickLocalModel(list, { now: t0 + 1000 }), 'mid:4b')
+  // الفاشل بيتأجّل 10 دقايق وبعدين بيرجع
+  noteLocal('mid:4b', false, 0, t0 + 2000)
+  assert.equal(pickLocalModel(list, { now: t0 + 3000 }), 'tiny:1b')
+  assert.equal(pickLocalModel(list, { now: t0 + 2000 + 11 * 60_000 }), 'mid:4b')
+  // كلهم فاشلين: null (البرنامج بينزل للمجاني)
+  resetTrivialState()
+  for (const x of list.slice(1)) noteLocal(x.name, false, 0, t0)
+  assert.equal(pickLocalModel(list, { now: t0 + 1000 }), null)
+  assert.equal(pickLocalModel([], { now: t0 }), null)
+})
+
+test('needsNoThink: بس عائلة qwen3', () => {
+  assert.equal(needsNoThink('qwen3:1.7b'), true)
+  assert.equal(needsNoThink('gemma3:4b'), false)
+})
+
+test('cityFrom: بيطلع اسم المدينة من الطلب وإلا الافتراضي', () => {
+  assert.equal(cityFrom('شو الطقس بدمشق'), 'بدمشق')
+  assert.equal(cityFrom('weather in Beirut'), 'Beirut')
+  assert.equal(cityFrom('كيف الطقس'), DEFAULT_CITY)
+})
+
+test('hasCjk بيكشف الصيني/الياباني/الكوري بس مو العربي', () => {
+  assert.equal(hasCjk('الحرارة 28° 气温在25到30摄氏度之间'), true)
+  assert.equal(hasCjk('こんにちは'), true)
+  assert.equal(hasCjk('الطقس اليوم صافي 28°'), false)
+})
+
+test('stripThink يشيل بلوك التفكير', () => {
+  assert.equal(stripThink('<think>hmm\nlong</think>\n\nأهلين'), 'أهلين')
+  assert.equal(stripThink('أهلين'), 'أهلين')
+})
+
+test('preferGood: آخر ناجح بالأول، والفاشل بيتأجّل 10 دقايق، وما بيفضى القائمة', () => {
+  resetTrivialState()
+  const t0 = 1_000_000
+  const list = ['a', 'b', 'c', 'd']
+  assert.deepEqual(preferGood(list, t0), list)
+  noteResult(['a', 'b'], 'c', t0)
+  assert.deepEqual(preferGood(list, t0 + 1000), ['c', 'd'])
+  // بعد 10 دقايق الفاشلين بيرجعوا (والناجح لسا بالأول ضمن 30 دقيقة)
+  assert.deepEqual(preferGood(list, t0 + 11 * 60_000), ['c', 'a', 'b', 'd'])
+  // إذا كلهم فاشلين ما نفضّي القائمة
+  resetTrivialState()
+  noteResult(['a', 'b', 'c', 'd'], undefined, t0)
+  assert.deepEqual(preferGood(list, t0 + 1000), list)
+})
