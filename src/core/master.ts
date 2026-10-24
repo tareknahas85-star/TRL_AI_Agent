@@ -5,7 +5,7 @@ import { skillCatalog } from '../skills/loader'
 import { emitProgress, currentSignal } from './progress'
 
 // Small local maestro (Ollama). Used first when the model is installed; falls back to the OpenRouter maestros.
-const LOCAL_MASTER = 'qwen3:1.7b'
+const LOCAL_MASTER = 'qwen3:4b'
 const LOCAL_BASE = 'http://127.0.0.1:11434'
 let localCheck: { at: number; ok: boolean } = { at: 0, ok: false }
 async function localMasterAvailable(): Promise<boolean> {

@@ -22,7 +22,11 @@ const FILE = 'custom-models.json'
 const TIERS: Tier[] = ['TIER_1_FREE', 'TIER_2_CHEAP', 'TIER_3_EXPENSIVE']
 export const CUSTOM_PREFIX = 'custom:'
 
-export const listCustomModels = (): CustomModel[] => readJson<CustomModel[]>(FILE, [])
+// النماذج اللي اسمها "free/..." أو ينتهي معرّفها بـ ":free" مجانية بالتعريف.
+// نصحّح التصنيف عند القراءة، وهكذا النماذج القديمة المصنّفة TIER_2 تدخل المجاني تلقائياً.
+const isFreeByName = (model: string): boolean => /^free\//i.test(model) || /:free$/i.test(model)
+export const listCustomModels = (): CustomModel[] =>
+  readJson<CustomModel[]>(FILE, []).map((m) => (m.tier !== 'TIER_1_FREE' && isFreeByName(m.model) ? { ...m, tier: 'TIER_1_FREE' as Tier } : m))
 export const getCustomModel = (id: string): CustomModel | undefined =>
   listCustomModels().find((m) => m.id === id)
 

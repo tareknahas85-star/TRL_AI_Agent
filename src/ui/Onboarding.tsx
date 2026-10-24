@@ -117,7 +117,10 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
         {step === 0 && (
           <div className="space-y-3 text-sm">
             <div className="text-lg font-semibold">أهلاً فيك في TRL_AI_Agent</div>
-          <p className="text-muted">بخطوتين بتصير جاهز: مفتاح مجاني من OpenRouter، وبعدها بنجيب الموديلات ونفعّلها لحالها. كل شي بيبقى على جهازك.</p>
+            <p className="text-muted">البرنامج بيشتغل بمفاتيح API من حسابك انت (OpenRouter أو Google أو Claude أو ChatGPT). كل شي بيبقى على جهازك.</p>
+            <p className="rounded-card border border-warning/40 bg-warning/10 p-2 text-[11px] text-muted">
+              البرنامج ما يستعمل حسابات الاشتراك الشخصية لتسجيل الدخول، لأن شروط هالخدمات تمنع ذلك. أنت مسؤول عن الالتزام بشروط كل مزوّد وبقوانين بلدك.
+            </p>
             <label className="block">
               <span className="mb-1 block text-muted">شو بدك نناديك؟ (اختياري)</span>
               <input
@@ -140,18 +143,23 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
 
         {step === 1 && (
           <div className="space-y-3 text-sm">
-            <div className="text-lg font-semibold">مفتاح OpenRouter</div>
+            <div className="text-lg font-semibold">مفتاح OpenRouter (اختياري للبداية)</div>
+            <p className="text-muted">
+              OpenRouter بيفتح كثير موديلات بمفتاح وحدة، وفيه موديلات مجانية. ما تحتاجه إذا عندك مفتاح Google أو Claude أو ChatGPT، بتضيفه من صفحة «الموديلات».
+            </p>
             <ol className="list-decimal space-y-1 ps-5 text-muted">
               <li>
                 افتح{' '}
                 <a href="https://openrouter.ai/keys" target="_blank" rel="noreferrer" className="text-primary hover:underline" dir="ltr">
                   openrouter.ai/keys
                 </a>{' '}
-                وسجّل دخول (ببلاش).
+                وسجّل دخول.
               </li>
-              <li>دوس Create Key وانسخ المفتاح.</li>
-              <li>الصقه هون. المفتاح المجاني بيكفي للبداية مع الموديلات المجانية.</li>
+              <li>دوس Create Key وانسخ المفتاح، وألصقه هون.</li>
             </ol>
+            <p className="text-[11px] text-muted" dir="ltr">
+              Google AI Studio: aistudio.google.com · Anthropic: console.anthropic.com · OpenAI: platform.openai.com
+            </p>
             <input
               type="password"
               dir="ltr"
@@ -169,6 +177,11 @@ export function Onboarding({ onClose }: { onClose: () => void }) {
                 رجوع
               </button>
               <div className="flex gap-2">
+                {!keyOk && (
+                  <button onClick={finish} className={ghost}>
+                    تخطي، بضيفها لاحقاً
+                  </button>
+                )}
                 <button disabled={busy || !key.trim()} onClick={saveKey} className={keyOk ? ghost : primary}>
                   {busy ? 'عم أفحص…' : 'حفظ واختبار'}
                 </button>

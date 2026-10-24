@@ -571,7 +571,14 @@ async function openScanner() {
       const sc = Math.min(1, 1280 / video.videoWidth); canvas.width = Math.round(video.videoWidth * sc); canvas.height = Math.round(video.videoHeight * sc)
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
       const img = ctx.getImageData(0, 0, canvas.width, canvas.height)
-      const r = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' })
+      let r = jsQR(img.data, img.width, img.height, { inversionAttempts: 'attemptBoth' })
+      if (!r) {
+        // second pass at half size: some dense codes read better at lower resolution
+        const half = document.createElement('canvas'); half.width = Math.round(canvas.width / 2); half.height = Math.round(canvas.height / 2)
+        half.getContext('2d', { willReadFrequently: true }).drawImage(canvas, 0, 0, half.width, half.height)
+        const im2 = half.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, half.width, half.height)
+        r = jsQR(im2.data, im2.width, im2.height, { inversionAttempts: 'attemptBoth' })
+      }
       if (r && hit(r.data)) return
     }
     setTimeout(tick, 150)

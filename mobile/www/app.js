@@ -41670,7 +41670,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.10.7" : "5.10";
+  var VERSION = true ? "5.17.2" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -42761,7 +42761,15 @@
         canvas.height = Math.round(video.videoHeight * sc);
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const r = (0, import_jsqr.default)(img.data, img.width, img.height, { inversionAttempts: "attemptBoth" });
+        let r = (0, import_jsqr.default)(img.data, img.width, img.height, { inversionAttempts: "attemptBoth" });
+        if (!r) {
+          const half = document.createElement("canvas");
+          half.width = Math.round(canvas.width / 2);
+          half.height = Math.round(canvas.height / 2);
+          half.getContext("2d", { willReadFrequently: true }).drawImage(canvas, 0, 0, half.width, half.height);
+          const im2 = half.getContext("2d", { willReadFrequently: true }).getImageData(0, 0, half.width, half.height);
+          r = (0, import_jsqr.default)(im2.data, im2.width, im2.height, { inversionAttempts: "attemptBoth" });
+        }
         if (r && hit(r.data)) return;
       }
       setTimeout(tick, 150);

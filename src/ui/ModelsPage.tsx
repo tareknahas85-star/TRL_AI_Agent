@@ -23,6 +23,7 @@ const BUILTIN: { tier: Tier; models: string[] }[] = [
 const PROVIDERS = [
   { id: 'general', name: 'عام: المجاني والتكلفة' },
   { id: 'openrouter', name: 'OpenRouter', key: 'OPENROUTER_API_KEY' },
+  { id: 'apinex', name: 'APInex', key: 'APINEX_API_KEY' },
   { id: 'huggingface', name: 'Hugging Face', key: 'HUGGINGFACE_API_KEY' },
   { id: 'gemini', name: 'Gemini', key: 'GEMINI_API_KEY' },
   { id: 'openai', name: 'OpenAI', key: 'OPENAI_API_KEY' },
@@ -31,8 +32,75 @@ const PROVIDERS = [
   { id: 'local', name: 'محلي (Ollama / LM Studio)' },
   { id: 'custom', name: 'موديلات مخصصة' }
 ] as const
+// APInex: which free source goes first in the normal chat, and a manual refresh of its free list.
+function ApinexPanel() {
+  const [first, setFirst] = useState<'openrouter' | 'apinex'>('openrouter')
+  const [ids, setIds] = useState<string[]>([])
+  const [busy, setBusy] = useState(false)
+  useEffect(() => {
+    void window.api.freeFirst.get().then(setFirst)
+  }, [])
+  const choose = (v: 'openrouter' | 'apinex'): void => {
+    setFirst(v)
+    void window.api.freeFirst.set(v)
+  }
+  const refresh = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      setIds(await window.api.apinex.refresh())
+    } finally {
+      setBusy(false)
+    }
+  }
+  return (
+    <div className={`mt-3 ${cardCls}`}>
+      <h3 className="mb-2 text-sm font-semibold">أيّ مزوّد يبدأ في المحادثة العادية؟</h3>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="radio" name="freeFirst" checked={first === 'openrouter'} onChange={() => choose('openrouter')} />
+        OpenRouter أولاً (الافتراضي)
+      </label>
+      <label className="mt-1 flex items-center gap-2 text-sm">
+        <input type="radio" name="freeFirst" checked={first === 'apinex'} onChange={() => choose('apinex')} />
+        apinex أولاً
+      </label>
+      <div className="mt-3 flex items-center gap-2">
+        <button className={ghostBtn} onClick={() => void refresh()} disabled={busy}>
+          {busy ? 'جاري التحديث…' : 'تحديث قائمة apinex الآن'}
+        </button>
+        {ids.length > 0 && <span className="text-xs text-muted">{ids.length} موديل مجاني</span>}
+      </div>
+      {ids.length > 0 && (
+        <ul className="mt-2 list-disc pr-5 text-xs text-muted">
+          {ids.map((id) => (
+            <li key={id}>{id.replace('apinex:', '')}</li>
+          ))}
+        </ul>
+      )}
+      <p className="mt-2 text-xs text-muted">القائمة بتتحدث تلقائياً مرة باليوم. الموديلات اللي عليها اشتراك مستبعدة.</p>
+    </div>
+  )
+}
+
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai/'
 const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier }
+
+// شرح المفاتيح + التنبيه: البرنامج ما بيستعمل حسابات الاشتراك الشخصية، كل واحد يضيف مفاتيحه من حسابه.
+function KeysNotice(): ReactElement {
+  return (
+    <div className={`${cardCls} mb-4 space-y-2 p-4 text-[12px] leading-6`}>
+      <div className="font-semibold">كيف تجيب مفتاح لكل مزوّد</div>
+      <ul className="list-disc space-y-1 ps-5">
+        <li>Google (Gemini): مفتاح من AI Studio على aistudio.google.com ← API key. فيه طبقة مجانية، بس شوف شروطها الحالية.</li>
+        <li>Anthropic (Claude): مفتاح من console.anthropic.com ← API Keys. هذا مدفوع حسب الاستخدام.</li>
+        <li>OpenAI (ChatGPT / GPT): مفتاح من platform.openai.com ← API keys. هذا مدفوع حسب الاستخدام.</li>
+        <li>OpenRouter: مفتاح واحد يفتح كثير موديلات، وفيه موديلات مجانية (:free).</li>
+      </ul>
+      <div className="rounded-card border border-warning/40 bg-warning/10 p-2 text-[11px]">
+        البرنامج ما يستعمل حسابات الاشتراك الشخصية (Claude أو Google AI أو ChatGPT) لتسجيل الدخول، لأن شروط هالخدمات تمنع ذلك. كل مستخدم يضيف مفاتيح API الخاصة فيه من حسابه. أنت مسؤول عن الالتزام بشروط كل مزوّد، وبالقوانين المعمول فيها ببلدك. المطوّر ما يوفّر حسابات أو مفاتيح، ولا يتحمّل مسؤولية الاستخدام اللي يخالف الشروط.
+      </div>
+    </div>
+  )
+}
 
 // Manual price (USD per 1M tokens) for a custom model; empty = use the built-in table (Gemini...) or OpenRouter's price.
 function PriceRow({ m, onSaved }: { m: CustomModelInfo; onSaved: () => void }): ReactElement {
@@ -159,7 +227,8 @@ export function ModelsPage() {
               <div key={m.id} className={cardCls + ' flex flex-wrap items-center justify-between gap-3'}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold">{m.name}</span>
+                    <span className={'font-semibold' + (isLocal(m) ? ' text-success' : '')}>{m.name}</span>
+                    {isLocal(m) && <Chip cls="bg-success/15 text-success">محلي</Chip>}
                     <Chip cls={TIER_LABEL[m.tier].cls}>{TIER_LABEL[m.tier].label}</Chip>
                     {m.hasKey && <Chip>مفتاح محفوظ</Chip>}
                     <CapIcons caps={capMap[m.model] ?? guessCaps(m.model)} />
@@ -171,6 +240,20 @@ export function ModelsPage() {
                   {r && <div className={`mt-1 text-xs ${r.ok ? 'text-success' : 'text-danger'}`}>{r.ok ? '✓ ' : '✗ '}{r.message}</div>}
                 </div>
                 <div className="flex items-center gap-1">
+                  {isLocal(m) && (
+                    <button
+                      className={ghostBtn + ' text-danger'}
+                      aria-label={`حذف ${m.name}`}
+                      onClick={async () => {
+                        if (await askConfirm(`بدك تحذف الموديل ${m.name}؟`)) {
+                          await window.api.models.remove(m.id)
+                          load()
+                        }
+                      }}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
                   <button
                     className={ghostBtn + ' flex items-center gap-1'}
                     disabled={testing === m.id}
@@ -194,6 +277,7 @@ export function ModelsPage() {
                     <button className={ghostBtn} disabled={remoteBusy === m.id} onClick={() => fetchRemote(m)}>{remoteBusy === m.id ? 'عم أجلب…' : 'جلب المجانية'}</button>
                   )}
                   <button className={ghostBtn} onClick={() => { setKeyVal(''); setKeyFor(m) }}>المفتاح</button>
+                  {!isLocal(m) && (
                   <button
                     className={ghostBtn + ' text-danger'}
                     aria-label={`حذف ${m.name}`}
@@ -206,6 +290,7 @@ export function ModelsPage() {
                   >
                     <Trash2 size={14} />
                   </button>
+                  )}
                   <Toggle checked={m.enabled} label={`تفعيل ${m.name}`} onChange={async () => { await window.api.models.toggle(m.id); load() }} />
                 </div>
               </div>
@@ -219,6 +304,7 @@ export function ModelsPage() {
 
   return (
     <PageShell title="الموديلات" subtitle="اختار المزوّد من القائمة: المفتاح، الموديلات، والتجربة بمكان واحد." action={<CheckButton c={chk} label="فحص المفاتيح والموديلات" />}>
+      <KeysNotice />
       <UsagePanel />
       <CheckPanel c={chk} />
       <div className="flex items-start gap-5">
@@ -245,6 +331,16 @@ export function ModelsPage() {
               <SpendPanel />
               <UsageChart />
               <p className="mt-3 text-xs text-muted">الراوتر بيجرّب الموديلات حسب الطبقة (مجاني، رخيص، قوي) وبينتقل للتالي إذا فشل واحد.</p>
+            </>
+          )}
+          {prov === 'apinex' && (
+            <>
+              {head('APInex')}
+              <p className="mb-3 text-xs text-muted">
+                بوابة ثانية فيها موديلات مجانية بدون اشتراك. تضيف مفتاحها هون، وبتقدر تختار إذا تبدأ قبل OpenRouter أو بعده.
+              </p>
+              <KeyField name="APINEX_API_KEY" onChange={setKeyHas('APINEX_API_KEY')} />
+              <ApinexPanel />
             </>
           )}
           {prov === 'openrouter' && (
@@ -320,6 +416,7 @@ export function ModelsPage() {
           {prov === 'local' && (
             <>
               {head('محلي (Ollama / LM Studio)')}
+              <OllamaPanel onChanged={scan} />
       <div className="mb-2 flex items-center justify-between">
         <h3 className="text-sm font-semibold text-muted">موديلات محلية (Ollama / LM Studio)</h3>
         <button className={ghostBtn} onClick={scan} disabled={scanning}>{scanning ? 'عم أفحص…' : 'فحص الموديلات المحلية'}</button>
@@ -440,5 +537,172 @@ export function ModelsPage() {
         </Modal>
       )}
     </PageShell>
+  )
+}
+
+type OllamaInfo = {
+  state: 'missing' | 'stopped' | 'running'
+  models: string[]
+  suggested: string[]
+  downloadUrl: string
+}
+
+// Manages Ollama from inside the app: detect, start, download and delete models.
+function OllamaPanel({ onChanged }: { onChanged: () => void }): ReactElement | null {
+  const [st, setSt] = useState<OllamaInfo | null>(null)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [msg, setMsg] = useState('')
+  const [prog, setProg] = useState<{ model: string; status: string; percent: number } | null>(null)
+  const [custom, setCustom] = useState('')
+  const refresh = useCallback(async (): Promise<void> => {
+    setSt(await window.api.models.ollama.status())
+  }, [])
+  useEffect(() => {
+    let alive = true
+    void window.api.models.ollama.status().then((s) => { if (alive) setSt(s) })
+    const off = window.api.models.ollama.onProgress((p) => setProg(p))
+    return () => { alive = false; off() }
+
+    }, [])
+
+  const run = async (key: string, fn: () => Promise<void>): Promise<void> => {
+    setBusy(key)
+    setMsg('')
+    try {
+      await fn()
+    } finally {
+      setBusy(null)
+      setProg(null)
+    }
+    await refresh()
+    onChanged()
+  }
+  const start = (): Promise<void> =>
+    run('start', async () => {
+      const ok = await window.api.models.ollama.start()
+      setMsg(ok ? '✓ Ollama اشتغل' : '✗ ما قدرت شغّله، تأكد إنه مثبّت')
+    })
+  const pull = (name: string): Promise<void> =>
+    run('pull:' + name, async () => {
+      const r = await window.api.models.ollama.pull(name)
+      setMsg(r.ok ? '✓ تم تحميل ' + name : '✗ ' + (r.error ?? 'فشل التحميل'))
+    })
+  const del = (name: string): Promise<void> =>
+    run('del:' + name, async () => {
+      if (!(await askConfirm(`بدك تحذف ${name} من الجهاز؟`))) return
+      const r = await window.api.models.ollama.delete(name)
+      setMsg(r.ok ? '✓ تم حذف ' + name : '✗ ' + (r.error ?? 'فشل الحذف'))
+    })
+
+  if (!st) return null
+  const notice = msg && <p className={'text-xs ' + (msg.startsWith('✗') ? 'text-danger' : 'text-success')}>{msg}</p>
+
+  // Case 1: Ollama is not installed. Open the official page, never download silently.
+  if (st.state === 'missing') {
+    return (
+      <div className={cardCls + ' mb-4 space-y-2'}>
+        <p className="text-sm">Ollama مش مثبّت على جهازك.</p>
+        <div className="flex flex-wrap gap-2">
+          <button className={ghostBtn} onClick={() => void window.api.models.ollama.openDownload()}>تنزيل Ollama</button>
+          <button className={ghostBtn} onClick={() => void refresh()}>ثبّته، افحص الآن</button>
+        </div>
+        {notice}
+      </div>
+    )
+  }
+
+  // Case 2: installed but not running.
+  if (st.state === 'stopped') {
+    return (
+      <div className={cardCls + ' mb-4 space-y-2'}>
+        <p className="text-sm">Ollama مثبّت بس مش شغّال.</p>
+        <div className="flex flex-wrap gap-2">
+          <button className={ghostBtn} disabled={busy !== null} onClick={() => void start()}>
+            {busy === 'start' ? 'عم شغّل…' : 'شغّل Ollama'}
+          </button>
+        </div>
+        {notice}
+      </div>
+    )
+  }
+
+  // Case 3: running. Download, delete, and list installed models.
+  const installed = new Set(st.models)
+  return (
+    <div className={cardCls + ' mb-4 space-y-4'}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-sm font-semibold text-success">Ollama شغّال</span>
+        <button className={ghostBtn} disabled={busy !== null} onClick={() => void refresh()}>فحص</button>
+      </div>
+
+      <div className="space-y-2">
+        <div className="text-xs text-muted">تحميل موديل</div>
+        <div className="flex flex-wrap gap-2">
+          <input
+            dir="ltr"
+            value={custom}
+            onChange={(e) => setCustom(e.target.value)}
+            placeholder="مثال: qwen3:1.7b"
+            className="min-w-[12rem] flex-1 rounded-md border border-border bg-transparent px-2 py-1 font-mono text-xs"
+          />
+          <button
+            className={ghostBtn}
+            disabled={busy !== null || !custom.trim()}
+            onClick={() => void pull(custom.trim())}
+          >
+            تحميل
+          </button>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {st.suggested.map((s) => (
+            <button
+              key={s}
+              dir="ltr"
+              className={ghostBtn + ' font-mono text-xs'}
+              disabled={busy !== null || installed.has(s)}
+              onClick={() => void pull(s)}
+            >
+              {installed.has(s) ? s + ' ✓' : s}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {prog && (
+        <div className="space-y-1">
+          <div dir="ltr" className="text-xs text-muted">
+            {prog.model} · {prog.status} · {prog.percent}%
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded bg-surface-2">
+            <div className="h-full bg-success transition-all" style={{ width: prog.percent + '%' }} />
+          </div>
+        </div>
+      )}
+
+      <div className="space-y-2">
+        <div className="text-xs text-muted">الموديلات المحمّلة على جهازك</div>
+        {st.models.length === 0 ? (
+          <p className="text-xs text-muted">ما في موديلات محمّلة بعد.</p>
+        ) : (
+          <ul className="space-y-1">
+            {st.models.map((name) => (
+              <li key={name} className="flex items-center gap-3">
+                <button
+                  className={ghostBtn + ' text-danger'}
+                  aria-label={`حذف ${name}`}
+                  disabled={busy !== null}
+                  onClick={() => void del(name)}
+                >
+                  <Trash2 size={14} />
+                </button>
+                <span dir="ltr" className="truncate font-mono text-xs text-success">{name}</span>
+                <Chip cls="bg-success/15 text-success">محلي</Chip>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {notice}
+    </div>
   )
 }

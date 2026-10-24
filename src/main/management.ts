@@ -1,6 +1,8 @@
 import { fetchRemoteModels, importRemoteModels, setCustomModelKey, setCustomModelPosition } from '../core/custom-models'
 import { lintSkill } from '../skills/lint'
 import { freeOnly, setFreeOnly } from '../core/spend'
+import { freeFirst, setFreeFirst } from '../core/free-provider'
+import { apinexRefreshNow } from '../core/apinex'
 import { getRoles, setRoles } from '../core/roles'
 import { getClaudeUsage, setClaudeCap } from '../core/claude-usage'
 import { getEngineSeries } from '../core/usage-log'
@@ -10,7 +12,16 @@ import { deleteMemoryEntry, importMemory, listMemory, memoryPrompt, saveMemoryEn
 import { fetchOpenRouterModels, listCatalog, resetCatalogEnabled, setCatalogEnabled, testOpenRouterKey } from '../core/catalog'
 import { HOST_DEFAULTS, hostOf, hostsInfo, setHost, type HostId } from '../core/hosts'
 import { getApiKey } from '../store/secure-store'
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import {
+  OLLAMA_DOWNLOAD_URL,
+  SUGGESTED_OLLAMA_MODELS,
+  deleteModel,
+  ensureOllama,
+  listOllamaModels,
+  ollamaState,
+  pullModel
+} from '../core/ollama'
 import { computerState, resetComputerSession, setAutoApprove, setComputerEnabled, setFullAccess } from '../computer/control'
 import { addSchedule, listSchedules, removeSchedule, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
 import { importServers, parseAny, scanSources } from '../mcp/import'
@@ -85,6 +96,9 @@ export function registerManagementHandlers(): void {
   })
   ipcMain.handle('spend:get', () => freeOnly())
   ipcMain.handle('spend:set', (_e, on: unknown) => setFreeOnly(on !== false))
+  ipcMain.handle('freeFirst:get', () => freeFirst())
+  ipcMain.handle('freeFirst:set', (_e, v: unknown) => setFreeFirst(v === 'apinex' ? 'apinex' : 'openrouter'))
+  ipcMain.handle('apinex:refresh', () => apinexRefreshNow())
   ipcMain.handle('computer:reset', () => {
     resetComputerSession()
     return computerState()
@@ -148,6 +162,34 @@ export function registerManagementHandlers(): void {
   // ---- Custom models
   ipcMain.handle('models:list', () => listCustomModelViews())
   ipcMain.handle('models:detectLocal', () => detectLocalModels())
+  // ---- Ollama: install / start / download / delete from inside the app
+  ipcMain.handle('ollama:status', async () => ({
+    state: await ollamaState(),
+    models: await listOllamaModels(),
+    suggested: SUGGESTED_OLLAMA_MODELS,
+    downloadUrl: OLLAMA_DOWNLOAD_URL
+  }))
+  ipcMain.handle('ollama:start', () => ensureOllama())
+  ipcMain.handle('ollama:openDownload', () => shell.openExternal(OLLAMA_DOWNLOAD_URL))
+  ipcMain.handle('ollama:pull', async (e, name: unknown) => {
+    if (typeof name !== 'string' || !name.trim()) return { ok: false, error: 'اسم الموديل فاضي' }
+    const model = name.trim()
+    try {
+      await pullModel(model, (p) => e.sender.send('ollama:progress', { model, ...p }))
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
+  ipcMain.handle('ollama:delete', async (_e, name: unknown) => {
+    if (typeof name !== 'string' || !name.trim()) return { ok: false, error: 'اسم الموديل فاضي' }
+    try {
+      await deleteModel(name.trim())
+      return { ok: true }
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) }
+    }
+  })
   ipcMain.handle('models:fetchRemote', (_e, id: unknown, all: unknown) =>
     typeof id === 'string' ? fetchRemoteModels(id, all === true) : { ok: false, error: 'bad id' }
   )
@@ -288,7 +330,7 @@ export function registerManagementHandlers(): void {
       const r = await fetch('http://127.0.0.1:11434/api/tags', { signal: AbortSignal.timeout(1500) })
       const j = (await r.json()) as { models?: { name: string }[] }
       ollama = true
-      localMaster = !!j.models?.some((m) => m.name === 'qwen3:1.7b')
+      localMaster = !!j.models?.some((m) => m.name === 'qwen3:4b')
     } catch {
       /* ollama not running */
     }

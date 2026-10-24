@@ -12,7 +12,7 @@ const ago = (t: number): string => {
 export function RemotePanel() {
   const [st, setSt] = useState<RemoteInfo>(EMPTY)
   const [relay, setRelay] = useState('')
-  const [qr, setQr] = useState<{ img: string; exp: number } | null>(null)
+  const [qr, setQr] = useState<{ img: string; exp: number; text: string } | null>(null)
   const [left, setLeft] = useState(0)
   const [sas, setSas] = useState<{ sas: string; name: string } | null>(null)
   const [msg, setMsg] = useState('')
@@ -68,7 +68,7 @@ export function RemotePanel() {
     const r = await window.api.remote.pairStart()
     if (!r.ok) return setMsg(r.error)
     pairingRef.current = true
-    setQr({ img: r.qr, exp: r.exp })
+    setQr({ img: r.qr, exp: r.exp, text: r.text })
     setLeft(Math.round((r.exp - Date.now()) / 1000))
   }
 
@@ -141,11 +141,29 @@ export function RemotePanel() {
 
           {qr && (
             <div className="mt-3 flex flex-wrap items-center gap-4 rounded-lg border border-outline bg-bg p-3">
-              <img src={qr.img} alt="QR" className="h-80 w-80 rounded bg-white p-1" style={{ imageRendering: 'pixelated' }} />
-              <div className="text-xs text-muted">
+              <img src={qr.img} alt="QR" className="rounded bg-white p-2" style={{ width: 480, height: 480, imageRendering: 'pixelated' }} />
+              <div className="min-w-0 flex-1 text-xs text-muted">
                 افتح تطبيق الموبايل وامسح هالـ QR. بيخلص بعد <b className="text-fg">{left}</b> ثانية، وبينفع مرة وحدة بس.
                 <br />
                 تأكد إنو التلفون عالـ Wi-Fi نفسو.
+                <div className="mt-3 text-fg">ما قدرت تمسحو؟ استعمل الرمز كنص:</div>
+                <div className="mt-1 flex items-start gap-2">
+                  <textarea
+                    dir="ltr"
+                    readOnly
+                    value={qr.text}
+                    onFocus={(e) => e.currentTarget.select()}
+                    rows={3}
+                    className="min-w-0 flex-1 resize-none rounded-lg border border-outline bg-surface px-2 py-1 font-mono text-[10px] text-fg"
+                  />
+                  <button
+                    onClick={() => void navigator.clipboard.writeText(qr.text).then(() => setMsg('تم نسخ الرمز ✅'))}
+                    className="shrink-0 rounded-full border border-outline px-3 py-1.5 text-fg hover:bg-surface2"
+                  >
+                    نسخ
+                  </button>
+                </div>
+                <div className="mt-2">على التلفون: «لصق الرمز كنص» وبعدين الصقو. كود التوثيق (6 أرقام) بيظهر لما التلفون يتصل، مش قبل.</div>
               </div>
             </div>
           )}

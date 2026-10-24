@@ -6,6 +6,7 @@ import { executeWithSkill } from '../skills/executor'
 import { runCouncil, resetCouncilTrace, getLastCouncilTrace, type CouncilInfo } from '../core/council'
 import { CLAUDE_CLI, CLAUDE_CLI_MODELS, claudeCliPath, cliModelName, isCliModel } from '../core/cli-models'
 import { CODEX_CLI, CODEX_MODEL_PREFIX, GEMINI_CLI, codexCliPath, codexModelsList, geminiCliPath } from '../core/cli-agent'
+import { subscriptionEnginesEnabled } from '../core/feature-flags'
 import { registerManagementHandlers } from './management'
 import { activeProject, getConversation, listProjects, saveConversation } from '../core/workspace'
 import { listAgents } from '../core/agents'
@@ -35,10 +36,10 @@ import { memoryPrompt } from '../core/memory'
 import { runInContext, cancelRun, isUnattended, type RunMode } from '../core/progress'
 import { createStreamBatcher } from '../core/stream-batch'
 import { listCatalog } from '../core/catalog'
-import { CUSTOM_PREFIX, getCustomModel, listCustomModels } from '../core/custom-models'
+import { CUSTOM_PREFIX, getCustomModel, listCustomModelViews } from '../core/custom-models'
 import { getApiKey, setApiKey } from '../store/secure-store'
 
-const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY', 'VIRUSTOTAL_API_KEY'] as const
+const KEY_NAMES = ['OPENROUTER_API_KEY', 'APINEX_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY', 'VIRUSTOTAL_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
 
 function isKeyName(k: unknown): k is KeyName {
@@ -118,19 +119,22 @@ export function registerIpcHandlers(): void {
   const lastRuns = new Map<string, LastRun>()
 
   // Models the user may pick explicitly in a tab (enabled custom models + enabled catalog models).
-  type PickerItem = { value: string; label: string; tier: string }
+  type PickerItem = { value: string; label: string; tier: string; keyed?: boolean }
+  // الموديل المحلي = سيرفر على جهازك (Ollama أو LM Studio). بنعرضو بفئة «محلي» بالقائمة بس، والتوجيه بيضل يستعمل الفئة الأصلية.
+  const isLocalBase = (u?: string): boolean => /localhost|127\.0\.0\.1|:11434|:1234/i.test(u ?? '')
   const pickerModels = (): PickerItem[] => [
-    ...listCustomModels()
+    // keyed: هل الموديل عنده مفتاح محفوظ (الواجهة تستخدمها لخيارات المنفّذ والمراجع في وضع بناء المشروع)
+    ...listCustomModelViews()
       .filter((m) => m.enabled)
-      .map((m) => ({ value: CUSTOM_PREFIX + m.id, label: m.name, tier: m.tier })),
+      .map((m) => ({ value: CUSTOM_PREFIX + m.id, label: m.name, tier: isLocalBase(m.baseURL) ? 'LOCAL' : m.tier, keyed: m.hasKey })),
     ...listCatalog()
       .models.filter((m) => m.enabled)
       .map((m) => ({ value: m.id, label: m.name || m.id, tier: m.tier })),
-    // Subscription accounts through their official CLI (only offered when the tool is installed).
-    ...(geminiCliPath() ? [{ value: GEMINI_CLI, label: 'Gemini (حساب غووغل)', tier: 'SUBSCRIPTION' }] : []),
-    ...(codexCliPath() ? [{ value: CODEX_CLI, label: 'ChatGPT Codex (حسابك، الافتراضي)', tier: 'SUBSCRIPTION' }] : []),
-    ...(codexCliPath() ? codexModelsList().map((slug) => ({ value: CODEX_MODEL_PREFIX + slug, label: 'ChatGPT Codex: ' + slug, tier: 'SUBSCRIPTION' })) : []),
-    ...(claudeCliPath() ? [CLAUDE_CLI, ...CLAUDE_CLI_MODELS.map((x) => x.id)].map((id) => ({ value: id, label: cliModelName(id), tier: 'SUBSCRIPTION' })) : [])
+    // Subscription accounts through their official CLI: hidden unless TRL_DEV_SUBSCRIPTION_ENGINES=1 (انظر feature-flags.ts).
+    ...(subscriptionEnginesEnabled() && geminiCliPath() ? [{ value: GEMINI_CLI, label: 'Gemini (حساب غووغل)', tier: 'SUBSCRIPTION' }] : []),
+    ...(subscriptionEnginesEnabled() && codexCliPath() ? [{ value: CODEX_CLI, label: 'ChatGPT Codex (حسابك، الافتراضي)', tier: 'SUBSCRIPTION' }] : []),
+    ...(subscriptionEnginesEnabled() && codexCliPath() ? codexModelsList().map((slug) => ({ value: CODEX_MODEL_PREFIX + slug, label: 'ChatGPT Codex: ' + slug, tier: 'SUBSCRIPTION' })) : []),
+    ...(subscriptionEnginesEnabled() && claudeCliPath() ? [CLAUDE_CLI, ...CLAUDE_CLI_MODELS.map((x) => x.id)].map((id) => ({ value: id, label: cliModelName(id), tier: 'SUBSCRIPTION' })) : [])
   ]
   const parseMode = (raw: unknown): RunMode => {
     const r = raw as { kind?: unknown; id?: unknown } | null
@@ -166,8 +170,20 @@ export function registerIpcHandlers(): void {
   type Opts = { tabId: string; projectId: string | null; mode: RunMode; allowWeaker?: boolean }
 
   const runChat = async (sender: WebContents, input: string, retry: boolean, rawHistory: unknown, o: Opts) => {
-    if (o.mode.kind !== 'model' && !(o.mode.kind === 'council' && o.mode.author && o.mode.critic) && !process.env.OPENROUTER_API_KEY) {
-      return { content: 'Error: OPENROUTER_API_KEY is missing. Add it in Settings or in .env.', failed: true }
+    // OpenRouter اختياري (انظر Onboarding): نكتفي بوجود أي مسار قابل للتشغيل، مش بمفتاح OpenRouter لحاله.
+    const hasAnyRoute =
+      !!process.env.OPENROUTER_API_KEY ||
+      !!process.env.APINEX_API_KEY ||
+      !!process.env.GEMINI_API_KEY ||
+      !!process.env.OPENAI_API_KEY ||
+      listCustomModelViews().some((m) => m.enabled && m.hasKey) ||
+      pickerModels().some((m) => m.tier === 'SUBSCRIPTION')
+    // المحادثة العادية: المجاني أولاً، وإذا فشل بتكمل للمدفوع. يكفيها أي مسار قابل للتشغيل.
+    if (o.mode.kind !== 'model' && !(o.mode.kind === 'council' && o.mode.author && o.mode.critic) && !hasAnyRoute) {
+      return {
+        content: 'ما في أي مفتاح أو حساب مفعّل. أضف مفتاح (OpenRouter أو apinex أو Gemini أو OpenAI أو موديل مخصص) من الإعدادات.',
+        failed: true
+      }
     }
     const prev = lastRuns.get(o.tabId)
     if (retry && !prev) return { content: 'ما في طلب سابق لنعيده.', failed: true }

@@ -1,9 +1,10 @@
 import { useEffect, useState, type ReactElement } from 'react'
 import { Modal } from './components/ui'
 
-const VERSION = '5.16.3'
+const VERSION = '5.17.2'
 const SEEN = 'air.whatsnew.seen'
 const NOTES: string[] = [
+  'النماذج المحلية صارت تنداس من داخل البرنامج: بيفحص إذا Ollama مثبّت وشغّال، وبيحمّل ويحذف الموديلات من جهازك مع شريط تقدم.',
   'متصفح جانبي (🌐) بجنب المحادثة. لما تسكّر اللوحة، النافذة بترجع لعرضها الأصلي.',
   'جدولة مهامك صارت أدق: مرة وحدة أو بفترات، ولكل مهمة منطقتها الزمنية، وإعادة محاولة تلقائية إذا فشلت.',
   'إذا وصلنا لحد المزوّد، البرنامج بيوقف مؤقتاً بدل ما يفشل، والموديلات القوية بتاخد الدور.',
@@ -53,3 +54,4 @@ export function WhatsNew(): ReactElement | null {
     </Modal>
   )
 }
+

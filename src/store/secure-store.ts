@@ -6,6 +6,7 @@ import path from 'path'
 
 type StoreSchema = {
   OPENROUTER_API_KEY: string
+  APINEX_API_KEY: string
   GEMINI_API_KEY: string
   OPENAI_API_KEY: string
   ANTHROPIC_API_KEY: string

@@ -5,7 +5,8 @@
 export type Price = { in: number; out: number }
 
 const TABLE: [RegExp, Price][] = [
-  [/gemini-3\.[68]-flash(?!-)/, { in: 0.75, out: 3.75 }],
+  [/gemini-3\.[678]-flash(?!-)/, { in: 0.75, out: 3.75 }],
+  [/gemini-3\.5-flash(?!-)/, { in: 1.5, out: 9 }],
   [/gemini-3\.5-flash-lite/, { in: 0.3, out: 2.5 }],
   [/gemini-3\.1-flash-lite/, { in: 0.25, out: 1.5 }],
   [/gemini-3-flash/, { in: 0.5, out: 3 }],

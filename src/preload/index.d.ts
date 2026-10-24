@@ -135,10 +135,17 @@ declare global {
       chat: (userInput: string, history: { role: 'user' | 'assistant'; content: string }[] | undefined, opts: ChatOpts) => Promise<ChatResult>
       retryChat: (opts: ChatOpts) => Promise<ChatResult>
       cancelChat: (tabId: string) => Promise<boolean>
-      modelPicker: () => Promise<{ value: string; label: string; tier: string }[]>
+      modelPicker: () => Promise<{ value: string; label: string; tier: string; keyed?: boolean }[]>
       spend: {
         get: () => Promise<boolean>
         set: (on: boolean) => Promise<boolean>
+      }
+      freeFirst: {
+        get: () => Promise<'openrouter' | 'apinex'>
+        set: (v: 'openrouter' | 'apinex') => Promise<'openrouter' | 'apinex'>
+      }
+      apinex: {
+        refresh: () => Promise<string[]>
       }
       computer: {
         get: () => Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean; fullAccess: boolean }>
@@ -191,6 +198,14 @@ declare global {
         detectLocal: () => Promise<{ runtime: string; baseURL: string; models: string[] }[]>
         fetchRemote: (id: string, all?: boolean) => Promise<{ ok: boolean; models?: { id: string; recommended: boolean; added: boolean; free: boolean }[]; error?: string }>
         importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => Promise<number>
+  ollama: {
+    status: () => Promise<{ state: 'missing' | 'stopped' | 'running'; models: string[]; suggested: string[]; downloadUrl: string }>
+    start: () => Promise<boolean>
+    openDownload: () => Promise<void>
+    pull: (name: string) => Promise<{ ok: boolean; error?: string }>
+    delete: (name: string) => Promise<{ ok: boolean; error?: string }>
+    onProgress: (cb: (p: { model: string; status: string; percent: number; total?: number; completed?: number }) => void) => () => void
+  }
         setPosition: (id: string, last: boolean) => Promise<boolean>
         setPrice: (id: string, pin: string, pout: string) => Promise<boolean>
         setKey: (id: string, key: string) => Promise<boolean>
@@ -300,7 +315,7 @@ declare global {
       remote: {
         get: () => Promise<RemoteInfo>
         set: (p: { enabled?: boolean; port?: number; relayUrl?: string; approveFromPhone?: boolean; destructiveFromPhone?: boolean }) => Promise<RemoteInfo>
-        pairStart: () => Promise<{ ok: true; qr: string; exp: number; urls: string[] } | { ok: false; error: string }>
+        pairStart: () => Promise<{ ok: true; qr: string; text: string; exp: number; urls: string[] } | { ok: false; error: string }>
         pairAnswer: (ok: boolean) => Promise<void>
         pairCancel: () => Promise<void>
         revoke: (id: string) => Promise<RemoteInfo>

@@ -189,7 +189,7 @@ async function refreshSummary(id: string, userMsg: string, reply: string): Promi
     const r = await fetch(LOCAL_BASE + '/api/generate', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ model: 'qwen3:1.7b', prompt, stream: false, format: 'json', think: false, options: { num_predict: 160, temperature: 0.2 }, keep_alive: '5m' }),
+      body: JSON.stringify({ model: 'qwen3:4b', prompt, stream: false, format: 'json', think: false, options: { num_predict: 160, temperature: 0.2 }, keep_alive: '5m' }),
       signal: AbortSignal.timeout(60000)
     })
     const j = (await r.json()) as { response?: string }

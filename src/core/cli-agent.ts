@@ -10,6 +10,7 @@ import { getApiKey } from '../store/secure-store'
 import { recordClaudeRun } from './claude-usage'
 import { quarantineEmptyFragments } from './run-report'
 import { recordEngineRun } from './usage-log'
+import { subscriptionEnginesEnabled } from './feature-flags'
 
 // Agent engines: the official command-line tools (Claude Code / Codex) run the WHOLE job themselves
 // with their own tools, signed in with the user's account. The app only streams progress and returns the final answer.
@@ -30,8 +31,10 @@ export function codexModelsList(): string[] {
 }
 export const GEMINI_CLI = 'cli:gemini'
 // Order of preference when an engine fails: Google first (paid plan), then Claude, then ChatGPT (free plan, small limit).
-export const ENGINE_ORDER = [GEMINI_CLI, 'cli:claude', CODEX_CLI]
-export const isAgentEngine = (m: string): boolean => m === CODEX_CLI || m.startsWith(CODEX_MODEL_PREFIX) || m === GEMINI_CLI || m === 'cli:claude' || m.startsWith('cli:claude:')
+// مخفية افتراضياً (انظر feature-flags.ts). فاضية = ما في محركات اشتراك في الفولباك ولا في المراجعة.
+export const ENGINE_ORDER: string[] = subscriptionEnginesEnabled() ? [GEMINI_CLI, 'cli:claude', CODEX_CLI] : []
+export const isAgentEngine = (m: string): boolean =>
+  subscriptionEnginesEnabled() && (m === CODEX_CLI || m.startsWith(CODEX_MODEL_PREFIX) || m === GEMINI_CLI || m === 'cli:claude' || m.startsWith('cli:claude:'))
 
 // "وضع الاستقلال الكامل": OFF by default. ON = the engines run without any permission prompts or sandbox.
 // OFF = Claude limited to edits + an allow-list of tools, Codex sandboxed to the working folder.

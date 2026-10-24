@@ -12,7 +12,7 @@ import { RemotePanel } from './RemotePanel'
 import { TransferPanel } from './TransferPanel'
 import { UpdatePanel } from './UpdatePanel'
 
-const KEY_NAMES = ['OPENROUTER_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY'] as const
+const KEY_NAMES = ['OPENROUTER_API_KEY', 'APINEX_API_KEY', 'GEMINI_API_KEY', 'OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'HUGGINGFACE_API_KEY'] as const
 type KeyName = (typeof KEY_NAMES)[number]
 
 const TABS = [
@@ -41,6 +41,7 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
   }
   const [keys, setKeys] = useState<Record<KeyName, string>>({
     OPENROUTER_API_KEY: '',
+    APINEX_API_KEY: '',
     GEMINI_API_KEY: '',
     OPENAI_API_KEY: '',
     ANTHROPIC_API_KEY: '',
@@ -51,10 +52,11 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
     Promise.all(KEY_NAMES.map((k) => window.api.getKey(k))).then((values) => {
       setKeys({
         OPENROUTER_API_KEY: values[0],
-        GEMINI_API_KEY: values[1],
-        OPENAI_API_KEY: values[2],
-        ANTHROPIC_API_KEY: values[3],
-        HUGGINGFACE_API_KEY: values[4]
+        APINEX_API_KEY: values[1],
+        GEMINI_API_KEY: values[2],
+        OPENAI_API_KEY: values[3],
+        ANTHROPIC_API_KEY: values[4],
+        HUGGINGFACE_API_KEY: values[5]
       })
     })
   }, [])

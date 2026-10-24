@@ -40,6 +40,13 @@ const api = {
     get: (): Promise<boolean> => ipcRenderer.invoke('spend:get'),
     set: (on: boolean): Promise<boolean> => ipcRenderer.invoke('spend:set', on)
   },
+  freeFirst: {
+    get: (): Promise<'openrouter' | 'apinex'> => ipcRenderer.invoke('freeFirst:get'),
+    set: (v: 'openrouter' | 'apinex'): Promise<'openrouter' | 'apinex'> => ipcRenderer.invoke('freeFirst:set', v)
+  },
+  apinex: {
+    refresh: (): Promise<string[]> => ipcRenderer.invoke('apinex:refresh')
+  },
   computer: {
     get: (): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:get'),
     set: (on: boolean): Promise<{ enabled: boolean; sessionAllowed: boolean; autoApprove: boolean }> => ipcRenderer.invoke('computer:set', on),
@@ -100,7 +107,19 @@ const api = {
     setPrice: (id: string, pin: string, pout: string) => ipcRenderer.invoke('models:setPrice', id, pin, pout),
     test: (id: string) => ipcRenderer.invoke('models:test', id),
     fetchRemote: (id: string, all?: boolean) => ipcRenderer.invoke('models:fetchRemote', id, all),
-    importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items)
+    importRemote: (id: string, items: (string | { id: string; free: boolean })[]) => ipcRenderer.invoke('models:importRemote', id, items),
+    ollama: {
+      status: () => ipcRenderer.invoke('ollama:status'),
+      start: () => ipcRenderer.invoke('ollama:start'),
+      openDownload: () => ipcRenderer.invoke('ollama:openDownload'),
+      pull: (name: string) => ipcRenderer.invoke('ollama:pull', name),
+      delete: (name: string) => ipcRenderer.invoke('ollama:delete', name),
+      onProgress: (cb: (p: { model: string; status: string; percent: number; total?: number; completed?: number }) => void) => {
+        const handler = (_e: unknown, p: { model: string; status: string; percent: number; total?: number; completed?: number }): void => cb(p)
+        ipcRenderer.on('ollama:progress', handler)
+        return () => ipcRenderer.removeListener('ollama:progress', handler)
+      }
+    }
   },
   providers: {
     check: (p: 'openai' | 'anthropic' | 'gemini' | 'openrouter'): Promise<{ ok: boolean; message: string; models: string[] }> => ipcRenderer.invoke('provider:check', p)

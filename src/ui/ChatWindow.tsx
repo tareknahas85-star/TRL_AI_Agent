@@ -25,6 +25,20 @@ const TEMPLATES: { label: string; text: string }[] = [
   { label: '⚙️ سكربت PowerShell', text: 'اكتبلي سكربت PowerShell يعمل التالي:\n\n' }
 ]
 
+// أوضاع المحادثة الثلاثة (فوق اختيار الموديل). كل وضع يربط بوضع التشغيل الموجود في الراوتر.
+const CHAT_MODES: { id: 'chat' | 'project' | 'council'; label: string; hint: string; mode: ChatMode }[] = [
+  { id: 'chat', label: '💬 محادثة عادية', hint: 'المجاني أولاً، وإذا فشل بتنتقل للمدفوع تلقائياً (بيصرف)', mode: { kind: 'free' } },
+  { id: 'project', label: '🛠️ بناء مشروع', hint: 'منفّذ ومراجع من مزوّداتك (بمفاتيحك)', mode: { kind: 'auto' } },
+  { id: 'council', label: '🏛️ المجلس', hint: 'نماذج مدفوعة بس، للمشاريع الكبيرة', mode: { kind: 'council' } }
+]
+const activeChatMode = (mode: ChatMode): string => (mode.kind === 'free' ? 'chat' : mode.kind === 'auto' ? 'project' : mode.kind === 'council' ? 'council' : '')
+// القائمة تتبع الوضع: المحادثة العادية تعرض المجاني والمدفوع (المدفوع بيصير اختيار موديل محدد وبيصرف).
+// المجلس بدون كاتب/ناقد: مدفوع بس.
+function pickerForMode<T extends { tier: string }>(mode: ChatMode, picker: T[]): T[] {
+  if (mode.kind === 'council' && !mode.author && !mode.critic) return picker.filter((p) => p.tier !== 'TIER_1_FREE' && p.tier !== 'LOCAL' && p.tier !== 'SUBSCRIPTION')
+  return picker
+}
+
 type Brand = 'claude' | 'openai' | 'gemini'
 const brandOf = (model: string): Brand | null =>
   /claude|sonnet|opus|haiku/i.test(model) ? 'claude' : /gemini|nano-banana|veo/i.test(model) ? 'gemini' : /gpt|codex|openai|\bo[1-9]\b/i.test(model) ? 'openai' : null
@@ -310,11 +324,49 @@ function MsgFooter({ text, at }: { text: string; at?: number }): ReactElement {
   )
 }
 
+// تفاصيل التنفيذ: مين رد، ومين فشل وليش، والوقت. مخفية افتراضياً، بتنفتح بالضغط.
+function ExecDetails({ meta }: { meta: string }): ReactElement {
+  const m = parseMeta(meta)
+  const st = m.stats as unknown as { failures?: { model: string; reason: string }[]; why?: string; complexity?: string; totalMs?: number } | null
+  const failures = st?.failures ?? []
+  return (
+    <details className="mt-3 rounded-lg border border-outline bg-surface2/60 p-3 text-[12px] leading-6">
+      <summary className="cursor-pointer select-none font-semibold text-muted">
+        🔍 شو صار بالخلفية {failures.length ? `(${failures.length} تحويل)` : '(بدون تحويلات)'}
+      </summary>
+      <ul className="mt-2 space-y-1.5">
+        {failures.map((f, i) => (
+          <li key={i} className="flex gap-2">
+            <span>❌</span>
+            <span>
+              <span dir="ltr" className="font-mono">{f.model}</span> — {f.reason}
+            </span>
+          </li>
+        ))}
+        <li className="flex gap-2">
+          <span>✅</span>
+          <span>
+            الرد من <span dir="ltr" className="font-mono">{m.model}</span>
+            {m.tools.length > 0 && ` · أدوات: ${m.tools.length}`}
+          </span>
+        </li>
+      </ul>
+      <div className="mt-2 text-muted">
+        {st?.complexity && <span>التعقيد: {st.complexity} · </span>}
+        {st?.totalMs ? <span>الوقت: {(st.totalMs / 1000).toFixed(1)}s · </span> : null}
+        {m.saved && <span>{m.saved} · </span>}
+        {st?.why && <span>السبب: {st.why}</span>}
+      </div>
+      {m.council && <div className="mt-1">🏛️ المجلس: {m.council}</div>}
+    </details>
+  )
+}
+
 function MetaBar({ meta }: { meta: string }): ReactElement {
   const m = parseMeta(meta)
   const t = tierChip(m.saved)
-  const failed = m.tried.length > 1 ? m.tried.slice(0, -1) : []
   return (
+    <>
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
       <Chip cls={t.cls}>{t.label}</Chip>
       <Chip>
@@ -330,12 +382,9 @@ function MetaBar({ meta }: { meta: string }): ReactElement {
         </Chip>
       )}
       {m.council && <Chip cls="bg-primary/10 text-primary">🏛️ {m.council}</Chip>}
-      {failed.length > 0 && (
-        <Chip cls="bg-warning/15 text-warning">
-          جرّب {failed.length} قبله
-        </Chip>
-      )}
     </div>
+    <ExecDetails meta={meta} />
+    </>
   )
 }
 
@@ -512,7 +561,7 @@ export function ChatWindow({
   useEffect(() => {
     onBusy(loading)
   }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
-  const [picker, setPicker] = useState<{ value: string; label: string; tier: string }[]>([])
+  const [picker, setPicker] = useState<{ value: string; label: string; tier: string; keyed?: boolean }[]>([])
   const [needsChoice, setNeedsChoice] = useState(false)
   const [policyRefused, setPolicyRefused] = useState(false)
   const [skillCard, setSkillCard] = useState<{ tools: string[]; request: string; answer: string; name: string; msg: string } | null>(null)
@@ -848,7 +897,7 @@ export function ChatWindow({
                 <option value="">🎯 اختار موديل…</option>
                 {picker.map((p) => (
                   <option key={p.value} value={p.value}>
-                    {p.label} ({p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
+                    {p.label} ({p.tier === 'LOCAL' ? 'محلي' : p.tier === 'TIER_1_FREE' ? 'مجاني' : p.tier === 'SUBSCRIPTION' ? 'اشتراكك' : 'مدفوع'})
                   </option>
                 ))}
               </select>
@@ -864,16 +913,32 @@ export function ChatWindow({
           </div>
         )}
         <div className="mx-auto mb-1 flex max-w-3xl flex-wrap items-center gap-2 text-[11px] text-muted">
+          <div className="flex overflow-hidden rounded-full border border-outline" role="radiogroup" aria-label="وضع المحادثة">
+            {CHAT_MODES.map((b) => {
+              const on = activeChatMode(mode) === b.id
+              return (
+                <button key={b.id} type="button" role="radio" aria-checked={on} title={b.hint} onClick={() => onModeChange(b.mode)} className={`px-3 py-0.5 ${on ? 'bg-primary/20 font-medium text-primary' : 'bg-surface text-fg hover:bg-surface2'}`}>
+                  {b.label}
+                </button>
+              )
+            })}
+          </div>
           <span>الموديل:</span>
-          <ModelPicker mode={mode} picker={picker} onModeChange={onModeChange} />
-          <span>المنفّذ:</span>
-          <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.executor} title="المحرّك اللي بينفّذ المهام (auto = الترتيب الافتراضي)" onChange={(e) => { setRolesUi({ ...roles, executor: e.target.value }); window.api.roles.set({ executor: e.target.value }).catch(() => undefined) }}>
-            <option value="auto">تلقائي</option><option value="cli:gemini">Gemini</option><option value="cli:claude">Claude</option><option value="cli:codex">Codex</option>
-          </select>
-          <span>المراجع:</span>
-          <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.reviewer} title="المراجع المستقل (لازم يكون من عيلة غير المنفّذ)" onChange={(e) => { setRolesUi({ ...roles, reviewer: e.target.value }); window.api.roles.set({ reviewer: e.target.value }).catch(() => undefined) }}>
-            <option value="auto">تلقائي</option><option value="cli:gemini">Gemini</option><option value="cli:claude">Claude</option><option value="cli:codex">Codex</option>
-          </select>
+          <ModelPicker mode={mode} picker={pickerForMode(mode, picker)} onModeChange={onModeChange} />
+          {mode.kind === 'auto' && (
+            <>
+              <span>المنفّذ:</span>
+              <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.executor} title="المنفّذ: موديل من مزوّد عنده مفتاح، أو تلقائي" onChange={(e) => { setRolesUi({ ...roles, executor: e.target.value }); window.api.roles.set({ executor: e.target.value }).catch(() => undefined) }}>
+                <option value="auto">تلقائي</option>
+                {picker.filter((p) => p.keyed).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+              <span>المراجع:</span>
+              <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.reviewer} title="المراجع: لازم يكون من عيلة مختلفة عن المنفّذ" onChange={(e) => { setRolesUi({ ...roles, reviewer: e.target.value }); window.api.roles.set({ reviewer: e.target.value }).catch(() => undefined) }}>
+                <option value="auto">تلقائي</option>
+                {picker.filter((p) => p.keyed).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+              </select>
+            </>
+          )}
           <span>التفكير:</span>
           <select
             className="rounded-full border border-outline bg-surface px-2 py-0.5"

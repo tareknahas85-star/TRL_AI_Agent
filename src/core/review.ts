@@ -1,12 +1,36 @@
 ﻿import { emitAgent } from './progress'
 import { runClaudeAgent, runCodexAgent, runGeminiAgent, codexModelOf, CODEX_CLI, CODEX_MODEL_PREFIX, GEMINI_CLI, ENGINE_ORDER, type AgentResult } from './cli-agent'
 import { getRoles } from './roles'
+import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel, listCustomModelViews } from './custom-models'
 
-const family = (e: string): string => (e.startsWith('cli:claude') ? 'claude' : (e === CODEX_CLI || e.startsWith(CODEX_MODEL_PREFIX)) ? 'openai' : e === GEMINI_CLI ? 'google' : e)
+// العيلة: نفس العيلة = ما نعتبر المراجعة مستقلة. الموديل المخصص يتصنّف حسب اسم موديله (claude / gemini / gpt).
+const family = (e: string): string => {
+  if (e.startsWith(CUSTOM_PREFIX)) {
+    const n = (getCustomModel(e.slice(CUSTOM_PREFIX.length))?.model ?? e).toLowerCase()
+    return /claude/.test(n) ? 'claude' : /gemini/.test(n) ? 'google' : /gpt|codex|openai|\bo[1-9]\b/.test(n) ? 'openai' : e
+  }
+  return e.startsWith('cli:claude') ? 'claude' : (e === CODEX_CLI || e.startsWith(CODEX_MODEL_PREFIX)) ? 'openai' : e === GEMINI_CLI ? 'google' : e
+}
 
 export type Ctx = { signal?: AbortSignal; emit: (t: string) => void; effort?: string }
 
+// المراجع عبر API ما عنده وصول للملفات. نقولها له صراحة عشان ما يدّعي إنه فحص شي ما فحصه.
+const API_REVIEW_NOTE =
+  '\n\nIMPORTANT: you have NO access to the project files in this review. Judge only the task and the author summary given to you. Say so in the CHECKS line, and never claim you ran or read anything.'
+
+async function runApiReview(eng: string, prompt: string, system: string, c: Ctx): Promise<AgentResult> {
+  const m = getCustomModel(eng.slice(CUSTOM_PREFIX.length))
+  if (!m) throw new Error('موديل المراجعة مو موجود')
+  const { client, modelId } = clientForCustomModel(m)
+  c.emit('مراجعة نصية (بدون وصول للملفات)')
+  const res = await client.chat.completions.create({ model: modelId, messages: [{ role: 'system', content: system + API_REVIEW_NOTE }, { role: 'user', content: prompt }] }, { signal: c.signal })
+  const text = res.choices[0]?.message?.content ?? ''
+  if (!text.trim()) throw new Error('المراجع رجّع رد فاضي')
+  return { text, tools: [] } as unknown as AgentResult
+}
+
 function runOn(eng: string, prompt: string, system: string, c: Ctx, role: string): Promise<AgentResult> {
+  if (eng.startsWith(CUSTOM_PREFIX)) return runApiReview(eng, prompt, system, c)
   const base = { signal: c.signal, system, onProgress: (t: string): void => emitAgent(eng, role, t) }
   return eng === CODEX_CLI || codexModelOf(eng) ? runCodexAgent(prompt, { ...base, model: codexModelOf(eng) }) : eng === GEMINI_CLI ? runGeminiAgent(prompt, base) : runClaudeAgent(prompt, { ...base, effort: c.effort })
 }
@@ -26,7 +50,13 @@ function parse(text: string): { findings: number; high: number; verdict: 'PASS' 
 }
 
 export async function independentReview(author: string, task: string, authorSummary: string, c: Ctx): Promise<ReviewOutcome | null> {
-  const others = ENGINE_ORDER.filter((e) => family(e) !== family(author))
+  // مراجعين: محركات الاشتراك (لو مفعّلة) + الموديلات المخصصة اللي عندها مفتاح. الأقوى أولاً.
+  const rank = (t: string): number => (t === 'TIER_3_EXPENSIVE' ? 0 : t === 'TIER_2_CHEAP' ? 1 : 2)
+  const apiReviewers = listCustomModelViews()
+    .filter((m) => m.enabled && m.hasKey)
+    .sort((a, b) => rank(a.tier) - rank(b.tier))
+    .map((m) => CUSTOM_PREFIX + m.id)
+  const others = [...ENGINE_ORDER, ...apiReviewers].filter((e) => family(e) !== family(author))
   // Reviewer preference (Settings > roles). It is used only when it comes from a different family than the author.
   const pref = getRoles().reviewer
   if (pref !== 'auto' && family(pref) === family(author)) c.emit('المراجع المفضّل من نفس عيلة المنفّذ، بنختار مراجع من عيلة تانية')

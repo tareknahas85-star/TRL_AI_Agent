@@ -1,5 +1,6 @@
 ﻿import { hostOf } from './hosts'
 import OpenAI from 'openai'
+import { apinexClient, apinexModelId, isApinexModel } from './apinex'
 import fs from 'fs'
 import { dataFile } from './json-store'
 import { bumpFreeCount, modelBlockReason, noteModelFailure, noteRateLimit, noteModelOk, rateLimitWaitSec } from './model-health'
@@ -8,7 +9,7 @@ import { refuseDowngrade, STRONG_WAIT_MAX_SEC, strongRequiredFor } from './stron
 import { notePinOutcome } from './free-pin'
 import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
-import { emitProgress, emitStream, emitAgent, currentSignal } from './progress'
+import { emitProgress, emitStream, emitAgent, currentSignal, currentMode } from './progress'
 import { rotateLogFile } from './log-rotate'
 import { activeProject } from './workspace'
 import { quarantineEmptyFragments, appendRunLog } from './run-report'
@@ -123,10 +124,18 @@ const FAST_Q_MAX_CHARS = 200
 const ACTION_HINT = /```|[\\/]|https?:|\.\w{2,4}\b|ملف|مجلد|افتح|اكتب|اعمل|عدّل|عدل|احذف|ثبّت|ثبت|شغّل|شغل|نفّذ|نفذ|ابحث|ارسل|أرسل|create|write|open|run|edit|install|delete|fix|build|deploy|file|folder|code|script/i
 function fastGeminiRoute(models: string[], userInput: string): string[] {
   const text = (userInput || '').trim()
-  if (!models.includes(GEMINI_CLI) || !geminiLoggedIn()) return models
+  if (!models.includes(GEMINI_CLI) || !geminiLoggedIn() || !process.env.GEMINI_API_KEY) return models
   if (!text || text.length > FAST_Q_MAX_CHARS || ACTION_HINT.test(text)) return models
   return [FAST_GEMINI_API_MODEL, ...models.filter((m) => m !== GEMINI_CLI && m !== FAST_GEMINI_API_MODEL), GEMINI_CLI]
 }
+// وضع بناء مشروع + منفّذ مخصص (من Settings > roles) + شغل فيه أدوات: الموديل المخصص يصير أول واحد.
+// الباقي يبقى كاحتياطي بالترتيب العادي.
+function customExecutorFirst(models: string[], toolset?: Toolset | null): string[] {
+  const ex = getRoles().executor
+  if (!ex.startsWith(CUSTOM_PREFIX) || !toolset?.defs.length || currentMode()?.kind !== 'auto') return models
+  return [ex, ...models.filter((m) => m !== ex)]
+}
+
 export async function executeWithFallback(
   models: string[],
   userInput: string,
@@ -136,22 +145,24 @@ export async function executeWithFallback(
   history: { role: 'user' | 'assistant'; content: string }[] = [],
   opts: { requireTools?: boolean; escalate?: boolean } = {}
 ): Promise<FallbackResult> {
-  const r = await executeWithFallbackInner(fastGeminiRoute(models, userInput), userInput, analysis, systemPrompt, toolset, history, opts)
+  const r = await executeWithFallbackInner(customExecutorFirst(fastGeminiRoute(models, userInput), toolset), userInput, analysis, systemPrompt, toolset, history, opts)
   // 5.16: عدّاد الاستخدام لكل موديل (النماذج عبر API). CLI محسوبة من cli-agent، فنتجاهلها هون لتفادي العد مرتين.
   if (r.success && r.startedAt && r.modelUsed && !(r.engine ?? '').startsWith('cli:')) recordEngineRun(r.modelUsed, (Date.now() - r.startedAt) / 60000)
   try {
     const action = !!(toolset?.defs.length || opts.requireTools)
     const fails = r.failures || []
-    const longRun = !!r.engine && !!r.startedAt && Date.now() - r.startedAt > 8 * 60 * 1000
-    if (action && r.success && longRun && r.engine) {
+    // المنفّذ = المحرّك اللي أنجز الشغل (CLI أو موديل API مخصص). المراجعة المستقلة تشتغل على أي منهم.
+    const who = r.engine || r.modelUsed
+    const longRun = !!who && !!r.startedAt && Date.now() - r.startedAt > 8 * 60 * 1000
+    if (action && r.success && longRun && who) {
       const ctx = { signal: currentSignal(), emit: emitProgress, effort: getEffort() }
-      let rv = await independentReview(r.engine, userInput, r.content, ctx)
+      let rv = await independentReview(who, userInput, r.content, ctx)
       let extra = ''
       for (let round = 1; rv && (rv.verdict === 'FAIL' || rv.high > 0) && round <= MAX_REPAIR_ROUNDS; round++) {
-        const fx = await repairFromReview(r.engine, userInput, rv, ctx)
+        const fx = await repairFromReview(who, userInput, rv, ctx)
         if (!fx) break
         extra += '\n\nبعد المراجعة (دورة ' + round + ' من ' + MAX_REPAIR_ROUNDS + '): المحرّك أصلح وهذا ملخصو (مو معتمد بدون فحص):\n' + fx.text
-        rv = (await independentReview(r.engine, userInput, r.content + extra, ctx)) ?? rv
+        rv = (await independentReview(who, userInput, r.content + extra, ctx)) ?? rv
       }
       if (rv) {
         r.content +=
@@ -212,6 +223,10 @@ async function executeWithFallbackInner(
   // Direct provider keys for Tier 2/3. Direct APIs expect the bare model name
   // (no "google/" or "openai/" prefix), so the id sent is returned with the client.
   const getClientForModel = (model: string): { client: OpenAI; modelId: string } => {
+    if (isApinexModel(model)) {
+      // APInex: OpenAI-compatible gateway with its own key. The id sent is the bare "free/..." name.
+      return { client: apinexClient(), modelId: apinexModelId(model) }
+    }
     if (model.startsWith(CUSTOM_PREFIX)) {
       const m = getCustomModel(model.slice(CUSTOM_PREFIX.length))
       if (!m) throw new Error('custom model removed')
@@ -238,7 +253,6 @@ async function executeWithFallbackInner(
   const signal = currentSignal()
   const failures: { model: string; reason: string }[] = loggedFailures()
 
-  let skipModel = false
   const queue = [...models]
   // Strong-first policy: a complex or action request never drops to a weaker model while a strong one is busy.
   const strongRequired = strongRequiredFor(!!_analysis.allowWeaker, _analysis.complexity, !!opts.requireTools)
@@ -311,7 +325,6 @@ async function executeWithFallbackInner(
       continue
     }
     triedModels.push(model)
-    skipModel = false
     try {
       console.log(`[Fallback] Trying model: ${model}`)
       emitProgress('يجرّب: ' + model)
@@ -341,7 +354,6 @@ async function executeWithFallbackInner(
               if (eng !== model) emitProgress('جرّب محرّك تاني: ' + eng)
               ar = await runEngine(eng)
               usedEng = eng
-              if (eng !== model) failures.push({ model, reason: 'فشل، كمّل ' + eng })
               break
             } catch (e) {
               lastErr = e
@@ -473,7 +485,7 @@ async function executeWithFallbackInner(
           return (await client.chat.completions.create(params as never, { signal })) as OpenAI.Chat.ChatCompletion
         }
       }
-      let toolsRejected = noToolModels.has(model) && !!toolset?.defs.length
+      let toolsRejected = noToolsNow(model) && !!toolset?.defs.length
       let textMode = false
       const baseSystem = (systemPrompt || 'You are a helpful assistant.') + VERIFY_HINT + (toolset?.defs.some((d) => (d as { function?: { name?: string } }).function?.name?.startsWith('pc_')) ? PC_HINT + AGENT_HINT : '') + handoff
       const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
@@ -560,7 +572,7 @@ async function executeWithFallbackInner(
             console.warn(`[Fallback] ${model} rejected tools, retrying without`)
             useTools = false
             toolsRejected = true
-            noToolModels.add(model)
+            noToolModels.set(model, Date.now())
             failures.push({ model, reason: 'ما بيدعم function calling — البرنامج بيشغّل الأدوات عنو' })
             round--
             continue
@@ -602,7 +614,7 @@ async function executeWithFallbackInner(
         break
       }
       // Objective failure signals (not the model's own opinion): ran out of rounds, got stuck repeating itself / failing, or claimed success without proof.
-      if (toolset && toolset.defs.length && !skipModel && (!toolsRejected || textMode)) {
+      if (toolset && toolset.defs.length && (!toolsRejected || textMode)) {
         const why = attemptFailure(calls_, capHit, content, unverifiedClaimWarning(model, userInput, content, toolsUsed, toolset, toolsRejected && !textMode, false, history))
         if (why) {
           failures.push({ model, reason: 'ما كمّل المهمة (' + why + ')' })
@@ -617,10 +629,6 @@ async function executeWithFallbackInner(
             continue
           }
         }
-      }
-      if (skipModel) {
-        emitProgress(model + ' ما بيدعم الأدوات — ينتقل للتالي')
-        continue
       }
       if (content && content.length < 400 && /to prevent abuse|free resource|too many requests|rate.?limit|quota (exceeded|exhausted)|insufficient (balance|quota|credit)|usage limit/i.test(content)) {
         failures.push({ model, reason: ('رد رفض: ' + content).slice(0, 90) })
@@ -641,7 +649,7 @@ async function executeWithFallbackInner(
         const warn = unverifiedClaimWarning(model, userInput, content, toolsUsed, toolset, toolsRejected && !textMode, false, history)
         if (warn) content = warn + '\n\n' + content
         // Never hide a downgrade: say which model(s) failed and why before the answer of the one that finally replied.
-        if (failures.length) content = '↪️ تحويل تلقائي: ' + failures.slice(0, 3).map((x) => x.model + ' (' + x.reason.slice(0, 60) + ')').join('، ') + ' فشل، فالجواب من ' + model + '.\n\n' + content
+        // التحويلات والفشل بتنعرض تحت الرد كتفاصيل قابلة للطي (من meta)، مش داخل نص الرد.
         return {
           content,
           modelUsed: model,
@@ -798,11 +806,21 @@ function capabilityBlock(model: string, toolset: Toolset | null | undefined, rej
 
 // Request that asks for a real-world action / reply that claims one was completed.
 export const BUILD_REQ = /ولّد|ولد|بني|ابني|بناء|احفظ|حفظ|انقل|انسخ|شغّل|شغل|نفّذ|نفذ|ثبّت|\.apk|\b(build|compile|save|install|deploy|execute)\b/i
-const noToolModels = new Set<string>()
+// حظر الأدوات للموديل بيخلص بعد ساعة: خطأ 400 واحد ممكن يكون مؤقت، ما لازم يحظر الموديل للأبد.
+const noToolModels = new Map<string, number>()
+const NO_TOOL_TTL_MS = 60 * 60 * 1000
+const noToolsNow = (m: string): boolean => {
+  const t = noToolModels.get(m)
+  if (t === undefined) return false
+  if (Date.now() - t > NO_TOOL_TTL_MS) {
+    noToolModels.delete(m)
+    return false
+  }
+  return true
+}
 export const ACTION_REQ = /ولّد|ولد|بني|ابني|بناء|انشئ|أنشئ|اعمل|اكتب.{0,12}ملف|احفظ|حفاظ|حفظ|انقل|نقل|انسخ|نزّل|نزل|ارفع|شغّل|شغل|نفّذ|نفذ|ثبّت|ثبت|عدّل|عدل|صلّح|صلح|ابعت|\.apk|\b(build|create|generate|save|write|run|execute|install|edit|fix|deploy|send|download|compile|move|copy)\b/i
-const DONE_CLAIM = /تم\b|تمّ|تمت|انحفظ|انبنى|بنيت|ولّدت|ولدت|أنشأت|انشأت|نفّذت|نفذت|حفظت|عدّلت|عدلت|نقلت|قمت ب|موجود|جاهز للاستخدام|✅|🎉|\b(done|created|saved|built|generated|completed|successfully|installed|exists?|moved|copied)\b/i
-// A file path or file name with an extension in the reply: a claim about the disk that needs a tool result behind it.
-const FILE_REF = /[A-Za-z]:\\[^\s`'"]+|\b[\w.-]+\.(apk|exe|zip|pdf|docx?|xlsx?|pptx?|ps1|kt|ts|py|json)\b/i
+const DONE_CLAIM = /تمّ|تمت|انحفظ|انبنى|بنيت|ولّدت|ولدت|أنشأت|انشأت|نفّذت|نفذت|حفظت|عدّلت|عدلت|نقلت|قمت ب|جاهز للاستخدام|✅|🎉|\b(done|created|saved|built|generated|completed|successfully|installed|moved|copied)\b/i
+
 
 // If the model used no tool but claims it did the work, tell the user clearly (independent of the model's honesty).
 function unverifiedClaimWarning(
@@ -818,7 +836,7 @@ function unverifiedClaimWarning(
   if (toolsUsed.length || !DONE_CLAIM.test(reply)) return ''
   // The request may sit in an earlier message ("ok", "the file is not there" are follow-ups), so look at the recent user turns too.
   const recentAsks = [userInput, ...history.filter((h) => h.role === 'user').slice(-4).map((h) => h.content)].join('\n')
-  if (!ACTION_REQ.test(recentAsks) && !FILE_REF.test(reply)) return ''
+  if (!ACTION_REQ.test(recentAsks)) return ''
   const offered = rejected || cli ? [] : toolNames(toolset)
   let why: string
   if (cli) why = 'هالموديل شغّال كمحادثة نصية بس عن طريق حساب مسجّل، وما إلو أدوات أصلاً.'

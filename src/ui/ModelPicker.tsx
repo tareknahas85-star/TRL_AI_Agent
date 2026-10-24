@@ -5,18 +5,19 @@ import type { ChatMode } from '../preload/index.d'
 type Entry = { value: string; label: string; tier: string }
 
 const TIERS: { id: string; title: string; badge: string; cls: string }[] = [
+  { id: 'LOCAL', title: 'محلي', badge: 'محلي', cls: 'bg-success/15 text-success' },
   { id: 'TIER_1_FREE', title: 'مجاني', badge: 'مجاني', cls: 'bg-success/15 text-success' },
   { id: 'SUBSCRIPTION', title: 'اشتراكك', badge: 'اشتراك', cls: 'bg-primary/15 text-primary' },
   { id: 'PAID', title: 'مدفوع', badge: 'مدفوع', cls: 'bg-warning/20 text-warning' }
 ]
-const tierOf = (t: string): string => (t === 'TIER_1_FREE' || t === 'SUBSCRIPTION' ? t : 'PAID')
+const tierOf = (t: string): string => (t === 'TIER_1_FREE' || t === 'SUBSCRIPTION' || t === 'LOCAL' ? t : 'PAID')
 
+// أوضاع المجلس (تلقائي / أنا أختار الكاتب والناقد) تظهر بالقائمة بس وانت بوضع المجلس. بوضع المحادثة العادية القائمة فيها موديلات بس.
 const AUTO: { id: string; label: string; hint: string }[] = [
-  { id: 'free', label: '🆓 تلقائي — مجاني بس', hint: 'الراوتر بيختار، ومستحيل يمر على مدفوع' },
-  { id: 'auto', label: '⚡ تلقائي — مع المدفوع', hint: 'بيختار الأنسب وممكن يستعمل مدفوع' },
-  { id: 'council', label: '🏛️ مجلس الموديلات', hint: 'مسودة، بعدين نقد، بعدين تصحيح' },
+  { id: 'council', label: '🏛️ مجلس — تلقائي', hint: 'النظام بيختار الكاتب والناقد' },
   { id: 'council-manual', label: '🏛️ مجلس — أنا بختار الكاتب والناقد', hint: 'بتحدد الكاتب والناقد بإيدك' }
 ]
+const MODE_NAME: Record<string, string> = { free: 'محادثة عادية', auto: 'بناء مشروع', council: 'المجلس' }
 
 function currentId(mode: ChatMode): string {
   if (mode.kind === 'model') return mode.id
@@ -50,7 +51,7 @@ export function ModelPicker({ mode, picker, onModeChange }: { mode: ChatMode; pi
 
   const needle = q.trim().toLowerCase()
   const match = (s: string): boolean => !needle || s.toLowerCase().includes(needle)
-  const autos = AUTO.filter((a) => match(a.label) && (a.id !== 'council-manual' || picker.length > 0))
+  const autos = (mode.kind === 'council' ? AUTO : []).filter((a) => match(a.label) && (a.id !== 'council-manual' || picker.length > 0))
   const groups = useMemo(
     () => TIERS.map((t) => ({ ...t, items: picker.filter((p) => tierOf(p.tier) === t.id && (match(p.label) || match(p.value))) })).filter((g) => g.items.length),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -82,7 +83,7 @@ export function ModelPicker({ mode, picker, onModeChange }: { mode: ChatMode; pi
         aria-expanded={open}
         className="flex max-w-[22rem] items-center gap-2 rounded-full border border-outline bg-surface px-3 py-0.5 text-fg hover:bg-surface2"
       >
-        <span className="truncate">{curAuto ? curAuto.label : curEntry ? curEntry.label : cur}</span>
+        <span className="truncate">{curAuto ? curAuto.label : curEntry ? curEntry.label : (MODE_NAME[cur] ?? cur)}</span>
         {curTier && <span className={`shrink-0 rounded-full px-1.5 text-[10px] ${curTier.cls}`}>{curTier.badge}</span>}
         {!curTier && paid && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />}
         <ChevronUp size={12} className={`shrink-0 transition-transform ${open ? '' : 'rotate-180'}`} />

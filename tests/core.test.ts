@@ -5,6 +5,8 @@ import os from 'os'
 import path from 'path'
 import { crossedLevel, usagePct, recordClaudeRun, getClaudeUsage, setClaudeCap } from '../src/core/claude-usage'
 import { getRoles, setRoles } from '../src/core/roles'
+import { writeJson } from '../src/core/json-store'
+import { listCustomModels } from '../src/core/custom-models'
 import { workDir, quarantineEmptyFragments } from '../src/core/run-report'
 import { recordEngineRun, getEngineSeries } from '../src/core/usage-log'
 import { createStreamBatcher } from '../src/core/stream-batch'
@@ -40,14 +42,40 @@ test('العدّاد يسجّل ويطلع تنبيه عند 70% ومرة وحد
   assert.match(fired[1]!, /90%/)
 })
 
-test('الأدوار: القيمة الغلط بترجع auto، والدمج ما بيمسح الباقي', () => {
+test('الأدوار: محركات الاشتراك مخفية افتراضياً، والمنفّذ المخصص مقبول، والدمج ما بيمسح الباقي', () => {
   process.env.TRL_TEST_DATA = tmp()
   assert.deepEqual(getRoles(), { manager: 'auto', executor: 'auto', reviewer: 'auto' })
+  // محرك اشتراك محفوظ قديماً يرجع لـ auto لأن العلم مغلق
   setRoles({ executor: 'cli:claude' })
+  assert.equal(getRoles().executor, 'auto')
+  // موديل مخصص من مزوّد عنده مفتاح: قيمة صالحة
+  setRoles({ executor: 'custom:abc123' })
   setRoles({ reviewer: 'bogus-engine' as never })
   const r = getRoles()
-  assert.equal(r.executor, 'cli:claude')
+  assert.equal(r.executor, 'custom:abc123')
   assert.equal(r.reviewer, 'auto')
+})
+
+test('feature flag: محركات الاشتراك مغلقة إلا بمتغير المطوّر', async () => {
+  const { subscriptionEnginesEnabled } = await import('../src/core/feature-flags')
+  delete process.env.TRL_DEV_SUBSCRIPTION_ENGINES
+  assert.equal(subscriptionEnginesEnabled(), false)
+  process.env.TRL_DEV_SUBSCRIPTION_ENGINES = '1'
+  assert.equal(subscriptionEnginesEnabled(), true)
+  delete process.env.TRL_DEV_SUBSCRIPTION_ENGINES
+})
+
+test('النماذج اللي اسمها free/... تتصنّف مجانية حتى لو مكتوبة TIER_2', () => {
+  process.env.TRL_TEST_DATA = tmp()
+  writeJson('custom-models.json', [
+    { id: 'a1', name: 'free-one', model: 'free/deepseek-v4-flash', baseURL: '', tier: 'TIER_2_CHEAP', enabled: true },
+    { id: 'a2', name: 'paid-one', model: 'gemini-2.5-flash', baseURL: '', tier: 'TIER_2_CHEAP', enabled: true },
+    { id: 'a3', name: 'or-free', model: 'meta/llama:free', baseURL: '', tier: 'TIER_2_CHEAP', enabled: true }
+  ])
+  const byId = Object.fromEntries(listCustomModels().map((m) => [m.id, m.tier]))
+  assert.equal(byId.a1, 'TIER_1_FREE')
+  assert.equal(byId.a2, 'TIER_2_CHEAP')
+  assert.equal(byId.a3, 'TIER_1_FREE')
 })
 
 test('workDir يختار مجلد build إذا موجود', () => {
