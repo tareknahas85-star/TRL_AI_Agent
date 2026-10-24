@@ -8,7 +8,9 @@ export const INTEREST_CATS: Record<string, string[]> = {
   office: ['office'],
   media: ['media'],
   research: ['research'],
-  daily: ['local']
+  daily: ['local'],
+  agents: ['office', 'dev'],
+  mail: ['office']
 }
 
 const OPTIONS: { id: string; label: string; hint: string }[] = [
@@ -17,7 +19,9 @@ const OPTIONS: { id: string; label: string; hint: string }[] = [
   { id: 'office', label: 'مكتب وإدارة', hint: 'Google، Microsoft 365، Notion، Dropbox' },
   { id: 'media', label: 'تصميم ووسائط', hint: 'Canva، Miro، تفريغ صوت' },
   { id: 'research', label: 'بحث ومعلومات', hint: 'بحث بالنت، أتمتة متصفح' },
-  { id: 'daily', label: 'حياة يومية', hint: 'أماكن قريبة، طقس، ملفات الجهاز' }
+  { id: 'daily', label: 'حياة يومية', hint: 'أماكن قريبة، طقس، ملفات الجهاز' },
+  { id: 'agents', label: 'وكلاء وأتمتة', hint: 'جدولة مهام، إيميل، وكلاء سحابيين' },
+  { id: 'mail', label: 'إيميل وتواصل', hint: 'Gmail، Outlook، Slack' }
 ]
 
 // First-run (and "change my interests") screen. It only picks which connectors are suggested; nothing is switched on by itself
