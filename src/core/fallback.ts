@@ -187,14 +187,8 @@ export async function executeWithFallback(
       const where = appendRunLog(proj.path, log)
       if (where) r.content += '\n\n(السجل الآلي انضاف لـ ' + where + (moved.length ? '، ونُقل ' + moved.length + ' ملف فاضي للحجر' : '') + ')'
     }
-    if (action && r.success && fails.length) {
-      const lines = fails.slice(-10).map((x) => '- ' + x.model + ': ' + x.reason.replace(/\s+/g, ' ').slice(0, 140))
-      r.content +=
-        '\n\n---\nسجل التشغيل (آلي من البرنامج، مو من الموديل):\n' +
-        'اللي كمّل وأنهى: ' + (r.modelDetail || r.modelUsed) + '\n' +
-        'محاولات فاشلة/تحويلات (' + fails.length + '):\n' + lines.join('\n') +
-        '\nإذا في تعارض بين كلام الموديل فوق وهالسجل، صدّق السجل وافحص الملفات الفعلية.'
-    }
+    // 5.17.2: سجل التحويلات ما بينضاف لنص الجواب. بيظهر بس بزر "شو صار بالخلفية" (meta.stats.failures).
+    void fails
   } catch {
     /* report is best-effort */
   }
