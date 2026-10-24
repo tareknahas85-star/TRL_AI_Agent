@@ -41670,7 +41670,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.17.3" : "5.10";
+  var VERSION = true ? "5.17.4" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
