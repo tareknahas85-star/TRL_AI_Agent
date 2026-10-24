@@ -523,6 +523,8 @@ test('allowWeaker: طلب فيه أدوات يبقى قوي حتى لو البس
 })
 
 // 5.17.3: بوابة "الرسالة البسيطة" (بدون أدوات، المحلي أولاً) + ذاكرة آخر موديل نجح/فشل
+import { cleanSchedule, cleanSources } from '../src/core/agents'
+import { looksSecret, filterLines, buildPack, cleanTerms } from '../src/core/agent-memory'
 import { isTrivialChat, localSuitable, hasCjk, cityFrom, DEFAULT_CITY, pickLocalModel, noteLocal, needsNoThink, stripThink, preferGood, noteResult, resetTrivialState } from '../src/core/trivial'
 
 test('isTrivialChat: تحيات وأسئلة قصيرة بسيطة', () => {
@@ -613,3 +615,34 @@ test('preferGood: آخر ناجح بالأول، والفاشل بيتأجّل 1
   noteResult(['a', 'b', 'c', 'd'], undefined, t0)
   assert.deepEqual(preferGood(list, t0 + 1000), list)
 })
+
+test('agent-memory: secrets, blocked words and pack building', () => {
+  assert.equal(looksSecret('my api_key: abc'), true)
+  assert.equal(looksSecret('AIzaSyA1234567890123456789012'), true)
+  assert.equal(looksSecret('I like green tea'), false)
+  assert.deepEqual(cleanTerms([' Acme ', 'acme', 'x', '', 'Beta']), ['Acme', 'Beta'])
+  const f = filterLines('Name: Tarek\nWorks on Acme portal. Likes tea\npassword: 123\nLives in Damascus', ['acme'])
+  assert.equal(f.text, 'Name: Tarek\nLikes tea\nLives in Damascus')
+  assert.equal(f.dropped, 2)
+  const p = buildPack(
+    [
+      { id: '1', title: 'Basics', content: 'Speaks Arabic\nProject Acme details', enabled: true, source: 'user' },
+      { id: '2', title: 'Acme notes', content: 'x', enabled: true, source: 'user' },
+      { id: '3', title: 'Off', content: 'hidden', enabled: false, source: 'user' }
+    ] as never,
+    ['acme']
+  )
+  assert.ok(p.text.includes('Speaks Arabic'))
+  assert.ok(!/acme|hidden/i.test(p.text.split('\n').slice(1).join('\n')))
+})
+test('agents: schedule and mail sources are validated', () => {
+  assert.equal(cleanSchedule({ time: '25:00', task: 'x' }), null)
+  assert.equal(cleanSchedule({ time: '08:30', task: '  ' }), null)
+  const s = cleanSchedule({ time: '08:30', days: 'work', task: ' report ', tz: 'Not/AZone' })
+  assert.equal(s?.time, '08:30')
+  assert.equal(s?.days, 'work')
+  assert.equal(s?.task, 'report')
+  assert.ok(s && s.tz.length > 0 && s.tz !== 'Not/AZone')
+  assert.deepEqual(cleanSources('Gmail, out look;x'), ['gmail', 'out', 'lookx'])
+  assert.deepEqual(cleanSources(['A', '', 'b']), ['a', 'b'])
+}) 

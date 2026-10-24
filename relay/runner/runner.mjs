@@ -12,6 +12,10 @@ const { TG_TOKEN, TG_CHAT_ID, OPENROUTER_KEY, GATE_URL, GATE_KEY } = E;
 let TASK = '';
 let AGENT = '';
 let PROMPT = '';
+let MEMORY = '';
+let MODEL = '';
+let TOOL = 'text';
+let SOURCES = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const GEMINI_KEY = E.GEMINI_KEY;
@@ -29,6 +33,10 @@ async function loadJob() {
   TASK = String(j.task || '').trim();
   AGENT = String(j.agent || '').trim();
   PROMPT = String(j.prompt || '').trim();
+  MEMORY = String(j.memory || '').trim();
+  MODEL = /^[A-Za-z0-9._:\/-]{1,80}$/.test(String(j.model || '')) ? String(j.model) : '';
+  TOOL = j.tool === 'image' ? 'image' : 'text';
+  SOURCES = Array.isArray(j.sources) ? j.sources.filter((s) => /^[a-z0-9_-]{1,20}$/.test(s)).slice(0, 5) : [];
   if (!TASK) throw new Error('empty job');
 }
 
@@ -224,7 +232,7 @@ async function readMail(count) {
   if (!GATE_URL || !GATE_KEY) return 'Error: mailbox not configured';
   const n = Math.min(10, Math.max(1, Number(count) || 5));
   try {
-    const r = await fetch(`${GATE_URL}/mail`, { headers: { 'x-gate-key': GATE_KEY } });
+    const r = await fetch(`${GATE_URL}/mail${SOURCES.length ? '?src=' + SOURCES.join(',') : ''}`, { headers: { 'x-gate-key': GATE_KEY } });
     if (!r.ok) return `Error: mailbox HTTP ${r.status}`;
     const items = ((await r.json()).items || []).slice(-n).reverse();
     if (!items.length) return 'The mailbox is empty.';
@@ -267,6 +275,7 @@ async function callTool(name, args) {
 // Primary: Gemini (pinned model names, OpenAI-compatible endpoint). Optional fallback: free OpenRouter models.
 async function pickModels() {
   const list = [];
+  if (GEMINI_KEY && MODEL) list.push({ p: 'gemini', id: MODEL }); // per-agent model first, defaults stay as fallback
   if (GEMINI_KEY) {
     for (const m of (E.GEMINI_MODELS || 'gemini-flash-lite-latest,gemini-flash-latest').split(',')) {
       if (m.trim()) list.push({ p: 'gemini', id: m.trim() });
@@ -309,13 +318,46 @@ const RULES =
   'For weather use Open-Meteo JSON, e.g. https://api.open-meteo.com/v1/forecast?latitude=33.51&longitude=36.29&current=temperature_2m,weather_code,wind_speed_10m&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=3 (Damascus; change the coordinates for another city; default to Damascus). ' +
   'Today is ' + new Date().toISOString().slice(0, 10) + '.';
 
+// Image agent: one Gemini image-model call, the picture goes to Telegram. Needs GEMINI_KEY (image models need a billing-enabled key).
+async function imageMain() {
+  if (!GEMINI_KEY) { await say('⚠️ وكيل الصور بدو GEMINI_KEY (مفتاح مع Billing).', 'fail'); return; }
+  const id = MODEL || 'gemini-2.5-flash-image';
+  await say('🎨 عم يولّد الصورة…');
+  let res;
+  try {
+    res = await fetch('https://generativelanguage.googleapis.com/v1beta/models/' + encodeURIComponent(id) + ':generateContent', {
+      method: 'POST',
+      headers: { 'x-goog-api-key': GEMINI_KEY, 'content-type': 'application/json' },
+      body: JSON.stringify({ contents: [{ parts: [{ text: (PROMPT ? PROMPT + '\n\n' : '') + TASK }] }] }),
+      signal: AbortSignal.timeout(120000),
+    });
+  } catch { await say('⚠️ ما قدرت وصل لخدمة الصور.', 'fail'); return; }
+  if (!res.ok) { await say('⚠️ فشل توليد الصورة (HTTP ' + res.status + '). تأكد إنو المفتاح مفعّل عليه Billing واسم الموديل صحيح.', 'fail'); return; }
+  const j = await res.json().catch(() => ({}));
+  const parts = j.candidates?.[0]?.content?.parts || [];
+  const img = parts.find((p) => (p.inlineData || p.inline_data)?.data);
+  const d = img && (img.inlineData || img.inline_data);
+  if (!d) { await say('⚠️ الموديل ما رجّع صورة' + (parts.find((p) => p.text)?.text ? ': ' + String(parts.find((p) => p.text).text).slice(0, 200) : '.'), 'fail'); return; }
+  const mime = d.mimeType || d.mime_type || 'image/png';
+  const buf = Buffer.from(d.data, 'base64');
+  if (TG_TOKEN && TG_CHAT_ID) {
+    const fd = new FormData();
+    fd.append('chat_id', TG_CHAT_ID);
+    fd.append('photo', new Blob([buf], { type: mime }), 'image.' + (mime.split('/')[1] || 'png'));
+    const tr = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendPhoto', { method: 'POST', body: fd }).catch(() => null);
+    if (tr && tr.ok) { await gpost('/result', { job: JOB, kind: 'done', text: '🎨 انبعتت الصورة على تيليغرام.' }); return; }
+  }
+  await say('⚠️ انولدت الصورة بس ما قدرت ابعتها (لازم Telegram مضبوط).', 'fail');
+}
+
 async function main() {
   await loadJob();
+  if (TOOL === 'image') return imageMain();
   await say(`☁️ بلّش ${AGENT ? 'الوكيل ' + AGENT : 'المهمة'} على الكمبيوتر السحابي.`);
   const models = await pickModels();
   if (!models.length) { await say('⚠️ ما لقيت نموذج متاح.', 'fail'); return; }
   const messages = [
-    { role: 'system', content: (PROMPT ? PROMPT + '\n\n' : '') + RULES },
+    { role: 'system', content: (PROMPT ? PROMPT + '\n\n' : '') + (MEMORY ? MEMORY + '\n\n' : '') + RULES },
     { role: 'user', content: TASK },
   ];
   let mi = 0;

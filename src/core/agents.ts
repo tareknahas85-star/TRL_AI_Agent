@@ -1,16 +1,47 @@
 import crypto from 'crypto'
 import { readJson, writeJson } from './json-store'
+import { isValidTimeZone, systemTz } from './schedule-time'
 
 // User-defined agents: a name, a system prompt, and where each one runs (this PC, the cloud runner, or automatic).
 export type RunOn = 'local' | 'cloud' | 'auto'
-export type Agent = { id: string; name: string; prompt: string; runOn: RunOn }
+// memory: what the cloud runner may know about the user. 'basic' = the filtered basic-facts pack (see agent-memory.ts), 'none' = nothing.
+export type AgentMemory = 'basic' | 'none'
+export type Agent = { id: string; name: string; prompt: string; runOn: RunOn; memory: AgentMemory; model: string; tool: AgentTool; schedule: AgentSchedule | null; sources: string[] }
 
+// tool: 'text' = normal chat agent, 'image' = generates a picture (cloud runner, Gemini image model). model = optional model id override.
+export type AgentTool = 'text' | 'image'
+// Cloud schedule: the gate's cron fires the agent with 	ask at 	ime (HH:MM in 	z); days 'work' = Sun-Thu.
+export type AgentSchedule = { time: string; days: 'all' | 'work'; task: string; tz: string }
+export function cleanSchedule(s: unknown): AgentSchedule | null {
+  const x = (s ?? {}) as Partial<AgentSchedule>
+  const time = String(x.time ?? '')
+  const task = String(x.task ?? '').trim().slice(0, 2000)
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time) || !task) return null
+  const tz = typeof x.tz === 'string' && isValidTimeZone(x.tz) ? x.tz : systemTz()
+  return { time, days: x.days === 'work' ? 'work' : 'all', task, tz }
+}
+// Mailbox labels (MAIL_SRC of each Apps Script) this agent may read; empty = all.
+export const cleanSources = (l: unknown): string[] =>
+  (Array.isArray(l) ? l : String(l ?? '').split(/[,\s]+/))
+    .map((s) => String(s).toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20))
+    .filter(Boolean)
+    .slice(0, 5)
+const MODEL_RE = /^[A-Za-z0-9._:/-]{1,80}$/
 const FILE = 'agents.json'
 const MODES: RunOn[] = ['local', 'cloud', 'auto']
 
 export function listAgents(): Agent[] {
   const a = readJson<Agent[]>(FILE, [])
-  return Array.isArray(a) ? a.filter((x) => x && typeof x.name === 'string' && x.name.trim()) : []
+  return Array.isArray(a)
+    ? a.filter((x) => x && typeof x.name === 'string' && x.name.trim()).map((x) => ({
+        ...x,
+        memory: x.memory === 'none' ? ('none' as const) : ('basic' as const),
+        model: typeof x.model === 'string' && MODEL_RE.test(x.model) ? x.model : '',
+        tool: x.tool === 'image' ? ('image' as const) : ('text' as const),
+        schedule: cleanSchedule(x.schedule),
+        sources: cleanSources(x.sources)
+      }))
+    : []
 }
 
 function clean(a: Partial<Agent>): Agent | null {
@@ -18,7 +49,10 @@ function clean(a: Partial<Agent>): Agent | null {
   if (!name) return null
   const id = typeof a.id === 'string' && /^[0-9a-f]{8}$/.test(a.id) ? a.id : crypto.randomBytes(4).toString('hex')
   const runOn = MODES.includes(a.runOn as RunOn) ? (a.runOn as RunOn) : 'auto'
-  return { id, name, prompt: String(a.prompt ?? '').slice(0, 3000), runOn }
+  const memory: AgentMemory = a.memory === 'none' ? 'none' : 'basic'
+  const model = typeof a.model === 'string' && MODEL_RE.test(a.model.trim()) ? a.model.trim() : ''
+  const tool: AgentTool = a.tool === 'image' ? 'image' : 'text'
+  return { id, name, prompt: String(a.prompt ?? '').slice(0, 3000), runOn, memory, model, tool, schedule: cleanSchedule(a.schedule), sources: cleanSources(a.sources) }
 }
 
 export function saveAgent(p: Partial<Agent>): Agent[] {

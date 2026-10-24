@@ -37,7 +37,7 @@ function pushMail() {
   const r = UrlFetchApp.fetch(GATE + '/mail', {
     method: 'post',
     contentType: 'application/json',
-    headers: { 'x-mail-key': key },
+    headers: { 'x-mail-key': key, 'x-mail-src': props.getProperty('MAIL_SRC') || 'main' },
     payload: JSON.stringify(out.slice(0, 10)),
     muteHttpExceptions: true,
   });

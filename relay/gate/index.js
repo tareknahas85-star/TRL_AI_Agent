@@ -12,8 +12,18 @@ const safeEq = (a, b) => {
 const json = (o, s = 200) =>
   new Response(JSON.stringify(o), { status: s, headers: { 'content-type': 'application/json' } });
 const clip = (s, n) => String(s ?? '').slice(0, n);
+const cleanSrc = (s) => String(s ?? '').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20);
+const cleanSrcList = (l) => (Array.isArray(l) ? l : []).map(cleanSrc).filter(Boolean).slice(0, 5);
 const AP_RE = /^ap:([0-9a-f]{12}):([01])$/;
 const MODES = { local: 'محلي', cloud: 'سحابي', auto: 'تلقائي' };
+// --- cloud schedule helpers ---
+const validTz = (tz) => { try { new Intl.DateTimeFormat('en', { timeZone: tz }); return String(tz); } catch { return 'Asia/Damascus'; } };
+const DOW = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+function zoned(date, tz) {
+  const o = {};
+  for (const p of new Intl.DateTimeFormat('en-GB', { timeZone: tz, hourCycle: 'h23', weekday: 'short', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }).formatToParts(date)) o[p.type] = p.value;
+  return { key: o.year + '-' + o.month + '-' + o.day, mins: Number(o.hour) * 60 + Number(o.minute), dow: DOW[o.weekday] };
+}
 const HELP = [
   'أوامر البوت:',
   '/agents - لائحة الوكلاء',
@@ -25,6 +35,10 @@ const HELP = [
 ].join('\n');
 
 export default {
+  // Cron (every 5 min): fire scheduled agents.
+  async scheduled(_event, env, ctx) {
+    ctx.waitUntil(env.GATE.get(env.GATE.idFromName('main')).tick());
+  },
   async fetch(req, env) {
     const u = new URL(req.url);
     if (u.pathname === '/health') return json({ ok: true });
@@ -62,7 +76,7 @@ export class Gate extends DurableObject {
       let arr;
       try { arr = JSON.parse(body); } catch { return json({ error: 'bad json' }, 400); }
       if (!Array.isArray(arr)) return json({ error: 'expected array' }, 400);
-      return json(await this.addMail(arr));
+      return json(await this.addMail(arr, cleanSrc(req.headers.get('x-mail-src')) || 'main'));
     }
 
     // Phone app (separate narrow key, registered by the PC app): same routing as the Telegram bot.
@@ -166,15 +180,31 @@ export class Gate extends DurableObject {
           name: clip(a?.name, 40).trim(),
           prompt: clip(a?.prompt, 3000),
           runOn: Object.hasOwn(MODES, a?.runOn) ? a.runOn : 'auto',
+          memory: a?.memory === 'none' ? 'none' : 'basic',
+      model: /^[A-Za-z0-9._:\/-]{1,80}$/.test(String(a?.model || '')) ? String(a.model) : '',
+      tool: a?.tool === 'image' ? 'image' : 'text',
+      sources: cleanSrcList(a?.sources),
+      schedule:
+        a?.schedule && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(a.schedule.time || '')) && String(a.schedule.task || '').trim()
+          ? { time: a.schedule.time, days: a.schedule.days === 'work' ? 'work' : 'all', task: clip(a.schedule.task, 2000).trim(), tz: validTz(a.schedule.tz) }
+          : null,
         }))
         .filter((a) => a.name);
       await st.put('agents', clean);
       return json({ ok: true, count: clean.length });
     }
+    // Basic-facts pack the app builds (already filtered on the PC). Read-only for the runner, given to a job only if its agent allows it.
+    if (p === '/memory' && req.method === 'PUT') {
+      let b;
+      try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+      await st.put('memory', clip(b?.text, 6000));
+      return json({ ok: true });
+    }
     if (p === '/mail' && req.method === 'GET') {
       const after = parseInt(u.searchParams.get('after') || '0', 10) || 0;
       const mail = (await st.get('mail')) || [];
-      return json({ items: mail.filter((m) => m.n > after), last: (await st.get('mseq')) || 0 });
+      const want = cleanSrcList((u.searchParams.get('src') || '').split(','));
+      return json({ items: mail.filter((m) => m.n > after && (!want.length || want.includes(m.src || 'main'))), last: (await st.get('mseq')) || 0 });
     }
     if (p === '/agents' && req.method === 'GET')
       return json({ agents: (await st.get('agents')) || [] });
@@ -205,7 +235,7 @@ export class Gate extends DurableObject {
       const job = await st.get('job:' + j[1]);
       if (!job || Date.now() - job.ts > 3600000) return json({ error: 'not found' }, 404);
       await st.delete('job:' + j[1]);
-      return json({ task: job.task, agent: job.agent, prompt: job.prompt });
+      return json({ task: job.task, agent: job.agent, prompt: job.prompt, model: job.model || '', tool: job.tool || 'text', sources: job.sources || [], memory: job.memory || '' });
     }
     return json({ error: 'not found' }, 404);
   }
@@ -326,6 +356,27 @@ export class Gate extends DurableObject {
     return this.run(null, t);
   }
 
+  // Called by the cron trigger. Fires each due scheduled agent once per day (15-minute grace window for cron delays).
+  async tick() {
+    const st = this.ctx.storage;
+    const agents = (await st.get('agents')) || [];
+    const now = new Date();
+    for (const a of agents) {
+      const s = a.schedule;
+      if (!s) continue;
+      const z = zoned(now, s.tz || 'Asia/Damascus');
+      const [h, m] = s.time.split(':').map(Number);
+      const t = h * 60 + m;
+      if (z.mins < t || z.mins >= t + 15) continue;
+      if (s.days === 'work' && (z.dow === 5 || z.dow === 6)) continue;
+      const mark = 'sch:' + a.name.toLowerCase();
+      if ((await st.get(mark)) === z.key) continue;
+      if (a.runOn === 'local' && !(await this.online())) continue; // retried on the next tick inside the window
+      await st.put(mark, z.key);
+      try { await this.run(a, s.task); } catch (e) { console.log('schedule error', clip(e, 150)); }
+    }
+  }
+
   newJob() {
     return [...crypto.getRandomValues(new Uint8Array(6))].map((b) => b.toString(16).padStart(2, '0')).join('');
   }
@@ -355,7 +406,7 @@ export class Gate extends DurableObject {
 
   // ---------- Agent mailbox ----------
   // Mail content is untrusted data: stored and shown as plain text only, never executed.
-  async addMail(arr) {
+  async addMail(arr, src = 'main') {
     const st = this.ctx.storage;
     const mail = (await st.get('mail')) || [];
     let seq = (await st.get('mseq')) || 0;
@@ -368,6 +419,7 @@ export class Gate extends DurableObject {
       mail.push({
         n: ++seq,
         mid,
+        src,
         ts: Date.now(),
         from: clip(x.from, 200),
         subject: clip(x.subject, 200),
@@ -391,6 +443,10 @@ export class Gate extends DurableObject {
       task: clip(task, 4000),
       agent: clip(agent?.name || '', 40),
       prompt: clip(agent?.prompt || '', 3000),
+      model: agent?.model || '',
+      tool: agent?.tool === 'image' ? 'image' : 'text',
+      sources: cleanSrcList(agent?.sources),
+      memory: agent && agent.memory === 'none' ? '' : clip((await this.ctx.storage.get('memory')) || '', 6000),
     });
     const r = await fetch(
       `https://api.github.com/repos/${GH_REPO}/actions/workflows/agent.yml/dispatches`,

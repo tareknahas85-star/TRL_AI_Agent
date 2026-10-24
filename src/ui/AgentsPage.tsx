@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react'
-import type { AgentInfo, GateInfo } from '../preload/index.d'
+import type { AgentInfo, AgentMemInfo, GateInfo } from '../preload/index.d'
 
 const MODES: { id: AgentInfo['runOn']; label: string }[] = [
   { id: 'auto', label: 'تلقائي: محلي إذا الكمبيوتر شغّال، وإلا سحابي' },
   { id: 'local', label: 'محلي فقط (على هالكمبيوتر)' },
   { id: 'cloud', label: 'سحابي فقط (بيشتغل حتى لو الكمبيوتر مطفي)' }
 ]
-const EMPTY: AgentInfo = { id: '', name: '', prompt: '', runOn: 'auto' }
+const EMPTY: AgentInfo = { id: '', name: '', prompt: '', runOn: 'auto', memory: 'basic', model: '', tool: 'text', schedule: null, sources: [] }
 const field = 'rounded-lg border border-outline bg-bg px-3 py-1.5 outline-none focus:border-primary'
 
 export function AgentsPage() {
@@ -21,6 +21,8 @@ export function AgentsPage() {
   const [task, setTask] = useState('')
   const [out, setOut] = useState('')
   const [running, setRunning] = useState(false)
+  const [mem, setMem] = useState<AgentMemInfo | null>(null)
+  const [blockedText, setBlockedText] = useState('')
   const runAgent = async (id: string): Promise<void> => {
     setRunning(true)
     setOut('')
@@ -35,6 +37,10 @@ export function AgentsPage() {
 
   useEffect(() => {
     window.api.agents.list().then(setList).catch(() => undefined)
+    window.api.agentMem.get().then((m) => {
+      setMem(m)
+      setBlockedText(m.blocked.join('\n'))
+    }).catch(() => undefined)
     window.api.gate.get().then((g) => {
       setGate(g)
       setUrl(g.url)
@@ -91,6 +97,33 @@ export function AgentsPage() {
                 {m.label}
               </option>
             ))}
+          </select>
+          <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value as AgentInfo['tool'] })} className={field}>
+            <option value="text">نوع الوكيل: نصّي (محادثة وأدوات)</option>
+            <option value="image">نوع الوكيل: توليد صور (نانو بنانا، سحابي، بدو مفتاح مدفوع)</option>
+          </select>
+          <input dir="ltr" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.tool === 'image' ? 'الموديل (فاضي = gemini-2.5-flash-image)' : 'الموديل (فاضي = الافتراضي، مثلاً gemini-flash-latest)'} maxLength={80} className={field} />
+          <input dir="ltr" value={form.sources.join(', ')} onChange={(e) => setForm({ ...form, sources: e.target.value.split(',').map((s) => s.trim()) })} placeholder="مصادر الإيميل يلي بيقراها (مثلاً: gmail, outlook) - فاضي = كل الصناديق" className={field} />
+          <label className="flex items-center gap-2 text-xs">
+            <input type="checkbox" checked={!!form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.checked ? { time: '08:00', days: 'all', task: '', tz: Intl.DateTimeFormat().resolvedOptions().timeZone } : null })} />
+            جدولة تلقائية (بتشتغل من السحابة حتى لو الكمبيوتر مطفي)
+          </label>
+          {form.schedule && (
+            <div className="grid gap-2">
+              <div className="flex flex-wrap gap-2">
+                <input type="time" dir="ltr" value={form.schedule.time} onChange={(e) => setForm({ ...form, schedule: { ...form.schedule!, time: e.target.value } })} className={field} />
+                <select value={form.schedule.days} onChange={(e) => setForm({ ...form, schedule: { ...form.schedule!, days: e.target.value as 'all' | 'work' } })} className={field}>
+                  <option value="all">كل يوم</option>
+                  <option value="work">الأحد للخميس</option>
+                </select>
+                <span className="self-center text-xs text-muted" dir="ltr">{form.schedule.tz}</span>
+              </div>
+              <textarea value={form.schedule.task} onChange={(e) => setForm({ ...form, schedule: { ...form.schedule!, task: e.target.value } })} rows={2} maxLength={2000} placeholder="المهمة يلي بينفذها كل مرة (مثلاً: لخّصلي الإيميلات الجديدة)" className={field} />
+            </div>
+          )}
+          <select value={form.memory} onChange={(e) => setForm({ ...form, memory: e.target.value as AgentInfo['memory'] })} className={field}>
+            <option value="basic">ذاكرة أساسية مفلترة (بدون مشاريع ولا أسرار) — للوكيل السحابي</option>
+            <option value="none">بدون ذاكرة</option>
           </select>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
@@ -149,6 +182,45 @@ export function AgentsPage() {
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="mt-4 rounded-card border border-outline bg-surface p-4 shadow-card">
+        <h3 className="text-base font-semibold">ذاكرة الوكلاء السحابيين</h3>
+        <p className="mt-1 text-xs text-muted">
+          الوكيل السحابي بيعرف معلوماتك الأساسية بس (قراءة فقط). أسماء المشاريع، السطور يلي فيها كلمات مسرّية، وأي كلمة بتكتبها هون ما بتنبعت أبداً.
+        </p>
+        <textarea
+          value={blockedText}
+          onChange={(e) => setBlockedText(e.target.value)}
+          rows={4}
+          dir="auto"
+          placeholder="كلمات ممنوعة، وحدة بكل سطر (اسم شركة، عميل، مشروع…)"
+          className={field + ' mt-3 w-full text-sm'}
+        />
+        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+          <button
+            disabled={busy}
+            onClick={() =>
+              void run(async () => {
+                const m = await window.api.agentMem.set(blockedText.split('\n'))
+                setMem(m)
+                setBlockedText(m.blocked.join('\n'))
+                return 'انحفظت القائمة وانزامنت.'
+              })
+            }
+            className="rounded-full bg-primary px-3 py-1.5 text-white disabled:opacity-50"
+          >
+            حفظ ومزامنة
+          </button>
+          {mem && (
+            <span className="text-muted">
+              انبعت {mem.used} عنصر · انحجب {mem.dropped} · مشاريع محجوبة تلقائياً: {mem.projects.length}
+            </span>
+          )}
+        </div>
+        {mem && mem.text && (
+          <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg border border-outline bg-bg p-2 text-xs">{mem.text}</pre>
+        )}
       </section>
 
       <section className="mt-4 rounded-card border border-outline bg-surface p-4 shadow-card">

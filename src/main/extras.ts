@@ -9,6 +9,7 @@ import { costOf, knownPrice } from '../core/pricing'
 import { readJson, writeJson } from '../core/json-store'
 import { getConversation, listConversations } from '../core/workspace'
 import { deleteAgent, listAgents, saveAgent } from '../core/agents'
+import { cloudMemoryPack, getBlocked, projectNames, setBlocked } from '../core/agent-memory'
 import { gateState, setGate, syncAgents, testGate } from '../core/gate'
 import { clearTelegramToken, detectChatId, sendTelegram, setTelegram, telegramState } from '../core/telegram'
 
@@ -209,6 +210,16 @@ ipcMain.handle('security:status', () => {
     const l = deleteAgent(String(id))
     void syncAgents()
     return l
+  })
+  ipcMain.handle('agentmem:get', () => {
+    const p = cloudMemoryPack()
+    return { blocked: getBlocked(), projects: projectNames(), text: p.text, used: p.used, dropped: p.dropped }
+  })
+  ipcMain.handle('agentmem:set', (_e, list: unknown) => {
+    setBlocked(Array.isArray(list) ? list : [])
+    void syncAgents()
+    const p = cloudMemoryPack()
+    return { blocked: getBlocked(), projects: projectNames(), text: p.text, used: p.used, dropped: p.dropped }
   })
   ipcMain.handle('gate:get', () => gateState())
   ipcMain.handle('gate:set', (_e, p: unknown) => setGate((p ?? {}) as never))

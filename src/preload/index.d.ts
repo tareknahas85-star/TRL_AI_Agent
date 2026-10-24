@@ -81,7 +81,9 @@ export type FilePreviewInfo = { ok: boolean; kind?: string; name?: string; size?
 export type RemoteDevice = { id: string; name: string; createdAt: number; lastSeen: number; online: boolean }
 export type RemoteInfo = { enabled: boolean; port: number; relayUrl: string; approveFromPhone: boolean; destructiveFromPhone: boolean; lan: string[]; listening: boolean; pairing: { exp: number } | null; devices: RemoteDevice[] }
 export type RemoteEvent = { type: 'sas'; sas: string; name: string } | { type: 'paired'; name: string } | { type: 'pair-end'; reason: string } | { type: 'status' }
-export type AgentInfo = { id: string; name: string; prompt: string; runOn: 'local' | 'cloud' | 'auto' }
+export type AgentSchedule = { time: string; days: 'all' | 'work'; task: string; tz: string }
+export type AgentInfo = { id: string; name: string; prompt: string; runOn: 'local' | 'cloud' | 'auto'; memory: 'basic' | 'none'; model: string; tool: 'text' | 'image'; schedule: AgentSchedule | null; sources: string[] }
+export type AgentMemInfo = { blocked: string[]; projects: string[]; text: string; used: number; dropped: number }
 export type GateInfo = { enabled: boolean; url: string; hasKey: boolean }
 export type TelegramInfo = { enabled: boolean; chatId: string; minSeconds: number; inbound: boolean; hasToken: boolean }
 export type TaskRowInfo = {
@@ -295,9 +297,13 @@ declare global {
         import: (password: string) => Promise<{ ok: boolean; error?: string; files?: number; skills?: number; at?: string }>
       }
       security: { status: () => Promise<{ keyStorage: 'os-protected' | 'legacy' | 'memory'; phoneApproval: boolean }> }
+    agentMem: {
+      get: () => Promise<AgentMemInfo>
+      set: (list: string[]) => Promise<AgentMemInfo>
+    }
     agents: {
       list: () => Promise<AgentInfo[]>
-      save: (p: { id?: string; name: string; prompt: string; runOn: string }) => Promise<AgentInfo[]>
+      save: (p: { id?: string; name: string; prompt: string; runOn: string; memory?: string; model?: string; tool?: string; schedule?: AgentSchedule | null; sources?: string[] }) => Promise<AgentInfo[]>
       remove: (id: string) => Promise<AgentInfo[]>
       run: (id: string, task: string) => Promise<{ content: string; failed?: boolean }>
     }

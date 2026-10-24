@@ -1,6 +1,7 @@
 import { readJson, writeJson } from './json-store'
 import { getSecret, setSecret } from '../store/secure-store'
 import { listAgents } from './agents'
+import { cloudMemoryPack } from './agent-memory'
 import { randomBytes } from 'crypto'
 
 // Link to the Cloudflare gate (trl-agent-gate). The gate owns the Telegram webhook, so while this is on the app
@@ -66,9 +67,12 @@ export async function pollInbox(after: number): Promise<{ items: InboxItem[]; la
 }
 
 export async function syncAgents(): Promise<boolean> {
-  const body = JSON.stringify(listAgents().map((a) => ({ name: a.name, prompt: a.prompt, runOn: a.runOn })))
+  const body = JSON.stringify(listAgents().map((a) => ({ name: a.name, prompt: a.prompt, runOn: a.runOn, memory: a.memory, model: a.model, tool: a.tool, schedule: a.schedule, sources: a.sources })))
   const r = await gateFetch('/agents', { method: 'PUT', body })
-  return !!r && r.ok
+  if (!r || !r.ok) return false
+  // The filtered basic-facts pack for cloud agents (best effort: agents still work if this fails).
+  await gateFetch('/memory', { method: 'PUT', body: JSON.stringify({ text: cloudMemoryPack().text }) }).catch(() => null)
+  return true
 }
 
 // A narrow key for the phone app (it can only ask the gate for status and send a task, exactly like the Telegram bot).

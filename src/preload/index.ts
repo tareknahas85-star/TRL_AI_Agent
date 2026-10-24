@@ -305,9 +305,13 @@ const api = {
     import: (password: string) => ipcRenderer.invoke('transfer:import', password)
   },
   security: { status: () => ipcRenderer.invoke('security:status') },
+  agentMem: {
+    get: () => ipcRenderer.invoke('agentmem:get'),
+    set: (list: string[]) => ipcRenderer.invoke('agentmem:set', list)
+  },
   agents: {
     list: () => ipcRenderer.invoke('agents:list'),
-    save: (p: { id?: string; name: string; prompt: string; runOn: string }) => ipcRenderer.invoke('agents:save', p),
+    save: (p: { id?: string; name: string; prompt: string; runOn: string; memory?: string; model?: string; tool?: string; schedule?: unknown; sources?: unknown }) => ipcRenderer.invoke('agents:save', p),
     remove: (id: string) => ipcRenderer.invoke('agents:remove', id),
     run: (id: string, task: string) => ipcRenderer.invoke('agents:run', id, task)
   },

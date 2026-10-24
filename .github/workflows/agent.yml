@@ -11,8 +11,9 @@ on:
 permissions:
   contents: read
 
+# One group per job id: several agents can run at the same time, and a new job never cancels a waiting one.
 concurrency:
-  group: agent-run
+  group: agent-${{ inputs.job }}
   cancel-in-progress: false
 
 jobs:
