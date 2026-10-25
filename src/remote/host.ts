@@ -361,7 +361,7 @@ async function handle(dev: Device, m: Json): Promise<void> {
     const rid = str(m.id, 60)
     if (!a || !rid) return void send(dev.id, { k: 'error', text: 'ما لقيت الوكيل' })
     if (!task) return void send(dev.id, { k: 'error', text: 'اكتب المهمة أول' })
-    if (a.runOn === 'cloud') return void send(dev.id, { k: 'done', id: rid, tab: 'agent-' + a.id, content: 'هالوكيل مضبوط سحابي بس، بيشتغل من تيليغرام.', failed: true })
+    if (a.runOn === 'cloud') return void send(dev.id, { k: 'done', id: rid, tab: 'agent-' + a.id, content: 'هالوكيل مضبوط سحابي بس. شغّلو من الموبايل (بيروح عالسحابة) أو من تيليغرام.', failed: true })
     // same as Telegram: auto mode, the desktop's active project (never confidential), no phone history
     const ap = activeProject()
     if (ap?.confidential) return void send(dev.id, { k: 'done', id: rid, tab: 'agent-' + a.id, content: '🔒 المشروع الفعّال سري. غيّر المشروع من البرنامج أول.', failed: true })

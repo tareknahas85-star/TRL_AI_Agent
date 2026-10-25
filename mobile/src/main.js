@@ -258,6 +258,9 @@ function runAgentNow(id) {
   }
   const r = rid()
   const st = S.agentOut[id] = { task, out: '', at: Date.now(), running: true, status: 'عم يرسل…' }
+  const ag = S.agents.find((x) => x.id === id)
+  // an agent set to «cloud only» always runs on the cloud runner, even while the PC is on (the PC refuses it)
+  if (ag && ag.runOn === 'cloud' && S.gate) { st.status = 'عم يبعت للبوابة…'; saveAgOut(); renderPage(); void gateRun(id, task, true); return }
   S.pending.set(r, { agent: id, buf: '', status: st.status })
   if (!sendHost({ k: 'agent.run', id: r, agent: id, task, project: S.project, mode: S.mode })) {
     S.pending.delete(r)

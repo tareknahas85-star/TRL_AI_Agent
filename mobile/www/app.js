@@ -42199,6 +42199,14 @@
     }
     const r = rid();
     const st = S.agentOut[id] = { task, out: "", at: Date.now(), running: true, status: "\u0639\u0645 \u064A\u0631\u0633\u0644\u2026" };
+    const ag = S.agents.find((x) => x.id === id);
+    if (ag && ag.runOn === "cloud" && S.gate) {
+      st.status = "\u0639\u0645 \u064A\u0628\u0639\u062A \u0644\u0644\u0628\u0648\u0627\u0628\u0629\u2026";
+      saveAgOut();
+      renderPage();
+      void gateRun(id, task, true);
+      return;
+    }
     S.pending.set(r, { agent: id, buf: "", status: st.status });
     if (!sendHost({ k: "agent.run", id: r, agent: id, task, project: S.project, mode: S.mode })) {
       S.pending.delete(r);
