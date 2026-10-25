@@ -235,6 +235,102 @@ const TOOLS = [
   },
 ];
 
+// ---- AI watch tools: public data fetched and parsed here in code; the model only summarises/translates it ----
+const NEWS_FEEDS = [
+  { name: 'OpenAI', url: 'https://openai.com/news/rss.xml' },
+  { name: 'Google DeepMind', url: 'https://deepmind.google/blog/rss.xml' },
+  { name: 'Google AI', url: 'https://blog.google/technology/ai/rss/' },
+  { name: 'Hugging Face', url: 'https://huggingface.co/blog/feed.xml' },
+  { name: 'Qwen', url: 'https://qwenlm.github.io/blog/index.xml' },
+  { name: 'TechCrunch AI', url: 'https://techcrunch.com/category/artificial-intelligence/feed/' },
+  { name: 'The Verge AI', url: 'https://www.theverge.com/rss/ai-artificial-intelligence/index.xml' },
+];
+const xmlText = (s) =>
+  String(s || '')
+    .replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'")
+    .replace(/&#(\d+);/g, (_, n) => String.fromCodePoint(Number(n)))
+    .replace(/\s+/g, ' ')
+    .trim();
+async function feedItems(f) {
+  try {
+    const r = await fetch(f.url, { signal: AbortSignal.timeout(12000), headers: { 'user-agent': 'trl-agent' } });
+    if (!r.ok) return [];
+    const x = await r.text();
+    const out = [];
+    for (const m of x.matchAll(/<(item|entry)[\s>][\s\S]*?<\/\1>/g)) {
+      const b = m[0];
+      const title = xmlText((b.match(/<title[^>]*>([\s\S]*?)<\/title>/) || [])[1]);
+      const link = (b.match(/<link[^>]*href="([^"]+)"/) || [])[1] || xmlText((b.match(/<link[^>]*>([\s\S]*?)<\/link>/) || [])[1]);
+      const when = Date.parse(xmlText((b.match(/<(pubDate|updated|published)[^>]*>([\s\S]*?)<\/\1>/) || [])[2]));
+      const sum = xmlText((b.match(/<(description|summary)[^>]*>([\s\S]*?)<\/\1>/) || [])[2]).slice(0, 200);
+      if (title && link) out.push({ src: f.name, title, link, t: Number.isFinite(when) ? when : 0, sum });
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+const OFFER_RE = /\b(free|limited[- ]time|promo|promotion|credits?|discount|trial|giveaway)\b/i;
+async function aiNews(hours) {
+  const h = Math.min(96, Math.max(6, Number(hours) || 36));
+  const all = (await Promise.all(NEWS_FEEDS.map(feedItems))).flat();
+  const since = Date.now() - h * 3600000;
+  const items = all.filter((i) => i.t >= since).sort((a, b) => b.t - a.t).slice(0, 40);
+  if (!items.length) return 'No new items in the last ' + h + ' hours from the configured feeds.';
+  return fence(
+    items
+      .map((i, n) => `#${n + 1} [${i.src}] ${i.title}${OFFER_RE.test(i.title + ' ' + i.sum) ? ' [POSSIBLE FREE OFFER]' : ''}\n${i.link}\n${i.sum}`)
+      .join('\n\n'),
+  );
+}
+const KNOWN_ORGS = new Set(['openai', 'anthropic', 'google', 'meta-llama', 'mistralai', 'deepseek', 'qwen', 'x-ai', 'nvidia', 'microsoft', 'cohere', 'moonshotai', 'z-ai', 'amazon', 'perplexity', 'thudm', 'tencent', 'baidu', 'minimax', 'ai21', 'inception', 'nousresearch', 'liquid']);
+async function orFreeModels(days) {
+  const d = Math.min(60, Math.max(1, Number(days) || 14));
+  try {
+    const r = await fetch('https://openrouter.ai/api/v1/models', { signal: AbortSignal.timeout(20000) });
+    if (!r.ok) return 'Error: OpenRouter HTTP ' + r.status;
+    const list = ((await r.json()).data || [])
+      .filter((m) => Number(m.pricing?.prompt) === 0 && Number(m.pricing?.completion) === 0 && (m.created || 0) * 1000 >= Date.now() - d * 86400000)
+      .sort((a, b) => (b.created || 0) - (a.created || 0))
+      .slice(0, 25);
+    if (!list.length) return 'No free models were added to OpenRouter in the last ' + d + ' days.';
+    return fence(
+      list
+        .map((m) => {
+          const org = String(m.id).split('/')[0];
+          const desc = String(m.description || '');
+          const hours = Math.round((Date.now() - m.created * 1000) / 3600000);
+          const stealth = org === 'openrouter' || !KNOWN_ORGS.has(org) || /cloaked|stealth|gather feedback|logged by the provider/i.test(desc);
+          return `${m.id} | ${m.name} | context ${m.context_length || '?'} | added ${hours}h ago${hours <= 48 ? ' [NEW]' : ''}${stealth ? ' [POSSIBLE STEALTH/UNKNOWN-ORIGIN MODEL]' : ''} | tools: ${(m.supported_parameters || []).includes('tools') ? 'yes' : 'no'}\n${desc.slice(0, 220)}`;
+        })
+        .join('\n\n'),
+    );
+  } catch (e) {
+    return 'Error: ' + String(e.message || e).slice(0, 150);
+  }
+}
+async function hnBuzz(query) {
+  const q = String(query || '').slice(0, 80).trim();
+  if (!q) return 'Error: query is required';
+  try {
+    const since = Math.floor(Date.now() / 1000) - 7 * 86400;
+    const r = await fetch('https://hn.algolia.com/api/v1/search?tags=story&hitsPerPage=5&numericFilters=' + encodeURIComponent('created_at_i>' + since) + '&query=' + encodeURIComponent(q), { signal: AbortSignal.timeout(12000) });
+    if (!r.ok) return 'Error: HN HTTP ' + r.status;
+    const hits = (await r.json()).hits || [];
+    if (!hits.length) return 'No Hacker News stories about "' + q + '" in the last 7 days (little community buzz).';
+    return fence(hits.map((h) => `${h.title} | ${h.points} points | ${h.num_comments} comments | https://news.ycombinator.com/item?id=${h.objectID}`).join('\n'));
+  } catch (e) {
+    return 'Error: ' + String(e.message || e).slice(0, 150);
+  }
+}
+TOOLS.push(
+  { type: 'function', function: { name: 'ai_news', description: 'Latest AI news items (title, link, short summary) from major AI company blogs and tech sites, newest first. Items tagged [POSSIBLE FREE OFFER] mention free/credits/discounts.', parameters: { type: 'object', properties: { hours: { type: 'number', description: 'Look-back window in hours (default 36)' } } } } },
+  { type: 'function', function: { name: 'openrouter_free_models', description: 'Models recently added to OpenRouter at price 0, newest first, with [NEW] and [POSSIBLE STEALTH/UNKNOWN-ORIGIN MODEL] tags.', parameters: { type: 'object', properties: { days: { type: 'number', description: 'Look-back window in days (default 14)' } } } } },
+  { type: 'function', function: { name: 'hn_buzz', description: 'Hacker News stories from the last 7 days matching a model or product name, with points and comments, as a rough measure of community buzz.', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+);
+
 let mailRead = false;
 async function readMail(count) {
   if (!GATE_URL || !GATE_KEY) return 'Error: mailbox not configured';
@@ -257,6 +353,9 @@ async function readMail(count) {
 
 let denied = false;
 async function callTool(name, args) {
+  if (name === 'ai_news') return aiNews(args.hours);
+  if (name === 'openrouter_free_models') return orFreeModels(args.days);
+  if (name === 'hn_buzz') return hnBuzz(args.query);
   if (name === 'read_mail') return readMail(args.count);
   if (name === 'web_fetch') {
     // After reading untrusted mail, any outbound fetch needs the user's approval (blocks data-exfil via injected instructions).
