@@ -252,7 +252,8 @@ const SYN: [RegExp, string[]][] = [
   [/مستند|دوك|وثيقة/, ['doc', 'docs', 'document']],
   [/عرض تقديمي|سلايد|بوربوينت/, ['presentation', 'slides']],
   [/جهات اتصال|جهة اتصال|كونتاكت/, ['contact', 'contacts']],
-  [/استبيان|فورم/, ['form', 'forms']]
+  [/استبيان|فورم/, ['form', 'forms']],
+  [/صورة|صور|ارسم|رسم|ولّد|ولد|لوحة|شعار|لوغو/, ['image', 'generate', 'picture', 'draw']]
 ]
 // Safety: tools that look like they change state (send/delete/write/run...) are never offered to the model automatically.
 const RISKY = /(edit|interact|send|delete|remove|create|write|update|modify|manage|set[_-]|push|merge|apply|execut|exec[_-]|run[_-]|kubectl|terminate|drop|insert|upload|post[_-]|reply|draft|import|copy|move|install|uninstall|spawn|start|stop|kill|reset|patch|scale|rollout|cleanup|shutdown|store|save|add[_-]|register|train|deploy|claim|assign|handoff|steal|cancel|retry|complete)/i
