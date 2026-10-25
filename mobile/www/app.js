@@ -41337,6 +41337,108 @@
     }
   });
 
+  // node_modules/@capacitor-community/text-to-speech/dist/esm/web.js
+  var web_exports3 = {};
+  __export(web_exports3, {
+    TextToSpeechWeb: () => TextToSpeechWeb
+  });
+  var TextToSpeechWeb;
+  var init_web3 = __esm({
+    "node_modules/@capacitor-community/text-to-speech/dist/esm/web.js"() {
+      init_dist();
+      TextToSpeechWeb = class extends WebPlugin {
+        constructor() {
+          super();
+          this.speechSynthesis = null;
+          if ("speechSynthesis" in window) {
+            this.speechSynthesis = window.speechSynthesis;
+            window.addEventListener("beforeunload", () => {
+              this.stop();
+            });
+          }
+        }
+        async speak(options) {
+          if (!this.speechSynthesis) {
+            this.throwUnsupportedError();
+          }
+          await this.stop();
+          const speechSynthesis = this.speechSynthesis;
+          const utterance = this.createSpeechSynthesisUtterance(options);
+          return new Promise((resolve, reject) => {
+            utterance.onend = () => {
+              resolve();
+            };
+            utterance.onerror = (event) => {
+              reject(event);
+            };
+            speechSynthesis.speak(utterance);
+          });
+        }
+        async stop() {
+          if (!this.speechSynthesis) {
+            this.throwUnsupportedError();
+          }
+          this.speechSynthesis.cancel();
+        }
+        async getSupportedLanguages() {
+          const voices = this.getSpeechSynthesisVoices();
+          const languages = voices.map((voice) => voice.lang);
+          const filteredLanguages = languages.filter((v, i, a) => a.indexOf(v) == i);
+          return { languages: filteredLanguages };
+        }
+        async getSupportedVoices() {
+          const voices = this.getSpeechSynthesisVoices();
+          return { voices };
+        }
+        async isLanguageSupported(options) {
+          const result = await this.getSupportedLanguages();
+          const isLanguageSupported = result.languages.includes(options.lang);
+          return { supported: isLanguageSupported };
+        }
+        async openInstall() {
+          this.throwUnimplementedError();
+        }
+        createSpeechSynthesisUtterance(options) {
+          const voices = this.getSpeechSynthesisVoices();
+          const utterance = new SpeechSynthesisUtterance();
+          const { text, lang, rate, pitch, volume, voice } = options;
+          if (voice !== void 0) {
+            utterance.voice = voices[voice];
+          }
+          if (volume !== void 0) {
+            utterance.volume = volume >= 0 && volume <= 1 ? volume : 1;
+          }
+          if (rate !== void 0) {
+            utterance.rate = rate >= 0.1 && rate <= 10 ? rate : 1;
+          }
+          if (pitch !== void 0) {
+            utterance.pitch = pitch >= 0 && pitch <= 2 ? pitch : 2;
+          }
+          if (lang) {
+            utterance.lang = lang;
+          }
+          utterance.text = text;
+          return utterance;
+        }
+        getSpeechSynthesisVoices() {
+          if (!this.speechSynthesis) {
+            this.throwUnsupportedError();
+          }
+          if (!this.supportedVoices || this.supportedVoices.length < 1) {
+            this.supportedVoices = this.speechSynthesis.getVoices();
+          }
+          return this.supportedVoices;
+        }
+        throwUnsupportedError() {
+          throw this.unavailable("SpeechSynthesis API not available in this browser.");
+        }
+        throwUnimplementedError() {
+          throw this.unimplemented("Not implemented on web.");
+        }
+      };
+    }
+  });
+
   // src/main.js
   var import_libsodium_wrappers = __toESM(require_libsodium_wrappers());
   var import_jsqr = __toESM(require_jsQR());
@@ -41371,6 +41473,24 @@
   // node_modules/@capacitor/push-notifications/dist/esm/index.js
   init_dist();
   var PushNotifications = registerPlugin("PushNotifications", {});
+
+  // node_modules/@capacitor-community/text-to-speech/dist/esm/index.js
+  init_dist();
+
+  // node_modules/@capacitor-community/text-to-speech/dist/esm/definitions.js
+  var QueueStrategy;
+  (function(QueueStrategy2) {
+    QueueStrategy2[QueueStrategy2["Flush"] = 0] = "Flush";
+    QueueStrategy2[QueueStrategy2["Add"] = 1] = "Add";
+  })(QueueStrategy || (QueueStrategy = {}));
+
+  // node_modules/@capacitor-community/text-to-speech/dist/esm/index.js
+  var TextToSpeech = registerPlugin("TextToSpeech", {
+    web: () => Promise.resolve().then(() => (init_web3(), web_exports3)).then((m) => new m.TextToSpeechWeb())
+  });
+  if ("speechSynthesis" in window) {
+    window.speechSynthesis;
+  }
 
   // ../src/remote/protocol.ts
   var PROTO = 1;
@@ -41623,12 +41743,13 @@
   function feedHtml(c) {
     const { S: S3, esc: esc2, md: md2 } = c;
     const q = S3.tgQuiet === true;
-    let h = '<div class="card"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645</b><div class="mut">' + (q ? "\u0645\u0633\u0643\u0651\u0631\u0629: \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u062A\u0637\u0644\u0639 \u0647\u0648\u0646 \u0628\u0633." : "\u0634\u063A\u0651\u0627\u0644\u0629: \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u062A\u0646\u0628\u0639\u062A \u0644\u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645 \u0643\u0645\u0627\u0646.") + '</div></div><button class="chip' + (q ? " pri" : "") + '" data-tgq="1">' + (q ? "\u0634\u063A\u0651\u0644\u0647\u0627" : "\u0633\u0643\u0651\u0631\u0647\u0627") + '</button></div><div class="acts" style="margin-top:10px"><button class="btn danger" data-stopall="1">\u25A0 \u0623\u0648\u0642\u0641 \u0643\u0644 \u0627\u0644\u0645\u0647\u0627\u0645</button><button class="chip" data-feedclear="1">\u0645\u0633\u062D \u0627\u0644\u0642\u0627\u0626\u0645\u0629</button></div></div>';
+    const vn = (S3.ttsVoices || []).find((x) => x.uri === S3.ttsVoice);
+    let h = '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:120px"><b>\u{1F50A} \u0627\u0644\u0642\u0631\u0627\u0621\u0629 \u0627\u0644\u0635\u0648\u062A\u064A\u0629</b><div class="mut">\u0628\u062A\u0642\u0631\u0627 \u0627\u0644\u0639\u0646\u0648\u0627\u0646 \u0648\u0627\u0644\u0645\u0644\u062E\u0635 \u0628\u0633\u060C \u0628\u062F\u0648\u0646 \u0627\u0644\u0631\u0648\u0627\u0628\u0637.</div></div>' + (S3.speaking ? '<button class="btn danger" data-speakstop="1">\u23F9 \u0648\u0642\u0651\u0641</button>' : '<button class="chip pri" data-speakall="1">\u{1F50A} \u0627\u0633\u0645\u0639 \u0627\u0644\u0643\u0644</button>') + '<button class="chip" data-ttsrate="1">\u23E9 ' + S3.ttsRate + 'x</button><button class="chip" data-ttsvoice="1">\u{1F5E3} ' + esc2(vn ? vn.name.slice(0, 18) : "\u0635\u0648\u062A \u062A\u0644\u0642\u0627\u0626\u064A") + '</button></div></div><div class="card"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645</b><div class="mut">' + (q ? "\u0645\u0633\u0643\u0651\u0631\u0629: \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u062A\u0637\u0644\u0639 \u0647\u0648\u0646 \u0628\u0633." : "\u0634\u063A\u0651\u0627\u0644\u0629: \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u062A\u0646\u0628\u0639\u062A \u0644\u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645 \u0643\u0645\u0627\u0646.") + '</div></div><button class="chip' + (q ? " pri" : "") + '" data-tgq="1">' + (q ? "\u0634\u063A\u0651\u0644\u0647\u0627" : "\u0633\u0643\u0651\u0631\u0647\u0627") + '</button></div><div class="acts" style="margin-top:10px"><button class="btn danger" data-stopall="1">\u25A0 \u0623\u0648\u0642\u0641 \u0643\u0644 \u0627\u0644\u0645\u0647\u0627\u0645</button><button class="chip" data-feedclear="1">\u0645\u0633\u062D \u0627\u0644\u0642\u0627\u0626\u0645\u0629</button></div></div>';
     const items = [...S3.feed || []].reverse();
     if (!items.length) return h + empty("\u0645\u0627 \u0641\u064A \u0646\u062A\u0627\u0626\u062C \u0644\u0633\u0627. \u0623\u064A \u0648\u0643\u064A\u0644 \u0628\u064A\u062E\u0644\u0635 (\u0645\u062C\u062F\u0648\u0644 \u0623\u0648 \u0645\u0634\u063A\u0651\u0644 \u0645\u0646 \u0623\u064A \u0645\u0643\u0627\u0646) \u0628\u062A\u0637\u0644\u0639 \u0646\u062A\u064A\u062C\u062A\u0648 \u0647\u0648\u0646.");
     return h + items.map((i) => {
       const open = S3.feedOpen === i.n;
-      return '<div class="card' + (open ? " open" : "") + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === "fail" ? "\u26A0\uFE0F " : "\u2705 ") + esc2(i.agent || "\u0645\u0647\u0645\u0629") + '</b><span class="mut"> \xB7 ' + esc2(when(i.ts)) + "</span></div>" + (open ? '<div class="msg bot' + (i.kind === "fail" ? " err" : "") + '" style="margin-top:8px">' + md2(i.text || "") + "</div>" + (i.task ? '<div class="mut" style="margin-top:6px">\u0627\u0644\u0645\u0647\u0645\u0629: ' + esc2(i.task) + "</div>" : "") + (i.kind === "fail" ? "" : '<div class="acts" style="margin-top:8px"><button class="chip pri" data-explain="' + i.n + '">\u{1F50E} \u0627\u0634\u0631\u062D \u0623\u0643\u062A\u0631</button></div>') : '<div class="mut ag-h">' + esc2(String(i.text || "").replace(/\s+/g, " ").slice(0, 120)) + "</div>") + "</div>";
+      return '<div class="card' + (open ? " open" : "") + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === "fail" ? "\u26A0\uFE0F " : "\u2705 ") + esc2(i.agent || "\u0645\u0647\u0645\u0629") + '</b><span class="mut"> \xB7 ' + esc2(when(i.ts)) + '</span><button class="chip' + (S3.speaking && S3.speakN === i.n ? " pri" : "") + '" style="float:left" data-speak="' + i.n + '">' + (S3.speaking && S3.speakN === i.n ? "\u23F9" : "\u{1F50A}") + "</button></div>" + (open ? '<div class="msg bot' + (i.kind === "fail" ? " err" : "") + '" style="margin-top:8px">' + md2(i.text || "") + "</div>" + (i.task ? '<div class="mut" style="margin-top:6px">\u0627\u0644\u0645\u0647\u0645\u0629: ' + esc2(i.task) + "</div>" : "") + (i.kind === "fail" ? "" : '<div class="acts" style="margin-top:8px"><button class="chip pri" data-explain="' + i.n + '">\u{1F50E} \u0627\u0634\u0631\u062D \u0623\u0643\u062A\u0631</button></div>') : '<div class="mut ag-h">' + esc2(String(i.text || "").replace(/\s+/g, " ").slice(0, 120)) + "</div>") + "</div>";
     }).join("");
   }
   function agentsHtml(c) {
@@ -42558,6 +42679,50 @@
       renderPage();
       return true;
     }
+    if (d.speak !== void 0) {
+      const n = Number(d.speak);
+      if (S2.speaking && S2.speakN === n) {
+        ttsStop();
+        return true;
+      }
+      const it = (S2.feed || []).find((x) => x.n === n);
+      if (it) void ttsSpeak([it]);
+      return true;
+    }
+    if (d.speakall) {
+      const items = [...S2.feed || []].reverse().filter((x) => x.kind !== "fail").slice(0, 15);
+      if (!items.length) {
+        toast("\u0645\u0627 \u0641\u064A \u0646\u062A\u0627\u0626\u062C \u0644\u0644\u0642\u0631\u0627\u0621\u0629");
+        return true;
+      }
+      void ttsSpeak(items);
+      return true;
+    }
+    if (d.speakstop) {
+      ttsStop();
+      return true;
+    }
+    if (d.ttsrate) {
+      const rs = [0.8, 1, 1.2, 1.4];
+      S2.ttsRate = rs[(rs.indexOf(S2.ttsRate) + 1) % rs.length];
+      lsSet("trl.ttsrate", S2.ttsRate);
+      renderPage();
+      return true;
+    }
+    if (d.ttsvoice) {
+      void ttsLoad().then((vs) => {
+        if (!vs.length) {
+          toast("\u0645\u0627 \u0644\u0642\u064A\u062A \u0635\u0648\u062A \u0639\u0631\u0628\u064A. \u0646\u0632\u0651\u0644 \u0635\u0648\u062A \u0639\u0631\u0628\u064A \u0645\u0646 \u0625\u0639\u062F\u0627\u062F\u0627\u062A Google TTS");
+          return;
+        }
+        const k = vs.findIndex((x) => x.uri === S2.ttsVoice);
+        S2.ttsVoice = vs[(k + 1) % vs.length].uri;
+        lsSet("trl.ttsvoice", S2.ttsVoice);
+        renderPage();
+        toast("\u0627\u0644\u0635\u0648\u062A: " + vs[(k + 1) % vs.length].name);
+      });
+      return true;
+    }
     if (d.explain !== void 0) {
       const it = (S2.feed || []).find((x) => x.n === Number(d.explain));
       if (!it) return true;
@@ -42732,6 +42897,76 @@
     return false;
   }
   var QUEUE_TTL = 60 * 60 * 1e3;
+  var ttsClean = (t) => String(t || "").replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/https?:\/\/\S+/gi, " ").replace(/\bwww\.\S+/gi, " ").replace(/[*_`#>|~]+/g, " ").replace(/^\s*[-•]\s+/gm, "").replace(/\s+/g, " ").trim();
+  var ttsChunks = (t) => {
+    const out = [];
+    let cur = "";
+    for (const p of t.split(/(?<=[.!?؟۔\n])\s+/)) {
+      if ((cur + " " + p).length > 2500 && cur) {
+        out.push(cur);
+        cur = p;
+      } else cur = cur ? cur + " " + p : p;
+    }
+    if (cur) out.push(cur);
+    return out.flatMap((x) => x.length > 3e3 ? x.match(/.{1,2500}/g) : [x]);
+  };
+  var ttsTok = 0;
+  S2.ttsRate = Number(lsGet("trl.ttsrate", 1)) || 1;
+  S2.ttsVoice = lsGet("trl.ttsvoice", "");
+  S2.ttsVoices = null;
+  S2.speaking = false;
+  S2.speakN = 0;
+  async function ttsLoad() {
+    if (S2.ttsVoices) return S2.ttsVoices;
+    try {
+      const r = await TextToSpeech.getSupportedVoices();
+      S2.ttsVoices = (r.voices || []).map((v, i) => ({ i, uri: v.voiceURI || v.name, name: v.name || v.voiceURI, lang: v.lang || "" })).filter((v) => /^ar/i.test(v.lang));
+    } catch {
+      S2.ttsVoices = [];
+    }
+    return S2.ttsVoices;
+  }
+  function ttsStop() {
+    ttsTok++;
+    S2.speaking = false;
+    S2.speakN = 0;
+    try {
+      void TextToSpeech.stop();
+    } catch {
+    }
+    renderPage();
+  }
+  async function ttsSpeak(items) {
+    const tok = ++ttsTok;
+    try {
+      await TextToSpeech.stop();
+    } catch {
+    }
+    S2.speaking = true;
+    renderPage();
+    const voices = await ttsLoad();
+    const v = voices.find((x) => x.uri === S2.ttsVoice);
+    try {
+      for (const it of items) {
+        if (tok !== ttsTok) return;
+        S2.speakN = it.n;
+        renderPage();
+        const text = ttsClean((it.agent ? it.agent + ". " : "") + (it.text || ""));
+        for (const ch of ttsChunks(text)) {
+          if (tok !== ttsTok) return;
+          await TextToSpeech.speak({ text: ch, lang: v && v.lang || "ar-SA", rate: S2.ttsRate, pitch: 1, volume: 1, category: "playback", ...v ? { voice: v.i } : {} });
+        }
+      }
+    } catch (e) {
+      if (tok === ttsTok) toast("\u0627\u0644\u0635\u0648\u062A \u0645\u0627 \u0627\u0634\u062A\u063A\u0644: " + String(e && e.message || e).slice(0, 60));
+    } finally {
+      if (tok === ttsTok) {
+        S2.speaking = false;
+        S2.speakN = 0;
+        renderPage();
+      }
+    }
+  }
   var getQ = () => lsGet("trl.queue", []);
   var queueAdd = (it) => {
     const q = getQ();

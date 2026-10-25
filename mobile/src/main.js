@@ -4,6 +4,7 @@ import { Capacitor, registerPlugin } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { PushNotifications } from '@capacitor/push-notifications'
+import { TextToSpeech } from '@capacitor-community/text-to-speech'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
 import { brandOf, brandBadgeHtml } from '../../src/core/brands'
@@ -412,6 +413,11 @@ function viewClick(t) {
   if (d.refresh) { sendHost({ k: d.refresh + '.get' }); toast('عم يحدّث…'); return true }
   if (d.agopen !== undefined) { S.agentOpen = S.agentOpen === d.agopen ? '' : d.agopen; renderPage(); return true }
   if (d.agview) { S.agView = d.agview; if (d.agview === 'feed') { S.feedSeen = S.feedLast; lsSet('trl.feedSeen', S.feedSeen); void feedPoll() } renderTabs(); renderPage(); return true }
+  if (d.speak !== undefined) { const n = Number(d.speak); if (S.speaking && S.speakN === n) { ttsStop(); return true } const it = (S.feed || []).find((x) => x.n === n); if (it) void ttsSpeak([it]); return true }
+  if (d.speakall) { const items = [...(S.feed || [])].reverse().filter((x) => x.kind !== 'fail').slice(0, 15); if (!items.length) { toast('ما في نتائج للقراءة'); return true } void ttsSpeak(items); return true }
+  if (d.speakstop) { ttsStop(); return true }
+  if (d.ttsrate) { const rs = [0.8, 1, 1.2, 1.4]; S.ttsRate = rs[(rs.indexOf(S.ttsRate) + 1) % rs.length]; lsSet('trl.ttsrate', S.ttsRate); renderPage(); return true }
+  if (d.ttsvoice) { void ttsLoad().then((vs) => { if (!vs.length) { toast('ما لقيت صوت عربي. نزّل صوت عربي من إعدادات Google TTS'); return } const k = vs.findIndex((x) => x.uri === S.ttsVoice); S.ttsVoice = vs[(k + 1) % vs.length].uri; lsSet('trl.ttsvoice', S.ttsVoice); renderPage(); toast('الصوت: ' + vs[(k + 1) % vs.length].name) }); return true }
   if (d.explain !== undefined) {
     const it = (S.feed || []).find((x) => x.n === Number(d.explain)); if (!it) return true
     S.cur = null; curConv(); S.tab = 'chat'; renderTabs(); renderPage()
@@ -461,6 +467,39 @@ function viewClick(t) {
 
 // ---------- offline queue ----------
 const QUEUE_TTL = 60 * 60 * 1000 // older than 1 hour: ask before sending
+
+// ---- Text-to-speech (Android built-in engine) for agent results: reads title/summary, never URLs ----
+const ttsClean = (t) => String(t || '')
+  .replace(/!?\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/https?:\/\/\S+/gi, ' ').replace(/\bwww\.\S+/gi, ' ')
+  .replace(/[*_`#>|~]+/g, ' ').replace(/^\s*[-•]\s+/gm, '').replace(/\s+/g, ' ').trim()
+const ttsChunks = (t) => { const out = []; let cur = ''; for (const p of t.split(/(?<=[.!?؟۔\n])\s+/)) { if ((cur + ' ' + p).length > 2500 && cur) { out.push(cur); cur = p } else cur = cur ? cur + ' ' + p : p } if (cur) out.push(cur); return out.flatMap((x) => x.length > 3000 ? x.match(/.{1,2500}/g) : [x]) }
+let ttsTok = 0
+S.ttsRate = Number(lsGet('trl.ttsrate', 1)) || 1; S.ttsVoice = lsGet('trl.ttsvoice', ''); S.ttsVoices = null; S.speaking = false; S.speakN = 0
+async function ttsLoad() {
+  if (S.ttsVoices) return S.ttsVoices
+  try { const r = await TextToSpeech.getSupportedVoices(); S.ttsVoices = (r.voices || []).map((v, i) => ({ i, uri: v.voiceURI || v.name, name: v.name || v.voiceURI, lang: v.lang || '' })).filter((v) => /^ar/i.test(v.lang)) } catch { S.ttsVoices = [] }
+  return S.ttsVoices
+}
+function ttsStop() { ttsTok++; S.speaking = false; S.speakN = 0; try { void TextToSpeech.stop() } catch { /* ignore */ } renderPage() }
+async function ttsSpeak(items) {
+  const tok = ++ttsTok
+  try { await TextToSpeech.stop() } catch { /* ignore */ }
+  S.speaking = true; renderPage()
+  const voices = await ttsLoad(); const v = voices.find((x) => x.uri === S.ttsVoice)
+  try {
+    for (const it of items) {
+      if (tok !== ttsTok) return
+      S.speakN = it.n; renderPage()
+      const text = ttsClean((it.agent ? it.agent + '. ' : '') + (it.text || ''))
+      for (const ch of ttsChunks(text)) {
+        if (tok !== ttsTok) return
+        await TextToSpeech.speak({ text: ch, lang: (v && v.lang) || 'ar-SA', rate: S.ttsRate, pitch: 1, volume: 1, category: 'playback', ...(v ? { voice: v.i } : {}) })
+      }
+    }
+  } catch (e) { if (tok === ttsTok) toast('الصوت ما اشتغل: ' + String((e && e.message) || e).slice(0, 60)) }
+  finally { if (tok === ttsTok) { S.speaking = false; S.speakN = 0; renderPage() } }
+}
 const getQ = () => lsGet('trl.queue', [])
 const queueAdd = (it) => { const q = getQ(); q.push(it); lsSet('trl.queue', q.slice(-50)) }
 function flushQueue() {

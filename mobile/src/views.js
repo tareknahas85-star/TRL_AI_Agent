@@ -28,13 +28,15 @@ const empty = (msg) => '<div class="emp">' + msg + '</div>'
 export function feedHtml(c) {
   const { S, esc, md } = c
   const q = S.tgQuiet === true
-  let h = '<div class="card"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>إشعارات تيليغرام</b><div class="mut">' + (q ? 'مسكّرة: النتائج بتطلع هون بس.' : 'شغّالة: النتائج بتنبعت لتيليغرام كمان.') + '</div></div><button class="chip' + (q ? ' pri' : '') + '" data-tgq="1">' + (q ? 'شغّلها' : 'سكّرها') + '</button></div>' +
+  const vn = (S.ttsVoices || []).find((x) => x.uri === S.ttsVoice)
+  let h = '<div class="card"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div style="flex:1;min-width:120px"><b>🔊 القراءة الصوتية</b><div class="mut">بتقرا العنوان والملخص بس، بدون الروابط.</div></div>' + (S.speaking ? '<button class="btn danger" data-speakstop="1">⏹ وقّف</button>' : '<button class="chip pri" data-speakall="1">🔊 اسمع الكل</button>') + '<button class="chip" data-ttsrate="1">⏩ ' + S.ttsRate + 'x</button><button class="chip" data-ttsvoice="1">🗣 ' + esc(vn ? vn.name.slice(0, 18) : 'صوت تلقائي') + '</button></div></div>' +
+    '<div class="card"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>إشعارات تيليغرام</b><div class="mut">' + (q ? 'مسكّرة: النتائج بتطلع هون بس.' : 'شغّالة: النتائج بتنبعت لتيليغرام كمان.') + '</div></div><button class="chip' + (q ? ' pri' : '') + '" data-tgq="1">' + (q ? 'شغّلها' : 'سكّرها') + '</button></div>' +
     '<div class="acts" style="margin-top:10px"><button class="btn danger" data-stopall="1">■ أوقف كل المهام</button><button class="chip" data-feedclear="1">مسح القائمة</button></div></div>'
   const items = [...(S.feed || [])].reverse()
   if (!items.length) return h + empty('ما في نتائج لسا. أي وكيل بيخلص (مجدول أو مشغّل من أي مكان) بتطلع نتيجتو هون.')
   return h + items.map((i) => {
     const open = S.feedOpen === i.n
-    return '<div class="card' + (open ? ' open' : '') + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === 'fail' ? '⚠️ ' : '✅ ') + esc(i.agent || 'مهمة') + '</b><span class="mut"> · ' + esc(when(i.ts)) + '</span></div>' +
+    return '<div class="card' + (open ? ' open' : '') + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === 'fail' ? '⚠️ ' : '✅ ') + esc(i.agent || 'مهمة') + '</b><span class="mut"> · ' + esc(when(i.ts)) + '</span><button class="chip' + (S.speaking && S.speakN === i.n ? ' pri' : '') + '" style="float:left" data-speak="' + i.n + '">' + (S.speaking && S.speakN === i.n ? '⏹' : '🔊') + '</button></div>' +
       (open
         ? '<div class="msg bot' + (i.kind === 'fail' ? ' err' : '') + '" style="margin-top:8px">' + md(i.text || '') + '</div>' + (i.task ? '<div class="mut" style="margin-top:6px">المهمة: ' + esc(i.task) + '</div>' : '') + (i.kind === 'fail' ? '' : '<div class="acts" style="margin-top:8px"><button class="chip pri" data-explain="' + i.n + '">🔎 اشرح أكتر</button></div>')
         : '<div class="mut ag-h">' + esc(String(i.text || '').replace(/\s+/g, ' ').slice(0, 120)) + '</div>') + '</div>'
