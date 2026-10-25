@@ -142,3 +142,9 @@ body{background:radial-gradient(1200px 500px at 50% -120px,var(--g1) 0%,var(--bg
 .eagle{width:1.15em;height:1.15em;object-fit:contain;vertical-align:middle}
 .phi .eagle{width:30px;height:30px}
 .tabs .i .eagle{width:24px;height:24px}
+
+.msg.user[data-mi]{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+.mm-bg{position:fixed;inset:0;background:rgba(0,0,0,.4);display:flex;align-items:flex-end;justify-content:center;z-index:9999}
+.mm{width:100%;max-width:520px;background:var(--s1);border-top:1px solid var(--line);border-radius:16px 16px 0 0;padding:10px;display:flex;flex-direction:column;gap:6px}
+.mm button{padding:14px;border-radius:12px;border:1px solid var(--line);background:var(--s2);color:var(--fg);font-size:16px;text-align:center}
+.mm button.danger{color:var(--dng)}

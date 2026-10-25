@@ -41836,6 +41836,7 @@
     if (S.conn !== s) {
       S.conn = s;
       updateDot();
+      if (S.view === "main" && S.tab === "more") renderPage();
       if (s !== "online" && s !== "connecting" && S.gate && S.tab === "agents") pcStatus();
     }
   }
@@ -41867,6 +41868,10 @@
       ws = await dial(S.device.urls, S.device.room, "guest");
     } catch {
       setConn("offline");
+      if (conn.recon) {
+        conn.recon = false;
+        toast("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u062A\u0635\u0644\u060C \u0639\u0645 \u064A\u0639\u064A\u062F \u0627\u0644\u0645\u062D\u0627\u0648\u0644\u0629");
+      }
       return scheduleRetry();
     }
     if (gen !== conn.gen) {
@@ -41891,6 +41896,11 @@
       onReady: () => {
         conn.retry = 0;
         setConn("online");
+        if (conn.recon) {
+          conn.recon = false;
+          toast("\u0645\u062A\u0635\u0644 \u2705");
+        }
+        ;
         link.send({ k: "hello" });
         link.send({ k: "agents.get" });
         link.send({ k: "sched.get" });
@@ -42473,8 +42483,8 @@
     const p = [...S.pending.values()].find((x) => x.conv === S.cur);
     el.innerHTML = p ? '<span class="spin"></span> ' + esc(p.status || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") : "";
   }
-  function msgHtml(m) {
-    if (m.role === "user") return '<div class="msg user">' + esc(m.content).replace(/\n/g, "<br>") + (m.atts && m.atts.length ? '<div class="meta">\u{1F4CE} ' + m.atts.map(esc).join(" \xB7 ") + "</div>" : "") + (m.queued ? '<div class="meta">\u23F3 \u0628\u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026</div>' : "") + (m.expired ? '<div class="meta">\u26A0\uFE0F \u0645\u0627 \u0627\u0646\u0628\u0639\u062A\u062A (\u0642\u062F\u064A\u0645\u0629)</div>' : "") + "</div>";
+  function msgHtml(m, i) {
+    if (m.role === "user") return '<div class="msg user" data-mi="' + i + '">' + esc(m.content).replace(/\n/g, "<br>") + (m.atts && m.atts.length ? '<div class="meta">\u{1F4CE} ' + m.atts.map(esc).join(" \xB7 ") + "</div>" : "") + (m.queued ? '<div class="meta">\u23F3 \u0628\u0627\u0646\u062A\u0638\u0627\u0631 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026</div>' : "") + (m.expired ? '<div class="meta">\u26A0\uFE0F \u0645\u0627 \u0627\u0646\u0628\u0639\u062A\u062A (\u0642\u062F\u064A\u0645\u0629)</div>' : "") + "</div>";
     const model = (String(m.meta || "").match(/Model: ([^|]+?)(?: \||$)/) || [])[1];
     return '<div class="msg bot' + (m.failed ? " err" : "") + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta">' + esc(model || m.meta || "") + "</div>" : "") + "</div>";
   }
@@ -42484,7 +42494,7 @@
     const c = curConv();
     const p = [...S.pending.values()].find((x) => x.conv === c.id);
     const empty2 = !c.msgs.length && !p;
-    el.innerHTML = empty2 ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">\u0627\u0643\u062A\u0628 \u0633\u0624\u0627\u0644\u0643 \u0623\u0648 \u0627\u0628\u0639\u062A \u0645\u0644\u0641. \u0643\u0644 \u0634\u064A \u0628\u064A\u062A\u0646\u0641\u0630 \u0639\u0644\u0649 \u0643\u0645\u0628\u064A\u0648\u062A\u0631\u0643.</div>' : c.msgs.map(msgHtml).join("") + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">\u2026</span>') + "</div>" : "");
+    el.innerHTML = empty2 ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">\u0627\u0643\u062A\u0628 \u0633\u0624\u0627\u0644\u0643 \u0623\u0648 \u0627\u0628\u0639\u062A \u0645\u0644\u0641. \u0643\u0644 \u0634\u064A \u0628\u064A\u062A\u0646\u0641\u0630 \u0639\u0644\u0649 \u0643\u0645\u0628\u064A\u0648\u062A\u0631\u0643.</div>' : c.msgs.map((m, i) => msgHtml(m, i)).join("") + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">\u2026</span>') + "</div>" : "");
     if (stick) el.scrollTop = el.scrollHeight;
   }
   function renderLast() {
@@ -42904,6 +42914,92 @@
       h.innerHTML = '<div class="sheet-bg" data-close="1"><div class="sheet" id="sheetBody"><h2>\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A</h2>' + (S.convs.length ? S.convs.map((c) => '<div class="opt ' + (c.id === S.cur ? "sel" : "") + '" data-conv="' + esc(c.id) + '"><div style="flex:1;min-width:0"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc(c.title) + "</div><small>" + new Date(c.at).toLocaleDateString("ar") + " \xB7 " + c.msgs.length + ' \u0631\u0633\u0627\u0644\u0629</small></div><button class="chip" data-delconv="' + esc(c.id) + '">\u062D\u0630\u0641</button></div>').join("") : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u062D\u0627\u062F\u062B\u0627\u062A.</div>') + "</div></div>";
     }
   }
+  var lpTimer = null;
+  var lpFired = 0;
+  var closeMsgMenu = () => {
+    const m = $("#msgMenu");
+    if (m) m.remove();
+  };
+  async function copyText(s) {
+    try {
+      await navigator.clipboard.writeText(s);
+      return true;
+    } catch {
+    }
+    try {
+      const x = document.createElement("textarea");
+      x.value = s;
+      x.style.position = "fixed";
+      x.style.opacity = "0";
+      document.body.appendChild(x);
+      x.select();
+      const ok = document.execCommand("copy");
+      x.remove();
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+  function showMsgMenu(i) {
+    const c = curConv();
+    const m = c.msgs[i];
+    if (!m || m.role !== "user") return;
+    closeMsgMenu();
+    const bg = document.createElement("div");
+    bg.id = "msgMenu";
+    bg.className = "mm-bg";
+    bg.innerHTML = '<div class="mm"><button data-ma="copy">\u{1F4CB} \u0646\u0633\u062E</button><button data-ma="resend">\u{1F501} \u0625\u0639\u0627\u062F\u0629 \u0625\u0631\u0633\u0627\u0644</button><button data-ma="del" class="danger">\u{1F5D1} \u062D\u0630\u0641 (\u0645\u0646 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644 \u0628\u0633)</button><button data-ma="x">\u0625\u0644\u063A\u0627\u0621</button></div>';
+    bg.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      if (ev.target === bg) return closeMsgMenu();
+      const a = ev.target.closest("[data-ma]");
+      if (!a) return;
+      const act = a.dataset.ma;
+      closeMsgMenu();
+      if (act === "copy") toast(await copyText(m.content) ? "\u0627\u0646\u0646\u0633\u062E\u062A" : "\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0646\u0633\u062E");
+      else if (act === "resend") {
+        if (S.running) return toast("\u0627\u0633\u062A\u0646\u0649 \u0644\u062D\u062F \u0645\u0627 \u064A\u062E\u0644\u0635 \u0627\u0644\u0631\u062F \u0627\u0644\u062D\u0627\u0644\u064A");
+        const ta = $("#ta");
+        if (!ta) return;
+        ta.value = m.content === "(\u0645\u0631\u0641\u0642\u0627\u062A)" ? "" : m.content;
+        if (m.atts && m.atts.length) toast("\u0627\u0644\u0645\u0631\u0641\u0642\u0627\u062A \u0645\u0627 \u0628\u062A\u0646\u0628\u0639\u062A \u0645\u0646 \u062C\u062F\u064A\u062F");
+        if (ta.value.trim()) sendChat();
+      } else if (act === "del") {
+        const k = c.msgs.indexOf(m);
+        if (k < 0) return;
+        c.msgs.splice(k, 1);
+        if (m.qid) lsSet("trl.queue", getQ().filter((q) => q.id !== m.qid));
+        saveConvs();
+        renderMsgs(false);
+        updateDot();
+        toast("\u0627\u0646\u062D\u0630\u0641\u062A \u0645\u0646 \u0627\u0644\u0645\u0648\u0628\u0627\u064A\u0644");
+      }
+    });
+    document.body.appendChild(bg);
+  }
+  document.addEventListener("touchstart", (e) => {
+    const el = e.target.closest && e.target.closest(".msg[data-mi]");
+    if (!el) return;
+    clearTimeout(lpTimer);
+    lpTimer = setTimeout(() => {
+      lpTimer = null;
+      lpFired = Date.now();
+      showMsgMenu(Number(el.dataset.mi));
+    }, 500);
+  }, { passive: true });
+  for (const ev of ["touchmove", "touchend", "touchcancel"]) document.addEventListener(ev, () => {
+    clearTimeout(lpTimer);
+    lpTimer = null;
+  }, { passive: true });
+  document.addEventListener("contextmenu", (e) => {
+    const el = e.target.closest && e.target.closest(".msg[data-mi]");
+    if (!el) return;
+    e.preventDefault();
+    if (Date.now() - lpFired > 800) {
+      lpFired = Date.now();
+      showMsgMenu(Number(el.dataset.mi));
+    }
+  });
   document.addEventListener("click", (e) => {
     const t = e.target.closest("button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj]");
     if (!t) return;
@@ -43008,6 +43104,8 @@
       case "apprNo":
         return answerApproval(false);
       case "reconBtn":
+        toast("\u0639\u0645 \u064A\u0639\u064A\u062F \u0627\u0644\u0627\u062A\u0635\u0627\u0644\u2026");
+        conn.recon = true;
         dropConn();
         setTimeout(wake, 100);
         return;

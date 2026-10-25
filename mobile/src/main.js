@@ -82,7 +82,7 @@ async function dial(urls, room, role) {
   for (const u of urls) { try { return await openWs(u, room, role) } catch { /* try next address */ } }
   throw new Error('no route')
 }
-function setConn(s) { if (S.conn !== s) { S.conn = s; updateDot(); if (s !== 'online' && s !== 'connecting' && S.gate && S.tab === 'agents') pcStatus() } }
+function setConn(s) { if (S.conn !== s) { S.conn = s; updateDot(); if (S.view === 'main' && S.tab === 'more') renderPage(); if (s !== 'online' && s !== 'connecting' && S.gate && S.tab === 'agents') pcStatus() } }
 function updateDot() {
   const d = $('#dot'); if (!d) return
   d.className = 'dot ' + (S.conn === 'online' ? 'on' : S.conn === 'offline' ? '' : 'wait')
@@ -101,14 +101,14 @@ async function connect() {
   setConn('connecting')
   const gen = ++conn.gen
   let ws
-  try { ws = await dial(S.device.urls, S.device.room, 'guest') } catch { setConn('offline'); return scheduleRetry() }
+  try { ws = await dial(S.device.urls, S.device.room, 'guest') } catch { setConn('offline'); if (conn.recon) { conn.recon = false; toast('ما قدرت أتصل، عم يعيد المحاولة') } return scheduleRetry() }
   if (gen !== conn.gen) { try { ws.close() } catch { /* */ } return }
   conn.ws = ws
   conn.lastRx = Date.now()
   const link = new GuestLink({
     sodium, ppk: S.ppk, psk: S.psk, name: S.device.me, mode: 'device', device: { dpk: S.device.dpk, room: S.device.room },
     send: (f) => { if (ws.readyState === 1) ws.send(f) },
-    onReady: () => { conn.retry = 0; setConn('online'); link.send({ k: 'hello' }); link.send({ k: 'agents.get' }); link.send({ k: 'sched.get' }); setTimeout(flushQueue, 400) },
+    onReady: () => { conn.retry = 0; setConn('online'); if (conn.recon) { conn.recon = false; toast('متصل ✅') }; link.send({ k: 'hello' }); link.send({ k: 'agents.get' }); link.send({ k: 'sched.get' }); setTimeout(flushQueue, 400) },
     onMessage: (m) => onHost(m),
     onPeer: (up) => setConn(up ? 'connecting' : 'hostdown')
   })
@@ -422,8 +422,8 @@ function renderStatus() {
   const p = [...S.pending.values()].find((x) => x.conv === S.cur)
   el.innerHTML = p ? '<span class="spin"></span> ' + esc(p.status || 'عم يشتغل…') : ''
 }
-function msgHtml(m) {
-  if (m.role === 'user') return '<div class="msg user">' + esc(m.content).replace(/\n/g, '<br>') + (m.atts && m.atts.length ? '<div class="meta">📎 ' + m.atts.map(esc).join(' · ') + '</div>' : '') + (m.queued ? '<div class="meta">⏳ بانتظار الكمبيوتر…</div>' : '') + (m.expired ? '<div class="meta">⚠️ ما انبعتت (قديمة)</div>' : '') + '</div>'
+function msgHtml(m, i) {
+  if (m.role === 'user') return '<div class="msg user" data-mi="' + i + '">' + esc(m.content).replace(/\n/g, '<br>') + (m.atts && m.atts.length ? '<div class="meta">📎 ' + m.atts.map(esc).join(' · ') + '</div>' : '') + (m.queued ? '<div class="meta">⏳ بانتظار الكمبيوتر…</div>' : '') + (m.expired ? '<div class="meta">⚠️ ما انبعتت (قديمة)</div>' : '') + '</div>'
   const model = (String(m.meta || '').match(/Model: ([^|]+?)(?: \||$)/) || [])[1]
   return '<div class="msg bot' + (m.failed ? ' err' : '') + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta">' + esc(model || m.meta || '') + '</div>' : '') + '</div>'
 }
@@ -432,7 +432,7 @@ function renderMsgs(stick = true) {
   const c = curConv()
   const p = [...S.pending.values()].find((x) => x.conv === c.id)
   const empty = !c.msgs.length && !p
-  el.innerHTML = empty ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">اكتب سؤالك أو ابعت ملف. كل شي بيتنفذ على كمبيوترك.</div>' : c.msgs.map(msgHtml).join('') + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">…</span>') + '</div>' : '')
+  el.innerHTML = empty ? '<div class="mut" style="margin:auto;text-align:center;padding:30px">اكتب سؤالك أو ابعت ملف. كل شي بيتنفذ على كمبيوترك.</div>' : c.msgs.map((m, i) => msgHtml(m, i)).join('') + (p ? '<div class="msg bot" id="live">' + (p.buf ? md(p.buf) : '<span class="mut">…</span>') + '</div>' : '')
   if (stick) el.scrollTop = el.scrollHeight
 }
 function renderLast() {
@@ -691,6 +691,52 @@ function renderSheet() {
   }
 }
 
+
+// ---------- long-press menu on my own messages: copy / resend / delete (phone only) ----------
+let lpTimer = null; let lpFired = 0
+const closeMsgMenu = () => { const m = $('#msgMenu'); if (m) m.remove() }
+async function copyText(s) {
+  try { await navigator.clipboard.writeText(s); return true } catch { /* fall back */ }
+  try { const x = document.createElement('textarea'); x.value = s; x.style.position = 'fixed'; x.style.opacity = '0'; document.body.appendChild(x); x.select(); const ok = document.execCommand('copy'); x.remove(); return ok } catch { return false }
+}
+function showMsgMenu(i) {
+  const c = curConv(); const m = c.msgs[i]; if (!m || m.role !== 'user') return
+  closeMsgMenu()
+  const bg = document.createElement('div'); bg.id = 'msgMenu'; bg.className = 'mm-bg'
+  bg.innerHTML = '<div class="mm"><button data-ma="copy">📋 نسخ</button><button data-ma="resend">🔁 إعادة إرسال</button><button data-ma="del" class="danger">🗑 حذف (من الموبايل بس)</button><button data-ma="x">إلغاء</button></div>'
+  bg.addEventListener('click', async (ev) => {
+    ev.stopPropagation()
+    if (ev.target === bg) return closeMsgMenu()
+    const a = ev.target.closest('[data-ma]'); if (!a) return
+    const act = a.dataset.ma
+    closeMsgMenu()
+    if (act === 'copy') toast((await copyText(m.content)) ? 'اننسخت' : 'ما قدرت أنسخ')
+    else if (act === 'resend') {
+      if (S.running) return toast('استنى لحد ما يخلص الرد الحالي')
+      const ta = $('#ta'); if (!ta) return
+      ta.value = m.content === '(مرفقات)' ? '' : m.content
+      if (m.atts && m.atts.length) toast('المرفقات ما بتنبعت من جديد')
+      if (ta.value.trim()) sendChat()
+    } else if (act === 'del') {
+      const k = c.msgs.indexOf(m); if (k < 0) return
+      c.msgs.splice(k, 1)
+      if (m.qid) lsSet('trl.queue', getQ().filter((q) => q.id !== m.qid))
+      saveConvs(); renderMsgs(false); updateDot(); toast('انحذفت من الموبايل')
+    }
+  })
+  document.body.appendChild(bg)
+}
+document.addEventListener('touchstart', (e) => {
+  const el = e.target.closest && e.target.closest('.msg[data-mi]'); if (!el) return
+  clearTimeout(lpTimer); lpTimer = setTimeout(() => { lpTimer = null; lpFired = Date.now(); showMsgMenu(Number(el.dataset.mi)) }, 500)
+}, { passive: true })
+for (const ev of ['touchmove', 'touchend', 'touchcancel']) document.addEventListener(ev, () => { clearTimeout(lpTimer); lpTimer = null }, { passive: true })
+document.addEventListener('contextmenu', (e) => {
+  const el = e.target.closest && e.target.closest('.msg[data-mi]'); if (!el) return
+  e.preventDefault()
+  if (Date.now() - lpFired > 800) { lpFired = Date.now(); showMsgMenu(Number(el.dataset.mi)) }
+})
+
 // ---------- events (delegated) ----------
 document.addEventListener('click', (e) => {
   const t = e.target.closest('button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj]'); if (!t) return
@@ -718,7 +764,7 @@ document.addEventListener('click', (e) => {
     case 'mic': return toggleRec()
     case 'apprYes': return answerApproval(true)
     case 'apprNo': return answerApproval(false)
-    case 'reconBtn': dropConn(); setTimeout(wake, 100); return
+    case 'reconBtn': toast('عم يعيد الاتصال…'); conn.recon = true; dropConn(); setTimeout(wake, 100); return
     case 'unpairBtn': if (confirm('تلغي ربط هالجهاز؟')) { sendHost({ k: 'unpair' }); setTimeout(() => wipeDevice(''), 250) } return
   }
 })
