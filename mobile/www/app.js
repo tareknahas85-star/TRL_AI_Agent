@@ -41368,6 +41368,10 @@
     web: () => Promise.resolve().then(() => (init_web2(), web_exports2)).then((m) => new m.LocalNotificationsWeb())
   });
 
+  // node_modules/@capacitor/push-notifications/dist/esm/index.js
+  init_dist();
+  var PushNotifications = registerPlugin("PushNotifications", {});
+
   // ../src/remote/protocol.ts
   var PROTO = 1;
   var enc = new TextEncoder();
@@ -42041,6 +42045,7 @@
         if (m.gate && m.gate.url && m.gate.key) {
           S.gate = m.gate;
           lsSet("trl.gate", m.gate);
+          void pushInit();
         }
         if (S.tab === "agents") renderPage();
         return;
@@ -42260,6 +42265,34 @@
       return null;
     }
   }
+  var pushOn = false;
+  async function pushInit() {
+    if (pushOn || !S.gate) return;
+    try {
+      let p = await PushNotifications.checkPermissions();
+      if (p.receive === "prompt" || p.receive === "prompt-with-rationale") p = await PushNotifications.requestPermissions();
+      if (p.receive !== "granted") return;
+      pushOn = true;
+      await PushNotifications.addListener("registration", (t) => {
+        if (t && t.value) void gateCall("/push-token", { token: t.value });
+      });
+      await PushNotifications.addListener("registrationError", () => {
+        pushOn = false;
+      });
+      await PushNotifications.addListener("pushNotificationActionPerformed", () => {
+        S.tab = "agents";
+        S.agView = "feed";
+        if (S.view === "main") {
+          renderTabs();
+          renderPage();
+        }
+        void feedPoll();
+      });
+      await PushNotifications.register();
+    } catch {
+      pushOn = false;
+    }
+  }
   var feedBusy = false;
   async function feedPoll() {
     if (!S.gate || feedBusy) return;
@@ -42284,7 +42317,7 @@
       if (items.length) {
         const mine = new Set(Object.values(S.agentOut).map((x) => x && x.job).filter(Boolean));
         S.feed = [...S.feed, ...items].slice(-50);
-        if (!first) {
+        if (!first && !pushOn) {
           for (const it of items) if (!mine.has(it.job)) notify((it.agent || "\u0645\u0647\u0645\u0629") + (it.kind === "fail" ? ": \u0645\u0627 \u062E\u0644\u0635\u062A" : ": \u062E\u0644\u0635"), it.text || "");
         }
       }
@@ -43047,9 +43080,21 @@
       const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, proj: projHtml, more: moreHtml }[S.tab] || moreHtml;
       const html = fn(VC);
       if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return;
+      const ae = document.activeElement;
+      const keep = ae && ae.id && /^(TEXTAREA|INPUT)$/.test(ae.tagName) && p.contains(ae) ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null;
       p.innerHTML = '<div class="page' + (lastPage.tab === S.tab ? "" : " fade") + '">' + html + "</div>";
       lastPage.tab = S.tab;
       lastPage.html = html;
+      if (keep) {
+        const el = document.getElementById(keep.id);
+        if (el) {
+          try {
+            el.focus({ preventScroll: true });
+            if (keep.s != null) el.setSelectionRange(keep.s, keep.e);
+          } catch {
+          }
+        }
+      }
     }
   }
   function renderApproval() {
@@ -43348,6 +43393,7 @@
   }, 45e3);
   setTimeout(() => {
     void feedPoll();
+    void pushInit();
   }, 4e3);
   window.addEventListener("online", wake);
   setInterval(() => {

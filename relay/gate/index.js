@@ -82,7 +82,7 @@ export class Gate extends DurableObject {
     // Phone app (separate narrow key, registered by the PC app): same routing as the Telegram bot.
     // /status says whether the PC is online; /run sends a task (to the PC if online, else the cloud runner).
     const phonePath =
-      p === '/run' || p === '/status' || p === '/approvals' || p === '/feed' || p === '/prefs' || p === '/stop' || p.startsWith('/result/') ||
+      p === '/run' || p === '/status' || p === '/approvals' || p === '/feed' || p === '/prefs' || p === '/stop' || p === '/push-token' || p.startsWith('/result/') ||
       (p.startsWith('/approval/') && (req.method === 'POST' || req.method === 'OPTIONS'));
     if (phonePath) {
       const cors = {
@@ -109,6 +109,16 @@ export class Gate extends DurableObject {
           await st.put('tgQuiet', b?.tgQuiet === true);
         }
         return out({ ok: true, tgQuiet: (await st.get('tgQuiet')) === true });
+      }
+      if (p === '/push-token' && req.method === 'POST') {
+        let b;
+        try { b = await req.json(); } catch { return out({ error: 'bad json' }, 400); }
+        const t = String(b?.token ?? '');
+        if (!/^[A-Za-z0-9:_-]{50,400}$/.test(t)) return out({ error: 'bad token' }, 400);
+        const list = ((await st.get('fcm')) || []).filter((x) => x !== t);
+        list.push(t);
+        await st.put('fcm', list.slice(-5));
+        return out({ ok: true, ready: !!this.env.FCM_SA });
       }
       if (p === '/stop' && req.method === 'POST') {
         await this.enqueue({ type: 'stop' });
@@ -242,6 +252,7 @@ export class Gate extends DurableObject {
       try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
       if (!/^[0-9a-f]{12}$/.test(String(b?.id ?? ''))) return json({ error: 'bad id' }, 400);
       await st.put('apreq:' + b.id, { ts: Date.now(), job: clip(b?.job, 12), title: clip(b?.title, 200), preview: clip(b?.preview, 2500) });
+      try { await this.push('🔐 طلب موافقة', clip(b?.title, 150), { tab: 'agents' }); } catch (e) { console.log('push error', clip(e, 120)); }
       return json({ ok: true });
     }
     const m = p.match(/^\/approval\/([0-9a-f]{12})$/);
@@ -417,6 +428,55 @@ export class Gate extends DurableObject {
     }
     return this.dispatch(agent, task);
   }
+  // ---------- FCM push (secret FCM_SA = the Firebase service-account JSON) ----------
+  async fcmAccess() {
+    const st = this.ctx.storage;
+    const c = await st.get('fcmat');
+    if (c && c.exp > Date.now() + 60000) return c;
+    let sa;
+    try { sa = JSON.parse(this.env.FCM_SA || ''); } catch { return null; }
+    if (!sa?.client_email || !sa?.private_key || !sa?.project_id) return null;
+    const te = new TextEncoder();
+    const b64u = (buf) => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const now = Math.floor(Date.now() / 1000);
+    const hdr = b64u(te.encode(JSON.stringify({ alg: 'RS256', typ: 'JWT' })));
+    const claim = b64u(te.encode(JSON.stringify({ iss: sa.client_email, scope: 'https://www.googleapis.com/auth/firebase.messaging', aud: 'https://oauth2.googleapis.com/token', iat: now, exp: now + 3600 })));
+    const der = Uint8Array.from(atob(String(sa.private_key).replace(/-----[^-]+-----/g, '').replace(/\s+/g, '')), (ch) => ch.charCodeAt(0));
+    const key = await crypto.subtle.importKey('pkcs8', der, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' }, false, ['sign']);
+    const sig = await crypto.subtle.sign('RSASSA-PKCS1-v1_5', key, te.encode(hdr + '.' + claim));
+    const r = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      body: 'grant_type=' + encodeURIComponent('urn:ietf:params:oauth:grant-type:jwt-bearer') + '&assertion=' + hdr + '.' + claim + '.' + b64u(sig),
+    });
+    if (!r.ok) { console.log('fcm auth failed', r.status); return null; }
+    const j = await r.json();
+    const out = { token: j.access_token, project: sa.project_id, exp: Date.now() + (Number(j.expires_in) || 3600) * 1000 };
+    await st.put('fcmat', out);
+    return out;
+  }
+  async push(title, body, data = {}) {
+    const st = this.ctx.storage;
+    const tokens = (await st.get('fcm')) || [];
+    if (!tokens.length || !this.env.FCM_SA) return;
+    const at = await this.fcmAccess();
+    if (!at) return;
+    const keep = [];
+    for (const t of tokens) {
+      const r = await fetch(`https://fcm.googleapis.com/v1/projects/${at.project}/messages:send`, {
+        method: 'POST',
+        headers: { authorization: 'Bearer ' + at.token, 'content-type': 'application/json' },
+        body: JSON.stringify({ message: { token: t, notification: { title: clip(title, 80), body: clip(body, 200) }, data, android: { priority: 'HIGH' } } }),
+      });
+      if (!r.ok) {
+        const tx = await r.text();
+        console.log('fcm send failed', r.status, clip(tx, 150));
+        if (/UNREGISTERED|registration token is not valid/i.test(tx)) continue;
+      }
+      keep.push(t);
+    }
+    if (keep.length !== tokens.length) await st.put('fcm', keep);
+  }
   async noteJob(job, agent, task) {
     await this.ctx.storage.put('jm:' + job, { ts: Date.now(), agent: clip(agent?.name || '', 40), task: clip(task, 200) });
   }
@@ -432,6 +492,7 @@ export class Gate extends DurableObject {
       const seq = ((await st.get('fseq')) || 0) + 1;
       feed.push({ n: seq, job, agent: jm?.agent || '', task: jm?.task || '', kind, text: clip(text, 3500), ts: Date.now() });
       await st.put({ fseq: seq, feed: feed.slice(-50) });
+      try { await this.push((jm?.agent || 'مهمة') + (kind === 'fail' ? ': ما خلصت' : ': خلص'), text, { tab: 'agents' }); } catch (e) { console.log('push error', clip(e, 120)); }
     }
     for (const [k, v] of await st.list({ prefix: 'jm:' })) if (Date.now() - v.ts > 172800000) await st.delete(k);
     // lazy cleanup of old results

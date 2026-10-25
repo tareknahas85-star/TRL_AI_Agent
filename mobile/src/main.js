@@ -3,6 +3,7 @@ import jsQR from 'jsqr'
 import { Capacitor, registerPlugin } from '@capacitor/core'
 import { App as CapApp } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
+import { PushNotifications } from '@capacitor/push-notifications'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
 import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml, projHtml } from './views.js'
@@ -145,7 +146,7 @@ function onHost(m) {
       if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet(); if (S.tab === 'more' || S.tab === 'proj') renderPage() }
       return
     case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !document.activeElement.matches('textarea')) renderPage() } return
-    case 'agents': S.agents = m.list || []; lsSet('trl.agents', S.agents); if (m.gate && m.gate.url && m.gate.key) { S.gate = m.gate; lsSet('trl.gate', m.gate) } if (S.tab === 'agents') renderPage(); return
+    case 'agents': S.agents = m.list || []; lsSet('trl.agents', S.agents); if (m.gate && m.gate.url && m.gate.key) { S.gate = m.gate; lsSet('trl.gate', m.gate); void pushInit() } if (S.tab === 'agents') renderPage(); return
     case 'todo': S.todo = Array.isArray(m.list) ? m.list : []; lsSet('trl.todo', S.todo); if (S.tab === 'todo' && !(document.activeElement && document.activeElement.id === 'todoIn')) renderPage(); return
     case 'sched': S.sched = m.list || []; if (S.tab === 'sched') renderPage(); return
     case 'report': S.report = m.rows || []; if (S.tab === 'report') renderPage(); return
@@ -280,6 +281,22 @@ async function gateCall(path, body) {
     return { status: r.status, ...j }
   } catch { return null }
 }
+// Background push (Firebase Cloud Messaging, free): the gate pushes finished agent runs and approval requests even when the app is closed.
+// Needs google-services.json in the APK build and the FCM_SA secret on the gate; without them registration just fails quietly.
+let pushOn = false
+async function pushInit() {
+  if (pushOn || !S.gate) return
+  try {
+    let p = await PushNotifications.checkPermissions()
+    if (p.receive === 'prompt' || p.receive === 'prompt-with-rationale') p = await PushNotifications.requestPermissions()
+    if (p.receive !== 'granted') return
+    pushOn = true
+    await PushNotifications.addListener('registration', (t) => { if (t && t.value) void gateCall('/push-token', { token: t.value }) })
+    await PushNotifications.addListener('registrationError', () => { pushOn = false })
+    await PushNotifications.addListener('pushNotificationActionPerformed', () => { S.tab = 'agents'; S.agView = 'feed'; if (S.view === 'main') { renderTabs(); renderPage() } void feedPoll() })
+    await PushNotifications.register()
+  } catch { pushOn = false }
+}
 // Results feed from the gate: every finished agent run (scheduled or manual, cloud or PC) shows up here, no Telegram needed.
 let feedBusy = false
 async function feedPoll() {
@@ -295,7 +312,7 @@ async function feedPoll() {
     if (items.length) {
       const mine = new Set(Object.values(S.agentOut).map((x) => x && x.job).filter(Boolean))
       S.feed = [...S.feed, ...items].slice(-50)
-      if (!first) for (const it of items) if (!mine.has(it.job)) notify((it.agent || 'مهمة') + (it.kind === 'fail' ? ': ما خلصت' : ': خلص'), it.text || '')
+      if (!first && !pushOn) for (const it of items) if (!mine.has(it.job)) notify((it.agent || 'مهمة') + (it.kind === 'fail' ? ': ما خلصت' : ': خلص'), it.text || '')
     }
     S.feedLast = Number(r.last) || S.feedLast
     if (first || (S.tab === 'agents' && S.agView === 'feed')) S.feedSeen = S.feedLast
@@ -705,8 +722,11 @@ function renderPage() {
     const html = fn(VC)
     // same tab + same content: leave the DOM alone (no flicker); the fade-in only plays when switching tabs
     if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return
+    const ae = document.activeElement
+    const keep = ae && ae.id && /^(TEXTAREA|INPUT)$/.test(ae.tagName) && p.contains(ae) ? { id: ae.id, s: ae.selectionStart, e: ae.selectionEnd } : null
     p.innerHTML = '<div class="page' + (lastPage.tab === S.tab ? '' : ' fade') + '">' + html + '</div>'
     lastPage.tab = S.tab; lastPage.html = html
+    if (keep) { const el = document.getElementById(keep.id); if (el) { try { el.focus({ preventScroll: true }); if (keep.s != null) el.setSelectionRange(keep.s, keep.e) } catch { /* */ } } }
   }
 }
 function renderApproval() {
@@ -825,7 +845,7 @@ document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'ta
 document.addEventListener('keydown', (e) => { if (e.target.id === 'ta' && e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendChat() } })
 document.addEventListener('visibilitychange', () => { if (!document.hidden) { wake(); void feedPoll() } })
 setInterval(() => { if (!document.hidden && S.view === 'main') void feedPoll() }, 45000)
-setTimeout(() => { void feedPoll() }, 4000)
+setTimeout(() => { void feedPoll(); void pushInit() }, 4000)
 window.addEventListener('online', wake)
 setInterval(() => { if (S.view === 'main' && S.tab === 'agents' && S.tasks.length && !document.activeElement.matches('textarea')) renderPage() }, 1000 * 5)
 

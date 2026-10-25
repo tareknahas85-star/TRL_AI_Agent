@@ -24,3 +24,5 @@ mobile/air-final.ps1
 bench/
 .wrangler/
 *.bak*
+
+mobile/android/app/google-services.json
