@@ -56,11 +56,11 @@ const S = {
   agentOut: Object.fromEntries(Object.entries(lsGet('trl.agentout', {})).map(([k, v]) => [k, { ...v, running: false }])),
   mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
   convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
-  pending: new Map(), atts: [], recording: null, approval: null, sheet: null, keepAlive: lsGet('trl.keepalive', true)
+  projView: '', projFiles: {}, pending: new Map(), atts: [], recording: null, approval: null, sheet: null, keepAlive: lsGet('trl.keepalive', true)
 }
 const saveConvs = () => { lsSet('trl.convs', S.convs.slice(0, 40).map((c) => ({ ...c, msgs: c.msgs.slice(-120) }))); lsSet('trl.cur', S.cur) }
 const VC = { get S() { return S }, esc, md, fmtDur, version: VERSION }
-const curConv = () => { let c = S.convs.find((x) => x.id === S.cur); if (!c) { c = { id: 'c' + rid(), title: 'محادثة جديدة', msgs: [], at: Date.now() }; S.convs.unshift(c); S.cur = c.id; saveConvs() } return c }
+const curConv = () => { let c = S.convs.find((x) => x.id === S.cur); if (!c) { c = { id: 'c' + rid(), title: 'محادثة جديدة', msgs: [], at: Date.now(), project: S.project || null }; S.convs.unshift(c); S.cur = c.id; saveConvs() } return c }
 
 function toast(t) {
   const d = document.createElement('div'); d.className = 'toast'; d.textContent = t; document.body.appendChild(d)
@@ -146,6 +146,8 @@ function onHost(m) {
       if (S.project && S.projects.find((p) => p.id === S.project && p.confidential)) { S.project = null; lsSet('trl.project', null) }
       if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet(); if (S.tab === 'more' || S.tab === 'proj') renderPage() }
       return
+    case 'learn': S.learn = m.v || null; if (S.view === 'main' && S.tab === 'more') renderPage(); return
+    case 'project.files': S.projFiles[m.id] = m; if (S.view === 'main' && S.tab === 'proj') renderPage(); return
     case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !document.activeElement.matches('textarea')) renderPage() } return
     case 'agents': S.agents = m.list || []; lsSet('trl.agents', S.agents); if (m.gate && m.gate.url && m.gate.key) { S.gate = m.gate; lsSet('trl.gate', m.gate); void pushInit() } if (S.tab === 'agents') renderPage(); return
     case 'todo': S.todo = Array.isArray(m.list) ? m.list : []; lsSet('trl.todo', S.todo); if (S.tab === 'todo' && !(document.activeElement && document.activeElement.id === 'todoIn')) renderPage(); return
@@ -410,6 +412,13 @@ function viewClick(t) {
   if (d.refresh) { sendHost({ k: d.refresh + '.get' }); toast('عم يحدّث…'); return true }
   if (d.agopen !== undefined) { S.agentOpen = S.agentOpen === d.agopen ? '' : d.agopen; renderPage(); return true }
   if (d.agview) { S.agView = d.agview; if (d.agview === 'feed') { S.feedSeen = S.feedLast; lsSet('trl.feedSeen', S.feedSeen); void feedPoll() } renderTabs(); renderPage(); return true }
+  if (d.explain !== undefined) {
+    const it = (S.feed || []).find((x) => x.n === Number(d.explain)); if (!it) return true
+    S.cur = null; curConv(); S.tab = 'chat'; renderTabs(); renderPage()
+    const ta = $('#ta')
+    if (ta) { ta.value = 'اشرحلي أكتر وبالتفصيل عن النتيجة التالية (من وكيل «' + (it.agent || 'مهمة') + '»). ركّز على: \n\n' + String(it.text || '').slice(0, 1800); ta.dispatchEvent(new Event('input')); ta.focus() }
+    return true
+  }
   if (d.feedopen !== undefined) { const n = Number(d.feedopen); S.feedOpen = S.feedOpen === n ? 0 : n; renderPage(); return true }
   if (d.tgq) { const v = S.tgQuiet !== true; S.tgQuiet = v; lsSet('trl.tgq', v); renderPage(); void gateCall('/prefs', { tgQuiet: v }).then((r) => { if (!r || !r.ok) { S.tgQuiet = !v; lsSet('trl.tgq', !v); renderPage(); toast('ما قدرت أغيّر الإعداد') } else toast(v ? 'تيليغرام انسكّر، النتائج هون بس' : 'تيليغرام رجع شغّال') }); return true }
   if (d.stopall) { void gateCall('/stop', {}).then((r) => toast(r && r.ok ? 'انبعت الإيقاف (سحابي انلغى: ' + (r.cancelled || 0) + ')' : 'ما قدرت أوصل للبوابة')); return true }
@@ -435,6 +444,10 @@ function viewClick(t) {
   if (d.sopen !== undefined) { S.schedOpen = S.schedOpen === d.sopen ? '' : d.sopen; renderPage(); return true }
   if (d.srun) { sendHost({ k: 'sched.run', id: d.srun }); toast('بلّشت المهمة'); return true }
   if (d.rperiod) { S.rperiod = d.rperiod; renderPage(); return true }
+  if (d.projopen) { S.projView = d.projopen; S.projFiles[d.projopen] = null; sendHost({ k: 'project.files', id: d.projopen }); renderPage(); return true }
+  if (d.projback) { S.projView = ''; renderPage(); return true }
+  if (d.projnew) { S.project = d.projnew; lsSet('trl.project', S.project); S.cur = null; curConv(); S.tab = 'chat'; renderHeader(); renderTabs(); renderPage(); return true }
+  if (d.projconv) { const cv = S.convs.find((x) => x.id === d.projconv); if (!cv) return true; S.cur = cv.id; if (cv.project) { S.project = cv.project; lsSet('trl.project', S.project) } saveConvs(); S.tab = 'chat'; renderHeader(); renderTabs(); renderPage(); return true }
   if (d.projdesk) { sendHost({ k: 'project.set', id: d.projdesk }); toast('انفعّل عالكمبيوتر'); return true }
   if (d.themeMode) { S.themeMode = d.themeMode; lsSet('trl.themeMode', S.themeMode); applyTheme(); renderPage(); return true }
   if (d.pal) { S.pal = d.pal; lsSet('trl.pal', S.pal); applyTheme(); renderTabs(); renderPage(); return true }
@@ -808,7 +821,7 @@ document.addEventListener('click', (e) => {
   const id = t.id
   if (viewClick(t)) return
   if (t.dataset.close && (t === e.target || t.tagName === 'BUTTON') && t.closest('#sheetHost')) { if (t.classList.contains('sheet-bg') ? e.target === t : true) { S.sheet = null; renderSheet(); renderHeader() } return }
-  if (t.dataset.tab) { S.tab = t.dataset.tab; renderTabs(); renderPage(); return }
+  if (t.dataset.tab) { S.tab = t.dataset.tab; if (S.tab === 'more') sendHost({ k: 'learn.get' }); renderTabs(); renderPage(); return }
   if (t.dataset.stop) { sendHost({ k: 'stop', tab: t.dataset.stop }); toast('طلبت الإيقاف'); return }
   if (t.dataset.mode) { const k = t.dataset.mode; S.mode = k === 'model' ? { kind: 'model', id: S.mode.id || '' } : k === 'council' ? { kind: 'council', author: S.mode.author || '', critic: S.mode.critic || '' } : { kind: k }; lsSet('trl.mode', S.mode); renderSheet(); renderHeader(); if (S.tab === 'more') renderPage(); return }
   if (t.dataset.delconv) { S.convs = S.convs.filter((c) => c.id !== t.dataset.delconv); if (S.cur === t.dataset.delconv) S.cur = null; saveConvs(); renderSheet(); if (S.tab === 'chat') renderMsgs(); return }

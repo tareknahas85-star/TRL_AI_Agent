@@ -1,4 +1,5 @@
 import { fetchRemoteModels, importRemoteModels, setCustomModelKey, setCustomModelPosition } from '../core/custom-models'
+import { listDirShallow } from '../core/project-files'
 import { lintSkill } from '../skills/lint'
 import { freeOnly, setFreeOnly } from '../core/spend'
 import { freeFirst, setFreeFirst } from '../core/free-provider'
@@ -350,6 +351,10 @@ export function registerManagementHandlers(): void {
 
   // ---- Projects
   ipcMain.handle('projects:list', () => listProjects())
+  ipcMain.handle('projects:files', (_e, id: unknown) => {
+    const p = typeof id === 'string' ? listProjects().projects.find((x) => x.id === id) : undefined
+    return p ? { ok: true, items: listDirShallow(p.path) } : { ok: false, items: [] }
+  })
   ipcMain.handle('projects:add', (_e, dir: unknown) => {
     try {
       return { ok: true, project: addProject(String(dir ?? '')) }

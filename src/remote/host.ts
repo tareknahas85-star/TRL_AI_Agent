@@ -15,6 +15,8 @@ import { readJson, writeJson, newId } from '../core/json-store'
 import { listTodo, onTodoChange, splitLines, todoOp } from '../core/todo-store'
 import { listProjects, activeProject, setActiveProject } from '../core/workspace'
 import { listAgents } from '../core/agents'
+import { listDirShallow } from '../core/project-files'
+import { learnView } from '../core/learning'
 import { phoneGateInfo } from '../core/gate'
 import { listSchedules, runScheduleNow, runningSchedules, updateSchedule } from '../core/scheduler'
 import { tasksReport } from '../main/extras'
@@ -435,6 +437,26 @@ async function handle(dev: Device, m: Json): Promise<void> {
       case 'report.get':
         send(dev.id, reportMsg())
         return
+      case 'learn.get': {
+        const v = learnView()
+        send(dev.id, {
+          k: 'learn',
+          v: {
+            enabled: v.enabled, paused: v.paused, turns: v.turns, level: v.level,
+            rings: v.rings.map((r) => ({ label: r.label, pct: r.pct, detail: String(r.detail).slice(0, 120) })),
+            topics: v.topics.slice(0, 8).map((t) => ({ label: t.label, pct: t.pct })),
+            summary: String(v.summary?.text ?? '').slice(0, 400)
+          }
+        })
+        return
+      }
+      case 'project.files': {
+        const id = str(m.id, 60)
+        const p = listProjects().projects.find((x) => x.id === id)
+        if (!p || p.confidential) { send(dev.id, { k: 'project.files', id, error: p ? 'confidential' : 'missing' }); return }
+        send(dev.id, { k: 'project.files', id, items: listDirShallow(p.path) })
+        return
+      }
       case 'project.set': {
         const id = str(m.id, 60)
         if (id === null || listProjects().projects.some((p) => p.id === id)) setActiveProject(id)

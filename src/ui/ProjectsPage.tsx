@@ -8,6 +8,14 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
   const [data, setData] = useState<{ projects: ProjectInfo[]; activeId: string | null }>({ projects: [], activeId: null })
   const [path, setPath] = useState('')
   const [error, setError] = useState('')
+  const [view, setView] = useState<string | null>(null)
+  const [files, setFiles] = useState<{ n: string; d: boolean; s?: number }[] | null>(null)
+  const [q, setQ] = useState('')
+  useEffect(() => {
+    setFiles(null)
+    setQ('')
+    if (view) void window.api.projects.files(view).then((r) => setFiles(r.items))
+  }, [view])
   const load = useCallback(() => window.api.projects.list().then(setData), [])
   useEffect(() => {
     load()
@@ -15,6 +23,69 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
   const changed = (): void => {
     load()
     onChanged()
+  }
+
+  const vp = view ? data.projects.find((p) => p.id === view) : undefined
+  if (vp) {
+    const mineAll = convs.filter((c) => c.projectId === vp.id).sort((x, y) => (y.updatedAt ?? 0) - (x.updatedAt ?? 0))
+    const mineShown = q.trim() ? mineAll.filter((c) => (c.title || '').toLowerCase().includes(q.trim().toLowerCase())) : mineAll
+    const openHere = openIds.includes(vp.id)
+    return (
+      <PageShell
+        title={vp.name}
+        subtitle="صفحة المشروع: معلوماته ومحادثاته وملفاته."
+        action={
+          <button className={ghostBtn} onClick={() => setView(null)}>
+            ← كل المشاريع
+          </button>
+        }
+      >
+        <div className={cardCls + ' mb-3 space-y-2'}>
+          <div dir="ltr" className="truncate text-start font-mono text-xs text-muted">{vp.path}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            {openHere && <Chip cls="bg-primary/15 text-primary"><CheckCircle2 size={12} /> مفتوح بتبويب</Chip>}
+            {vp.confidential && <Chip cls="bg-warning/20 text-warning"><Lock size={12} /> سري</Chip>}
+            <button className={primaryBtn} onClick={() => onOpen(vp)}>{openHere ? 'روح عالتبويب' : 'فتح بتبويب'}</button>
+            <button className={ghostBtn} onClick={() => onNewInProject(vp)}><Plus size={14} /> محادثة جديدة</button>
+          </div>
+        </div>
+        <div className={cardCls + ' mb-3'}>
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <span className="font-semibold">المحادثات ({mineAll.length})</span>
+            <input className={inputCls + ' max-w-xs'} placeholder="بحث بالعناوين" value={q} onChange={(e) => setQ(e.target.value)} />
+          </div>
+          <div className="space-y-1">
+            {mineShown.map((c) => (
+              <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
+                <span className="min-w-0 truncate">{c.title || 'محادثة بدون عنوان'}</span>
+                <button className={ghostBtn} onClick={() => onOpenConv(c.id)}>كمّل</button>
+              </div>
+            ))}
+            {mineShown.length === 0 && <p className="text-xs text-muted">ما في محادثات.</p>}
+          </div>
+        </div>
+        <div className={cardCls}>
+          <div className="mb-2 font-semibold">الملفات</div>
+          {vp.confidential ? (
+            <p className="text-xs text-muted">🔒 مشروع سري: ما بنعرض ملفاته هون.</p>
+          ) : files === null ? (
+            <p className="text-xs text-muted">عم يحمّل…</p>
+          ) : files.length === 0 ? (
+            <p className="text-xs text-muted">المجلد فاضي.</p>
+          ) : (
+            <div dir="ltr" className="max-h-96 space-y-0.5 overflow-auto text-start font-mono text-xs">
+              {files.map((f) => (
+                <div key={f.n} className="truncate">
+                  {f.d ? '📁 ' : '📄 '}
+                  {f.n}
+                  {f.s != null ? ' · ' + Math.max(1, Math.round(f.s / 1024)) + ' KB' : ''}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </PageShell>
+    )
   }
 
   return (
@@ -85,6 +156,9 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
                     onClick={() => onOpen(p)}
                   >
                     {active ? 'روح عالتبويب' : 'فتح'}
+                  </button>
+                  <button className={ghostBtn} onClick={() => setView(p.id)}>
+                    صفحة المشروع
                   </button>
                   <button
                     className={ghostBtn + ' text-danger'}

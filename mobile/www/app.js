@@ -41628,7 +41628,7 @@
     if (!items.length) return h + empty("\u0645\u0627 \u0641\u064A \u0646\u062A\u0627\u0626\u062C \u0644\u0633\u0627. \u0623\u064A \u0648\u0643\u064A\u0644 \u0628\u064A\u062E\u0644\u0635 (\u0645\u062C\u062F\u0648\u0644 \u0623\u0648 \u0645\u0634\u063A\u0651\u0644 \u0645\u0646 \u0623\u064A \u0645\u0643\u0627\u0646) \u0628\u062A\u0637\u0644\u0639 \u0646\u062A\u064A\u062C\u062A\u0648 \u0647\u0648\u0646.");
     return h + items.map((i) => {
       const open = S3.feedOpen === i.n;
-      return '<div class="card' + (open ? " open" : "") + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === "fail" ? "\u26A0\uFE0F " : "\u2705 ") + esc2(i.agent || "\u0645\u0647\u0645\u0629") + '</b><span class="mut"> \xB7 ' + esc2(when(i.ts)) + "</span></div>" + (open ? '<div class="msg bot' + (i.kind === "fail" ? " err" : "") + '" style="margin-top:8px">' + md2(i.text || "") + "</div>" + (i.task ? '<div class="mut" style="margin-top:6px">\u0627\u0644\u0645\u0647\u0645\u0629: ' + esc2(i.task) + "</div>" : "") : '<div class="mut ag-h">' + esc2(String(i.text || "").replace(/\s+/g, " ").slice(0, 120)) + "</div>") + "</div>";
+      return '<div class="card' + (open ? " open" : "") + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === "fail" ? "\u26A0\uFE0F " : "\u2705 ") + esc2(i.agent || "\u0645\u0647\u0645\u0629") + '</b><span class="mut"> \xB7 ' + esc2(when(i.ts)) + "</span></div>" + (open ? '<div class="msg bot' + (i.kind === "fail" ? " err" : "") + '" style="margin-top:8px">' + md2(i.text || "") + "</div>" + (i.task ? '<div class="mut" style="margin-top:6px">\u0627\u0644\u0645\u0647\u0645\u0629: ' + esc2(i.task) + "</div>" : "") + (i.kind === "fail" ? "" : '<div class="acts" style="margin-top:8px"><button class="chip pri" data-explain="' + i.n + '">\u{1F50E} \u0627\u0634\u0631\u062D \u0623\u0643\u062A\u0631</button></div>') : '<div class="mut ag-h">' + esc2(String(i.text || "").replace(/\s+/g, " ").slice(0, 120)) + "</div>") + "</div>";
     }).join("");
   }
   function agentsHtml(c) {
@@ -41712,10 +41712,26 @@
     h += '<div class="card"><h3>\u0622\u062E\u0631 \u0627\u0644\u0645\u0647\u0627\u0645</h3>' + rows.slice(0, 15).map((r) => '<div class="rrow"><div class="rp">' + esc2(r.prompt || "(\u0628\u062F\u0648\u0646 \u0639\u0646\u0648\u0627\u0646)") + '</div><div class="mut"><span dir="ltr">' + esc2(r.model) + "</span> \xB7 " + esc2(when(r.at)) + (r.fails ? " \xB7 \u26A0\uFE0F" : "") + "</div></div>").join("") + "</div>";
     return h;
   }
+  function projDetailHtml(c) {
+    const { S: S3, esc: esc2 } = c;
+    const p = S3.projects.find((x) => x.id === S3.projView);
+    if (!p) {
+      S3.projView = "";
+      return projHtml(c);
+    }
+    const convs = S3.convs.filter((x) => x.project === p.id);
+    const f = S3.projFiles[p.id];
+    let h = head("\u{1F4C2}", esc2(p.name), "\u0635\u0641\u062D\u0629 \u0627\u0644\u0645\u0634\u0631\u0648\u0639", '<button class="chip" data-projback="1">\u2190 \u0631\u062C\u0648\u0639</button>');
+    h += '<div class="card"><div class="acts" style="flex-wrap:wrap">' + (S3.project === p.id ? '<span class="pill ok">\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u062C\u0627\u064A\u0629 \u0639\u0627\u0644\u0645\u0634\u0631\u0648\u0639</span>' : '<button class="chip" data-proj="' + esc2(p.id) + '">\u0627\u0639\u062A\u0645\u062F\u0647 \u0644\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A</button>') + (S3.activeProject === p.id ? '<span class="pill ok">\u0641\u0639\u0651\u0627\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</span>' : '<button class="chip" data-projdesk="' + esc2(p.id) + '">\u0641\u0639\u0651\u0644\u0647 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</button>') + '</div><div class="acts" style="margin-top:10px"><button class="btn" data-projnew="' + esc2(p.id) + '">\uFF0B \u0645\u062D\u0627\u062F\u062B\u0629 \u062C\u062F\u064A\u062F\u0629 \u0628\u0627\u0644\u0645\u0634\u0631\u0648\u0639</button></div></div>';
+    h += '<div class="card"><h3>\u{1F4AC} \u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A (' + convs.length + ")</h3>" + (convs.length ? convs.map((x) => '<div class="prj" data-projconv="' + esc2(x.id) + '"><div class="pn">' + esc2(x.title || "\u0645\u062D\u0627\u062F\u062B\u0629") + '</div><span class="mut">' + (x.msgs || []).length + " \xB7 " + esc2(when(x.at)) + "</span></div>").join("") : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0628\u0647\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0644\u0633\u0627 (\u0627\u0644\u0645\u062D\u0627\u062F\u062B\u0627\u062A \u0627\u0644\u0642\u062F\u064A\u0645\u0629 \u0642\u0628\u0644 \u0647\u0627\u0644\u062A\u062D\u062F\u064A\u062B \u0645\u0627 \u0628\u062A\u0646\u062D\u0633\u0628).</div>') + "</div>";
+    h += '<div class="card"><h3>\u{1F4C1} \u0627\u0644\u0645\u0644\u0641\u0627\u062A</h3>' + (!f ? '<div class="mut">\u0639\u0645 \u064A\u062C\u064A\u0628 \u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0645\u0646 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026</div>' : f.error ? '<div class="mut">' + (f.error === "confidential" ? "\u{1F512} \u0645\u0634\u0631\u0648\u0639 \u0633\u0631\u064A" : "\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u0645\u0648 \u0645\u0648\u062C\u0648\u062F") + "</div>" : f.items && f.items.length ? f.items.map((x) => '<div class="mut" style="direction:ltr;text-align:left;padding:2px 0">' + (x.d ? "\u{1F4C1} " : "\u{1F4C4} ") + esc2(x.n) + (x.s != null ? " \xB7 " + Math.max(1, Math.round(x.s / 1024)) + " KB" : "") + "</div>").join("") + (f.items.length >= 150 ? '<div class="mut">\u2026\u0627\u0644\u0642\u0627\u0626\u0645\u0629 \u0645\u0642\u0635\u0648\u0635\u0629 \u0639\u0644\u0649 150 \u0639\u0646\u0635\u0631.</div>' : "") : '<div class="mut">\u0627\u0644\u0645\u062C\u0644\u062F \u0641\u0627\u0636\u064A.</div>') + "</div>";
+    return h;
+  }
   function projHtml(c) {
     const { S: S3, esc: esc2 } = c;
+    if (S3.projView) return projDetailHtml(c);
     let h = head("\u{1F4C1}", "\u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639", "\u0627\u0644\u0645\u0634\u0631\u0648\u0639 \u064A\u0644\u064A \u0628\u062A\u062E\u062A\u0627\u0631\u0648\u0627 \u0628\u062A\u0634\u062A\u063A\u0644 \u0639\u0644\u064A\u0647 \u0645\u062D\u0627\u062F\u062B\u0627\u062A\u0643 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646");
-    h += '<div class="card"><div class="prj' + (!S3.project ? " sel" : "") + '" data-proj=""><div class="pn">\u0628\u062F\u0648\u0646 \u0645\u0634\u0631\u0648\u0639</div></div>' + S3.projects.map((p) => '<div class="prj' + (S3.project === p.id ? " sel" : "") + (p.confidential ? " lock" : "") + '" data-proj="' + esc2(p.id) + '"><div class="pn">' + (p.confidential ? "\u{1F512} " : "\u{1F4C2} ") + esc2(p.name) + "</div>" + (S3.activeProject === p.id ? '<span class="pill ok">\u0641\u0639\u0651\u0627\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</span>' : p.confidential ? "" : '<button class="chip" data-projdesk="' + esc2(p.id) + '">\u0641\u0639\u0651\u0644\u0647 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</button>') + "</div>").join("") + (S3.projects.length ? "" : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u0634\u0627\u0631\u064A\u0639. \u0623\u0636\u0641 \u0645\u0634\u0631\u0648\u0639 \u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.</div>') + "</div>";
+    h += '<div class="card"><div class="prj' + (!S3.project ? " sel" : "") + '" data-proj=""><div class="pn">\u0628\u062F\u0648\u0646 \u0645\u0634\u0631\u0648\u0639</div></div>' + S3.projects.map((p) => '<div class="prj' + (S3.project === p.id ? " sel" : "") + (p.confidential ? " lock" : "") + '" data-proj="' + esc2(p.id) + '"><div class="pn">' + (p.confidential ? "\u{1F512} " : "\u{1F4C2} ") + esc2(p.name) + "</div>" + (S3.activeProject === p.id ? '<span class="pill ok">\u0641\u0639\u0651\u0627\u0644 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</span>' : p.confidential ? "" : '<button class="chip" data-projopen="' + esc2(p.id) + '">\u0641\u062A\u062D</button> <button class="chip" data-projdesk="' + esc2(p.id) + '">\u0641\u0639\u0651\u0644\u0647 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631</button>') + "</div>").join("") + (S3.projects.length ? "" : '<div class="mut">\u0645\u0627 \u0641\u064A \u0645\u0634\u0627\u0631\u064A\u0639. \u0623\u0636\u0641 \u0645\u0634\u0631\u0648\u0639 \u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.</div>') + "</div>";
     return h;
   }
   function moreHtml(c) {
@@ -41724,6 +41740,8 @@
     const m = S3.mode;
     const opt = (id, v) => '<option value="' + esc2(v.value) + '" ' + (id === v.value ? "selected" : "") + ">" + esc2(v.label) + "</option>";
     let h = head("\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F", "\u0627\u0644\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0648\u0627\u0644\u0645\u0638\u0647\u0631 \u0648\u0627\u0644\u0627\u062A\u0635\u0627\u0644");
+    const L2 = S3.learn;
+    h += '<div class="card"><h3>\u{1F9E0} \u0645\u0633\u062A\u0648\u0649 \u0627\u0644\u062A\u0639\u0644\u0651\u0645' + (L2 ? " \xB7 " + L2.level + "%" : "") + "</h3>" + (!L2 ? '<div class="mut">\u0639\u0645 \u064A\u062C\u064A\u0628 \u0645\u0646 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026</div>' : '<div class="mut" style="margin-bottom:6px">' + (L2.enabled ? L2.paused ? "\u0627\u0644\u062A\u0639\u0644\u0651\u0645 \u0645\u0648\u0642\u0648\u0641 (\u0648\u0636\u0639 \u062E\u0627\u0635)." : "\u0634\u063A\u0651\u0627\u0644" : "\u0645\u0637\u0641\u064A") + " \xB7 " + L2.turns + " \u0645\u062D\u0627\u062F\u062B\u0629</div>" + L2.rings.map((r) => '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>' + esc2(r.label) + "</span><b>" + r.pct + '%</b></div><div style="height:6px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:' + r.pct + '%;background:var(--pri)"></div></div><div class="mut">' + esc2(r.detail) + "</div></div>").join("") + (L2.topics.length ? '<div class="mut" style="margin-top:8px">\u0627\u0644\u0645\u0648\u0627\u0636\u064A\u0639: ' + L2.topics.map((t) => esc2(t.label)).join(" \xB7 ") + "</div>" : "") + (L2.summary ? '<div class="mut" style="margin-top:8px">' + esc2(L2.summary) + "</div>" : "")) + '<div class="mut" style="margin-top:6px">\u0627\u0644\u062A\u0639\u062F\u064A\u0644 \u0648\u0627\u0644\u0646\u0633\u064A\u0627\u0646 \u0645\u0646 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 (\u0627\u0644\u0625\u0639\u062F\u0627\u062F\u0627\u062A).</div></div>';
     h += '<div class="card"><h3>\u{1F9E0} \u0627\u0644\u0645\u0648\u062F\u064A\u0644 \u0648\u0637\u0631\u064A\u0642\u0629 \u0627\u0644\u0634\u063A\u0644</h3><div class="seg">' + [["auto", "\u062A\u0644\u0642\u0627\u0626\u064A"], ["free", "\u0645\u062C\u0627\u0646\u064A"], ["model", "\u0645\u0648\u062F\u064A\u0644"], ["council", "council"]].map(([k, l]) => '<button data-mode="' + k + '" class="' + (m.kind === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="mut" style="margin-bottom:8px">' + { auto: "\u064A\u062E\u062A\u0627\u0631 \u0623\u0646\u0633\u0628 \u0645\u0648\u062F\u064A\u0644 (\u0645\u062C\u0627\u0646\u064A \u0623\u0648 \u0645\u062F\u0641\u0648\u0639) \u062D\u0633\u0628 \u0627\u0644\u0637\u0644\u0628.", free: "\u0645\u0648\u062F\u064A\u0644\u0627\u062A \u0645\u062C\u0627\u0646\u064A\u0629 \u0628\u0633 (\u0627\u0644\u0623\u0631\u062E\u0635 \u0648\u0627\u0644\u0623\u0623\u0645\u0646).", model: "\u0645\u0648\u062F\u064A\u0644 \u0645\u062D\u062F\u062F \u0628\u062A\u062E\u062A\u0627\u0631\u0647 \u0625\u0646\u062A.", council: "\u0643\u0627\u062A\u0628 \u0648\u0645\u0631\u0627\u062C\u0639: \u062C\u0648\u0627\u0628 \u0623\u062F\u0642 \u0628\u0633 \u0623\u0628\u0637\u0623." }[m.kind] + "</div>" + (m.kind === "model" ? '<select class="sel" id="selModel"><option value="">\u2014 \u0627\u062E\u062A\u0631 \u2014</option>' + S3.models.map((v) => opt(m.id, v)).join("") + "</select>" : "") + (m.kind === "council" ? '<div class="mut">\u0627\u0644\u0643\u0627\u062A\u0628</div><select class="sel" id="selAuthor"><option value="">\u062A\u0644\u0642\u0627\u0626\u064A</option>' + S3.models.map((v) => opt(m.author, v)).join("") + '</select><div class="mut">\u0627\u0644\u0645\u0631\u0627\u062C\u0639</div><select class="sel" id="selCritic"><option value="">\u062A\u0644\u0642\u0627\u0626\u064A</option>' + S3.models.map((v) => opt(m.critic, v)).join("") + "</select>" : "") + '<div class="mut">' + S3.models.length + " \u0645\u0648\u062F\u064A\u0644 \u0645\u062A\u0627\u062D</div></div>";
     h += '<div class="card"><h3>\u{1F3A8} \u0627\u0644\u0645\u0638\u0647\u0631</h3><div class="seg">' + [["light", "\u0641\u0627\u062A\u062D"], ["dark", "\u063A\u0627\u0645\u0642"], ["auto", "\u062D\u0633\u0628 \u0627\u0644\u062C\u0647\u0627\u0632"]].map(([k, l]) => '<button data-theme-mode="' + k + '" class="' + (S3.themeMode === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="seg" style="margin-top:8px">' + [["default", "\u0627\u0644\u0623\u0644\u0648\u0627\u0646 \u0627\u0644\u0627\u0641\u062A\u0631\u0627\u0636\u064A\u0629"], ["syrian", "\u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u0633\u0648\u0631\u064A\u0629"]].map(([k, l]) => '<button data-pal="' + k + '" class="' + (S3.pal === k ? "act" : "") + '">' + l + "</button>").join("") + '</div><div class="mut" style="margin-top:8px">\u0627\u0644\u0647\u0648\u064A\u0629 \u0627\u0644\u0633\u0648\u0631\u064A\u0629: \u0623\u0644\u0648\u0627\u0646 \u0648\u062E\u0637 (\u062D\u064A\u0651\u0627\u0643\u0645 \u0627\u0644\u0644\u0647) \u0648\u0627\u0644\u0646\u0633\u0631 \u0645\u0643\u0627\u0646 \u0627\u0644\u0631\u0648\u0628\u0648\u062A\u060C \u0645\u062A\u0644 \u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.</div></div>';
     h += '<div class="card"><h3>\u{1F50C} \u0627\u0644\u0627\u062A\u0635\u0627\u0644</h3><div class="mut">\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631: <b>' + esc2(S3.host || d.name) + "</b><br>\u0627\u0644\u062D\u0627\u0644\u0629: " + esc2({ online: "\u0645\u062A\u0635\u0644 \u2705", connecting: "\u0639\u0645 \u064A\u062A\u0635\u0644\u2026", hostdown: "\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0640 relay", offline: "\u063A\u064A\u0631 \u0645\u062A\u0635\u0644" }[S3.conn]) + '<br>\u0627\u0644\u0639\u0646\u0627\u0648\u064A\u0646: <span dir="ltr">' + esc2((d.urls || []).map((u) => u.replace(/^wss?:\/\//, "").replace("/ws", "")).join(" , ")) + '</span></div></div><div class="card"><h3>\u0627\u0644\u062E\u0644\u0641\u064A\u0629</h3><label class="mut"><input type="checkbox" id="kaChk" ' + (S3.keepAlive ? "checked" : "") + '> \u062E\u0644\u0651\u064A \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u062E\u0644\u0641\u064A\u0629 (\u0628\u064A\u0638\u0647\u0631 \u0625\u0634\u0639\u0627\u0631 \u062B\u0627\u0628\u062A) \u0639\u0634\u0627\u0646 \u062A\u0648\u0635\u0644\u0643 \u0627\u0644\u0645\u0648\u0627\u0641\u0642\u0627\u062A \u0648\u0627\u0644\u0646\u062A\u0627\u0626\u062C</label></div><div class="card"><h3>\u{1F510} \u0627\u0644\u0623\u0645\u0627\u0646</h3><div class="mut">\u0643\u0644 \u0634\u064A \u0628\u064A\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0634\u0641\u0651\u0631 \u0645\u0646 \u0627\u0644\u0637\u0631\u0641\u064A\u0646. \u0645\u0641\u062A\u0627\u062D \u0647\u0627\u0644\u062C\u0647\u0627\u0632 \u0645\u062D\u0641\u0648\u0638 \u0628\u0645\u062E\u0632\u0646 \u0623\u0646\u062F\u0631\u0648\u064A\u062F \u0627\u0644\u0622\u0645\u0646 (Keystore).</div></div><button class="btn ghost" id="reconBtn" style="margin-bottom:10px">\u0625\u0639\u0627\u062F\u0629 \u0627\u0644\u0627\u062A\u0635\u0627\u0644</button><button class="btn danger" id="unpairBtn">\u0625\u0644\u063A\u0627\u0621 \u0631\u0628\u0637 \u0647\u0627\u0644\u062C\u0647\u0627\u0632</button><div class="mut" style="text-align:center;margin-top:14px">TRL Agent ' + esc2(version) + " \xB7 Tarek Nahas \xB7 AI</div>";
@@ -41830,6 +41848,8 @@
     project: lsGet("trl.project", null),
     convs: lsGet("trl.convs", []),
     cur: lsGet("trl.cur", null),
+    projView: "",
+    projFiles: {},
     pending: /* @__PURE__ */ new Map(),
     atts: [],
     recording: null,
@@ -41847,7 +41867,7 @@
   var curConv = () => {
     let c = S2.convs.find((x) => x.id === S2.cur);
     if (!c) {
-      c = { id: "c" + rid(), title: "\u0645\u062D\u0627\u062F\u062B\u0629 \u062C\u062F\u064A\u062F\u0629", msgs: [], at: Date.now() };
+      c = { id: "c" + rid(), title: "\u0645\u062D\u0627\u062F\u062B\u0629 \u062C\u062F\u064A\u062F\u0629", msgs: [], at: Date.now(), project: S2.project || null };
       S2.convs.unshift(c);
       S2.cur = c.id;
       saveConvs();
@@ -42055,6 +42075,14 @@
           if (S2.sheet) renderSheet();
           if (S2.tab === "more" || S2.tab === "proj") renderPage();
         }
+        return;
+      case "learn":
+        S2.learn = m.v || null;
+        if (S2.view === "main" && S2.tab === "more") renderPage();
+        return;
+      case "project.files":
+        S2.projFiles[m.id] = m;
+        if (S2.view === "main" && S2.tab === "proj") renderPage();
         return;
       case "tasks":
         S2.tasks = m.list || [];
@@ -42530,6 +42558,22 @@
       renderPage();
       return true;
     }
+    if (d.explain !== void 0) {
+      const it = (S2.feed || []).find((x) => x.n === Number(d.explain));
+      if (!it) return true;
+      S2.cur = null;
+      curConv();
+      S2.tab = "chat";
+      renderTabs();
+      renderPage();
+      const ta = $("#ta");
+      if (ta) {
+        ta.value = "\u0627\u0634\u0631\u062D\u0644\u064A \u0623\u0643\u062A\u0631 \u0648\u0628\u0627\u0644\u062A\u0641\u0635\u064A\u0644 \u0639\u0646 \u0627\u0644\u0646\u062A\u064A\u062C\u0629 \u0627\u0644\u062A\u0627\u0644\u064A\u0629 (\u0645\u0646 \u0648\u0643\u064A\u0644 \xAB" + (it.agent || "\u0645\u0647\u0645\u0629") + "\xBB). \u0631\u0643\u0651\u0632 \u0639\u0644\u0649: \n\n" + String(it.text || "").slice(0, 1800);
+        ta.dispatchEvent(new Event("input"));
+        ta.focus();
+      }
+      return true;
+    }
     if (d.feedopen !== void 0) {
       const n = Number(d.feedopen);
       S2.feedOpen = S2.feedOpen === n ? 0 : n;
@@ -42612,6 +42656,44 @@
     }
     if (d.rperiod) {
       S2.rperiod = d.rperiod;
+      renderPage();
+      return true;
+    }
+    if (d.projopen) {
+      S2.projView = d.projopen;
+      S2.projFiles[d.projopen] = null;
+      sendHost({ k: "project.files", id: d.projopen });
+      renderPage();
+      return true;
+    }
+    if (d.projback) {
+      S2.projView = "";
+      renderPage();
+      return true;
+    }
+    if (d.projnew) {
+      S2.project = d.projnew;
+      lsSet("trl.project", S2.project);
+      S2.cur = null;
+      curConv();
+      S2.tab = "chat";
+      renderHeader();
+      renderTabs();
+      renderPage();
+      return true;
+    }
+    if (d.projconv) {
+      const cv = S2.convs.find((x) => x.id === d.projconv);
+      if (!cv) return true;
+      S2.cur = cv.id;
+      if (cv.project) {
+        S2.project = cv.project;
+        lsSet("trl.project", S2.project);
+      }
+      saveConvs();
+      S2.tab = "chat";
+      renderHeader();
+      renderTabs();
       renderPage();
       return true;
     }
@@ -43256,6 +43338,7 @@
     }
     if (t.dataset.tab) {
       S2.tab = t.dataset.tab;
+      if (S2.tab === "more") sendHost({ k: "learn.get" });
       renderTabs();
       renderPage();
       return;

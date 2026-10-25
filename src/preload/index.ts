@@ -249,6 +249,7 @@ const api = {
   projects: {
     setConfidential: (id: string, on: boolean) => ipcRenderer.invoke('projects:setConfidential', id, on),
     list: () => ipcRenderer.invoke('projects:list'),
+    files: (id: string) => ipcRenderer.invoke('projects:files', id),
     add: (dir: string) => ipcRenderer.invoke('projects:add', dir),
     pick: () => ipcRenderer.invoke('projects:pick'),
     remove: (id: string) => ipcRenderer.invoke('projects:remove', id),
@@ -327,7 +328,8 @@ const api = {
   gate: {
     get: () => ipcRenderer.invoke('gate:get'),
     set: (p: { enabled?: boolean; url?: string; key?: string }) => ipcRenderer.invoke('gate:set', p),
-    test: () => ipcRenderer.invoke('gate:test')
+    test: () => ipcRenderer.invoke('gate:test'),
+    linkMail: (src: string) => ipcRenderer.invoke('gate:linkMail', src)
   },
   telegram: {
     get: () => ipcRenderer.invoke('telegram:get'),

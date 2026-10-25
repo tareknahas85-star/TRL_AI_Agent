@@ -3,6 +3,7 @@ import { getSecret, setSecret } from '../store/secure-store'
 import { listAgents } from './agents'
 import { cloudMemoryPack } from './agent-memory'
 import { randomBytes } from 'crypto'
+import { mailScript } from './mail-script'
 
 // Link to the Cloudflare gate (trl-agent-gate). The gate owns the Telegram webhook, so while this is on the app
 // does NOT call getUpdates: it polls the gate's inbox instead. Each poll also tells the gate "the PC is online",
@@ -116,4 +117,15 @@ export async function testGate(): Promise<{ ok: boolean; error?: string }> {
   if (r.status === 401) return { ok: false, error: 'المفتاح غلط' }
   if (!r.ok) return { ok: false, error: 'خطأ ' + r.status }
   return (await syncAgents()) ? { ok: true } : { ok: false, error: 'فشلت مزامنة الوكلاء' }
+}
+/** Wizard step: register a fresh write-only mailbox key at the gate and return the ready-to-paste Apps Script. */
+export async function linkMailbox(srcRaw: string): Promise<{ ok: boolean; script?: string; error?: string }> {
+  const s = gateState()
+  if (!s.url || !s.hasKey) return { ok: false, error: 'اربط البوابة أول (الرابط والمفتاح)' }
+  const src = String(srcRaw || 'main').toLowerCase().replace(/[^a-z0-9_-]/g, '').slice(0, 20) || 'main'
+  const key = randomBytes(32).toString('hex')
+  const r = await gateFetch('/mail-key', { method: 'PUT', body: JSON.stringify({ key }) })
+  if (!r) return { ok: false, error: 'ما قدرت أوصل للبوابة' }
+  if (!r.ok) return { ok: false, error: r.status === 404 ? 'البوابة عندك قديمة: لازم تعمل deploy للنسخة الجديدة (wrangler deploy)' : 'رفضت البوابة (HTTP ' + r.status + ')' }
+  return { ok: true, script: mailScript(s.url, key, src) }
 }

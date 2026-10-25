@@ -21,6 +21,9 @@ export function AgentsPage() {
   const [task, setTask] = useState('')
   const [out, setOut] = useState('')
   const [running, setRunning] = useState(false)
+  const [mailSrc, setMailSrc] = useState('main')
+  const [mailScript, setMailScript] = useState('')
+  const [mailMsg, setMailMsg] = useState('')
   const [mem, setMem] = useState<AgentMemInfo | null>(null)
   const [blockedText, setBlockedText] = useState('')
   const runAgent = async (id: string): Promise<void> => {
@@ -220,6 +223,43 @@ export function AgentsPage() {
         </div>
         {mem && mem.text && (
           <pre className="mt-2 max-h-48 overflow-y-auto whitespace-pre-wrap rounded-lg border border-outline bg-bg p-2 text-xs">{mem.text}</pre>
+        )}
+      </section>
+
+      <section className="mt-4 rounded-card border border-outline bg-surface p-4 shadow-card">
+        <h3 className="text-base font-semibold">🔗 ربط إيميل للوكلاء (Gmail)</h3>
+        <p className="mt-1 text-xs text-muted">
+          عشان الوكلاء السحابيين يقرأوا إيميلاتك وهنّي والكمبيوتر مطفي. بيتولّد سكربت جاهز مع مفتاح خاص (قراءة فقط، ما بيرسل ولا بيمسح). بتلصقو مرة وحدة بحساب Gmail يلي بدك تربطو.
+        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+          <input dir="ltr" value={mailSrc} onChange={(e) => setMailSrc(e.target.value)} placeholder="اسم الصندوق (مثلاً main)" className={field + ' w-48'} />
+          <button
+            className="rounded-full bg-primary px-4 py-1.5 text-white disabled:opacity-40"
+            disabled={!gate.enabled || !gate.hasKey}
+            onClick={async () => {
+              setMailMsg('')
+              const r = await window.api.gate.linkMail(mailSrc.trim() || 'main')
+              if (r.ok && r.script) { setMailScript(r.script); setMailMsg('تولّد السكربت. اتبع الخطوات تحت.') }
+              else { setMailScript(''); setMailMsg(r.error ?? 'خطأ') }
+            }}
+          >
+            ولّد السكربت
+          </button>
+          {mailMsg && <span className="text-xs text-muted">{mailMsg}</span>}
+        </div>
+        {mailScript && (
+          <div className="mt-3 space-y-2 text-xs leading-relaxed">
+            <ol className="list-decimal space-y-1 pe-5 text-muted">
+              <li>افتح script.google.com وانت مسجّل بحساب Gmail المطلوب، واختار «مشروع جديد».</li>
+              <li>امسح الكود الموجود والصق السكربت تحت، ثم احفظ.</li>
+              <li>اختار الدالة installTrigger من القائمة فوق، واضغط «تشغيل» ووافق على الصلاحيات (قراءة الإيميل بس).</li>
+              <li>خلص: كل دقيقة بيدفع الإيميلات الجديدة للبوابة. بعدها اكتب اسم الصندوق بحقل «مصادر الإيميل» عند الوكيل (أو اتركو فاضي).</li>
+            </ol>
+            <textarea readOnly dir="ltr" value={mailScript} className={field + ' h-44 w-full font-mono text-[11px]'} onFocus={(e) => e.currentTarget.select()} />
+            <button className="rounded-full px-3 py-1.5 hover:bg-surface2" onClick={() => void navigator.clipboard.writeText(mailScript).then(() => setMailMsg('انسخ السكربت'))}>
+              📋 انسخ السكربت
+            </button>
+          </div>
         )}
       </section>
 

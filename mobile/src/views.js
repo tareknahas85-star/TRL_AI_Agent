@@ -36,7 +36,7 @@ export function feedHtml(c) {
     const open = S.feedOpen === i.n
     return '<div class="card' + (open ? ' open' : '') + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === 'fail' ? '⚠️ ' : '✅ ') + esc(i.agent || 'مهمة') + '</b><span class="mut"> · ' + esc(when(i.ts)) + '</span></div>' +
       (open
-        ? '<div class="msg bot' + (i.kind === 'fail' ? ' err' : '') + '" style="margin-top:8px">' + md(i.text || '') + '</div>' + (i.task ? '<div class="mut" style="margin-top:6px">المهمة: ' + esc(i.task) + '</div>' : '')
+        ? '<div class="msg bot' + (i.kind === 'fail' ? ' err' : '') + '" style="margin-top:8px">' + md(i.text || '') + '</div>' + (i.task ? '<div class="mut" style="margin-top:6px">المهمة: ' + esc(i.task) + '</div>' : '') + (i.kind === 'fail' ? '' : '<div class="acts" style="margin-top:8px"><button class="chip pri" data-explain="' + i.n + '">🔎 اشرح أكتر</button></div>')
         : '<div class="mut ag-h">' + esc(String(i.text || '').replace(/\s+/g, ' ').slice(0, 120)) + '</div>') + '</div>'
   }).join('')
 }
@@ -143,13 +143,34 @@ export function reportHtml(c) {
 }
 
 // ---------- projects (own tab) ----------
+function projDetailHtml(c) {
+  const { S, esc } = c
+  const p = S.projects.find((x) => x.id === S.projView)
+  if (!p) { S.projView = ''; return projHtml(c) }
+  const convs = S.convs.filter((x) => x.project === p.id)
+  const f = S.projFiles[p.id]
+  let h = head('📂', esc(p.name), 'صفحة المشروع', '<button class="chip" data-projback="1">← رجوع</button>')
+  h += '<div class="card"><div class="acts" style="flex-wrap:wrap">' +
+    (S.project === p.id ? '<span class="pill ok">المحادثات الجاية عالمشروع</span>' : '<button class="chip" data-proj="' + esc(p.id) + '">اعتمده للمحادثات</button>') +
+    (S.activeProject === p.id ? '<span class="pill ok">فعّال عالكمبيوتر</span>' : '<button class="chip" data-projdesk="' + esc(p.id) + '">فعّله عالكمبيوتر</button>') + '</div>' +
+    '<div class="acts" style="margin-top:10px"><button class="btn" data-projnew="' + esc(p.id) + '">＋ محادثة جديدة بالمشروع</button></div></div>'
+  h += '<div class="card"><h3>💬 المحادثات (' + convs.length + ')</h3>' + (convs.length
+    ? convs.map((x) => '<div class="prj" data-projconv="' + esc(x.id) + '"><div class="pn">' + esc(x.title || 'محادثة') + '</div><span class="mut">' + (x.msgs || []).length + ' · ' + esc(when(x.at)) + '</span></div>').join('')
+    : '<div class="mut">ما في محادثات بهالمشروع من التلفون لسا (المحادثات القديمة قبل هالتحديث ما بتنحسب).</div>') + '</div>'
+  h += '<div class="card"><h3>📁 الملفات</h3>' + (!f ? '<div class="mut">عم يجيب القائمة من الكمبيوتر…</div>'
+    : f.error ? '<div class="mut">' + (f.error === 'confidential' ? '🔒 مشروع سري' : 'المشروع مو موجود') + '</div>'
+    : (f.items && f.items.length ? f.items.map((x) => '<div class="mut" style="direction:ltr;text-align:left;padding:2px 0">' + (x.d ? '📁 ' : '📄 ') + esc(x.n) + (x.s != null ? ' · ' + Math.max(1, Math.round(x.s / 1024)) + ' KB' : '') + '</div>').join('') + (f.items.length >= 150 ? '<div class="mut">…القائمة مقصوصة على 150 عنصر.</div>' : '') : '<div class="mut">المجلد فاضي.</div>')) + '</div>'
+  return h
+}
+
 export function projHtml(c) {
   const { S, esc } = c
+  if (S.projView) return projDetailHtml(c)
   let h = head('📁', 'المشاريع', 'المشروع يلي بتختاروا بتشتغل عليه محادثاتك من التلفون')
   h += '<div class="card">' +
     '<div class="prj' + (!S.project ? ' sel' : '') + '" data-proj=""><div class="pn">بدون مشروع</div></div>' +
     S.projects.map((p) => '<div class="prj' + (S.project === p.id ? ' sel' : '') + (p.confidential ? ' lock' : '') + '" data-proj="' + esc(p.id) + '"><div class="pn">' + (p.confidential ? '🔒 ' : '📂 ') + esc(p.name) + '</div>' +
-      (S.activeProject === p.id ? '<span class="pill ok">فعّال عالكمبيوتر</span>' : (p.confidential ? '' : '<button class="chip" data-projdesk="' + esc(p.id) + '">فعّله عالكمبيوتر</button>')) + '</div>').join('') +
+      (S.activeProject === p.id ? '<span class="pill ok">فعّال عالكمبيوتر</span>' : (p.confidential ? '' : '<button class="chip" data-projopen="' + esc(p.id) + '">فتح</button> <button class="chip" data-projdesk="' + esc(p.id) + '">فعّله عالكمبيوتر</button>')) + '</div>').join('') +
     (S.projects.length ? '' : '<div class="mut">ما في مشاريع. أضف مشروع من برنامج الكمبيوتر.</div>') + '</div>'
   return h
 }
@@ -161,6 +182,12 @@ export function moreHtml(c) {
   const m = S.mode
   const opt = (id, v) => '<option value="' + esc(v.value) + '" ' + (id === v.value ? 'selected' : '') + '>' + esc(v.label) + '</option>'
   let h = head('⚙️', 'المزيد', 'الموديلات والمظهر والاتصال')
+  const L = S.learn
+  h += '<div class="card"><h3>🧠 مستوى التعلّم' + (L ? ' · ' + L.level + '%' : '') + '</h3>' + (!L ? '<div class="mut">عم يجيب من الكمبيوتر…</div>'
+    : '<div class="mut" style="margin-bottom:6px">' + (L.enabled ? (L.paused ? 'التعلّم موقوف (وضع خاص).' : 'شغّال') : 'مطفي') + ' · ' + L.turns + ' محادثة</div>' +
+      L.rings.map((r) => '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>' + esc(r.label) + '</span><b>' + r.pct + '%</b></div><div style="height:6px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:' + r.pct + '%;background:var(--pri)"></div></div><div class="mut">' + esc(r.detail) + '</div></div>').join('') +
+      (L.topics.length ? '<div class="mut" style="margin-top:8px">المواضيع: ' + L.topics.map((t) => esc(t.label)).join(' · ') + '</div>' : '') +
+      (L.summary ? '<div class="mut" style="margin-top:8px">' + esc(L.summary) + '</div>' : '')) + '<div class="mut" style="margin-top:6px">التعديل والنسيان من برنامج الكمبيوتر (الإعدادات).</div></div>'
   h += '<div class="card"><h3>🧠 الموديل وطريقة الشغل</h3><div class="seg">' +
     [['auto', 'تلقائي'], ['free', 'مجاني'], ['model', 'موديل'], ['council', 'council']].map(([k, l]) => '<button data-mode="' + k + '" class="' + (m.kind === k ? 'act' : '') + '">' + l + '</button>').join('') + '</div>' +
     '<div class="mut" style="margin-bottom:8px">' + ({ auto: 'يختار أنسب موديل (مجاني أو مدفوع) حسب الطلب.', free: 'موديلات مجانية بس (الأرخص والأأمن).', model: 'موديل محدد بتختاره إنت.', council: 'كاتب ومراجع: جواب أدق بس أبطأ.' })[m.kind] + '</div>' +

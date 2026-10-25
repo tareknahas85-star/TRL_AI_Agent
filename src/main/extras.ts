@@ -11,7 +11,7 @@ import { getConversation, listConversations } from '../core/workspace'
 import { deleteAgent, listAgents, saveAgent } from '../core/agents'
 import { listTodo, onTodoChange, todoOp } from '../core/todo-store'
 import { cloudMemoryPack, getBlocked, projectNames, setBlocked } from '../core/agent-memory'
-import { gateState, setGate, syncAgents, testGate } from '../core/gate'
+import { gateState, linkMailbox, setGate, syncAgents, testGate } from '../core/gate'
 import { clearTelegramToken, detectChatId, sendTelegram, setTelegram, telegramState } from '../core/telegram'
 
 // ---------- files created by the model: exists / preview / open / reveal ----------
@@ -230,4 +230,5 @@ ipcMain.handle('security:status', () => {
   ipcMain.handle('gate:get', () => gateState())
   ipcMain.handle('gate:set', (_e, p: unknown) => setGate((p ?? {}) as never))
   ipcMain.handle('gate:test', () => testGate())
+  ipcMain.handle('gate:linkMail', (_e, src: unknown) => linkMailbox(typeof src === 'string' ? src : 'main'))
 }

@@ -317,6 +317,7 @@ declare global {
       get: () => Promise<GateInfo>
       set: (p: { enabled?: boolean; url?: string; key?: string }) => Promise<GateInfo>
       test: () => Promise<{ ok: boolean; error?: string }>
+      linkMail: (src: string) => Promise<{ ok: boolean; script?: string; error?: string }>
     }
       telegram: {
         get: () => Promise<TelegramInfo>
@@ -417,6 +418,7 @@ declare global {
   projects: {
     setConfidential: (id: string, on: boolean) => Promise<boolean>
         list: () => Promise<{ projects: ProjectInfo[]; activeId: string | null }>
+        files: (id: string) => Promise<{ ok: boolean; items: { n: string; d: boolean; s?: number }[] }>
         add: (dir: string) => Promise<{ ok: boolean; project?: ProjectInfo; error?: string }>
         pick: () => Promise<{ ok: boolean; project?: ProjectInfo; error?: string }>
         remove: (id: string) => Promise<boolean>

@@ -69,8 +69,10 @@ export class Gate extends DurableObject {
 
     // Mailbox push from the agent mailbox (Apps Script). Separate write-only key.
     if (p === '/mail' && req.method === 'POST') {
-      if (!env.MAIL_KEY || !safeEq(req.headers.get('x-mail-key'), env.MAIL_KEY))
-        return new Response('unauthorized', { status: 401 });
+      const hk = req.headers.get('x-mail-key');
+      const stored = (await this.ctx.storage.get('mkeys')) || [];
+      const okKey = (env.MAIL_KEY && safeEq(hk, env.MAIL_KEY)) || (Array.isArray(stored) && stored.some((k) => safeEq(hk, k)));
+      if (!okKey) return new Response('unauthorized', { status: 401 });
       const body = await req.text();
       if (body.length > 400000) return json({ error: 'too large' }, 413);
       let arr;
@@ -224,6 +226,15 @@ export class Gate extends DurableObject {
       return json({ ok: true, count: clean.length });
     }
     // Basic-facts pack the app builds (already filtered on the PC). Read-only for the runner, given to a job only if its agent allows it.
+    if (p === '/mail-key' && req.method === 'PUT') {
+      let b;
+      try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
+      const k = String(b?.key ?? '');
+      if (!/^[a-f0-9]{64}$/.test(k)) return json({ error: 'bad key' }, 400);
+      const cur = (await st.get('mkeys')) || [];
+      await st.put('mkeys', [k, ...(Array.isArray(cur) ? cur.filter((x) => x !== k) : [])].slice(0, 5));
+      return json({ ok: true });
+    }
     if (p === '/memory' && req.method === 'PUT') {
       let b;
       try { b = await req.json(); } catch { return json({ error: 'bad json' }, 400); }
