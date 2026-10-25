@@ -188,8 +188,9 @@ function onDone(m) {
   if (p && p.agent) return agDone(m, p)
   const c = S.convs.find((x) => x.id === (p ? p.conv : m.tab)) || null
   if (!c) return
+  if (m.id && c.msgs.some((x) => x.did === m.id)) return // already shown (late replay after a reconnect)
   if (m.cancelled) { c.msgs.push({ role: 'bot', content: p && p.buf ? p.buf : '', meta: 'انلغى', at: Date.now(), cancelled: true }) }
-  else c.msgs.push({ role: 'bot', content: m.content || '', meta: m.meta || '', failed: !!m.failed, at: Date.now() })
+  else c.msgs.push({ role: 'bot', content: m.content || '', meta: m.meta || '', failed: !!m.failed, did: m.id, at: Date.now() })
   if (!c.title || c.title === 'محادثة جديدة') { const u = c.msgs.find((x) => x.role === 'user'); if (u) c.title = u.content.slice(0, 40) }
   saveConvs()
   if (c.id === S.cur) { renderMsgs(); renderStatus(); renderSend() }
@@ -394,7 +395,7 @@ function viewClick(t) {
   if (d.proj !== undefined) {
     const p = S.projects.find((x) => x.id === d.proj)
     if (p && p.confidential) { toast('🔒 مشروع سري، ما بينفتح من الموبايل'); return true }
-    S.project = d.proj || null; lsSet('trl.project', S.project); renderPage(); return true
+    S.project = d.proj || null; lsSet('trl.project', S.project); renderHeader(); renderPage(); return true
   }
   return false
 }
@@ -640,7 +641,7 @@ const modeLabel = () => {
 }
 function renderHeader() {
   const h = $('#hostName'); if (h) h.textContent = S.host || (S.device && S.device.name) || 'TRL'
-  const b = $('#modeBtn'); if (b) b.textContent = '⚙ ' + modeLabel()
+  const b = $('#modeBtn'); if (b) { const pr = S.project && S.projects.find((x) => x.id === S.project); b.textContent = '⚙ ' + modeLabel() + (pr ? ' · 📁 ' + String(pr.name).slice(0, 12) : '') }
   updateDot()
 }
 // ---------- theme: light / dark / follow device, plus the optional Syrian identity palette (colors + font + eagle) ----------
@@ -790,7 +791,7 @@ document.addEventListener('change', (e) => {
   if (t.id === 'kaChk') { S.keepAlive = t.checked; lsSet('trl.keepalive', S.keepAlive); applyKeepAlive(); return }
   if (t.id === 'selModel') { S.mode = { kind: 'model', id: t.value }; lsSet('trl.mode', S.mode); renderHeader(); return }
   if (t.id === 'selAuthor' || t.id === 'selCritic') { S.mode = { kind: 'council', author: ($('#selAuthor') || {}).value || '', critic: ($('#selCritic') || {}).value || '' }; lsSet('trl.mode', S.mode); return }
-  if (t.id === 'selProj') { S.project = t.value || null; lsSet('trl.project', S.project); return }
+  if (t.id === 'selProj') { S.project = t.value || null; lsSet('trl.project', S.project); renderHeader(); return }
 })
 document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'ta') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px' } })
 document.addEventListener('keydown', (e) => { if (e.target.id === 'ta' && e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendChat() } })

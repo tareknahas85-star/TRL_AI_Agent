@@ -205,6 +205,22 @@ function send(id: string, m: Json): boolean {
   const l = readyLinks(id)[0]
   return l ? l.send(m) : false
 }
+// Replies that finished while the phone was unreachable: kept (max 20, 24 h) and replayed when it says hello again.
+const missed = new Map<string, Json[]>()
+function stashMissed(id: string, m: Json): void {
+  const a = missed.get(id) ?? []
+  a.push({ ...m, _at: Date.now() })
+  missed.set(id, a.slice(-20))
+}
+function replayMissed(id: string): void {
+  const a = (missed.get(id) ?? []).filter((x) => Date.now() - Number(x._at) < 86_400_000)
+  missed.delete(id)
+  for (const x of a) {
+    const r: Json = { ...x }
+    delete r._at
+    if (!send(id, { ...r, late: true })) stashMissed(id, r)
+  }
+}
 const broadcast = (m: Json): void => {
   for (const d of cfg.devices) send(d.id, m)
 }
@@ -375,6 +391,7 @@ async function handle(dev: Device, m: Json): Promise<void> {
       case 'state.get':
         send(dev.id, { k: 'state', ...stateFor() })
         pushTasks()
+        if (k === 'hello') replayMissed(dev.id)
         return
       case 'ping':
         send(dev.id, { k: 'pong' })
@@ -531,7 +548,8 @@ async function handle(dev: Device, m: Json): Promise<void> {
         if (timer) clearTimeout(timer)
         flush()
         const meta = typeof r.meta === 'string' ? r.meta.split(' | Stats:')[0] : ''
-        send(dev.id, { k: 'done', id, tab: tabKey, content: String(r.content ?? ''), meta, failed: !!r.failed, cancelled: !!r.cancelled, needsChoice: !!r.needsChoice })
+        const doneMsg: Json = { k: 'done', id, tab: tabKey, content: String(r.content ?? ''), meta, failed: !!r.failed, cancelled: !!r.cancelled, needsChoice: !!r.needsChoice }
+        if (!send(dev.id, doneMsg) && !r.cancelled) stashMissed(dev.id, doneMsg)
         return
       }
     }
