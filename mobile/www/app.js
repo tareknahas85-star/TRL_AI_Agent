@@ -42104,9 +42104,10 @@
     if (p && p.agent) return agDone(m, p);
     const c = S.convs.find((x) => x.id === (p ? p.conv : m.tab)) || null;
     if (!c) return;
+    if (m.id && c.msgs.some((x) => x.did === m.id)) return;
     if (m.cancelled) {
       c.msgs.push({ role: "bot", content: p && p.buf ? p.buf : "", meta: "\u0627\u0646\u0644\u063A\u0649", at: Date.now(), cancelled: true });
-    } else c.msgs.push({ role: "bot", content: m.content || "", meta: m.meta || "", failed: !!m.failed, at: Date.now() });
+    } else c.msgs.push({ role: "bot", content: m.content || "", meta: m.meta || "", failed: !!m.failed, did: m.id, at: Date.now() });
     if (!c.title || c.title === "\u0645\u062D\u0627\u062F\u062B\u0629 \u062C\u062F\u064A\u062F\u0629") {
       const u = c.msgs.find((x) => x.role === "user");
       if (u) c.title = u.content.slice(0, 40);
@@ -42481,6 +42482,7 @@
       }
       S.project = d.proj || null;
       lsSet("trl.project", S.project);
+      renderHeader();
       renderPage();
       return true;
     }
@@ -42894,7 +42896,10 @@
     const h = $("#hostName");
     if (h) h.textContent = S.host || S.device && S.device.name || "TRL";
     const b = $("#modeBtn");
-    if (b) b.textContent = "\u2699 " + modeLabel();
+    if (b) {
+      const pr = S.project && S.projects.find((x) => x.id === S.project);
+      b.textContent = "\u2699 " + modeLabel() + (pr ? " \xB7 \u{1F4C1} " + String(pr.name).slice(0, 12) : "");
+    }
     updateDot();
   }
   var EAGLE2 = '<img class="eagle" src="syria-eagle.svg" alt="">';
@@ -43211,6 +43216,7 @@
     if (t.id === "selProj") {
       S.project = t.value || null;
       lsSet("trl.project", S.project);
+      renderHeader();
       return;
     }
   });
