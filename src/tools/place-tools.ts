@@ -1,6 +1,7 @@
 import { execFile } from 'child_process'
 import type OpenAI from 'openai'
 import { getPrefs } from '../core/prefs'
+import { isOpenNow } from '../core/osm-hours'
 
 // get_location (phone GPS -> Windows location service -> IP) and nearby_places (OpenStreetMap). Both are opt-in and never offered in confidential projects.
 
@@ -181,10 +182,10 @@ export function addPlaceTools(defs: OpenAI.Chat.ChatCompletionTool[], handlers: 
     type: 'function',
     function: {
       name: 'nearby_places',
-      description: 'Find places near a point using OpenStreetMap (free). Pass a category or name such as "restaurant", "pharmacy", "مطعم", "صيدلية". Uses the user\'s location when lat/lon are omitted. Returns name, distance, coordinates, and opening hours/phone when OSM has them.',
+      description: 'Find places near a point using OpenStreetMap (free). Pass a category or name such as "restaurant", "pharmacy", "مطعم", "صيدلية". Uses the user\'s location when lat/lon are omitted. Returns name, distance, coordinates, phone, and for each place an OPEN NOW / CLOSED NOW / hours-unknown status computed from the OSM opening hours at the local time of the computer.',
       parameters: {
         type: 'object',
-        properties: { query: { type: 'string' }, radius_m: { type: 'number', description: 'default 1500, max 10000' }, lat: { type: 'number' }, lon: { type: 'number' } },
+        properties: { query: { type: 'string' }, radius_m: { type: 'number', description: 'default 1500, max 10000' }, only_open: { type: 'boolean', description: 'true = hide places that are closed right now (use for "open now" requests)' }, lat: { type: 'number' }, lon: { type: 'number' } },
         required: ['query']
       }
     }
@@ -209,8 +210,12 @@ export function addPlaceTools(defs: OpenAI.Chat.ChatCompletionTool[], handlers: 
       let places = cat ? await overpass(lat, lon, radius, cat.tags) : []
       if (!places.length) places = await nominatimSearch(query, lat, lon)
       if (!places.length) return `No places found for "${query}" within ${radius} m of ${lat.toFixed(4)},${lon.toFixed(4)} in OpenStreetMap. Try a bigger radius or a web search.`
-      const lines = places.slice(0, 10).map((p, i) => `${i + 1}. [${p.name}](${mapLink(p.lat, p.lon)}) — ${fmtM(p.meters)}${p.hours ? ' — hours: ' + p.hours : ''}${p.phone ? ' — ' + p.phone : ''}`)
-      return `Source: OpenStreetMap (data may be incomplete; verify opening hours). Search centre from ${srcNote}.\nIMPORTANT: show each place to the user as the markdown link below (name + distance), never as raw coordinates, and say where the search centre came from.\n` + lines.join('\n')
+      const st = (p: Place): boolean | null => isOpenNow(p.hours)
+      if (a.only_open === true) places = places.filter((p) => st(p) !== false)
+      if (!places.length) return `Every place found for "${query}" is closed right now according to OpenStreetMap. Say so and offer a bigger radius.`
+      const tag = (p: Place): string => (st(p) === true ? ' — OPEN NOW' : st(p) === false ? ' — CLOSED NOW' : ' — opening hours not in the map')
+      const lines = places.slice(0, 10).map((p, i) => `${i + 1}. [${p.name}](${mapLink(p.lat, p.lon)}) — ${fmtM(p.meters)}${tag(p)}${p.hours ? ' (' + p.hours + ')' : ''}${p.phone ? ' — ' + p.phone : ''}`)
+      return `Source: OpenStreetMap (data may be incomplete). Search centre from ${srcNote}.\nIMPORTANT: show each place as the markdown link below (name + distance + its open/closed status), never as raw coordinates, and say where the search centre came from. For places marked "not in the map" just say their hours are unknown. Do NOT run commands, scripts or extra searches to look up opening hours unless the user asks.\n` + lines.join('\n')
     } catch (e) {
       return 'Error: OpenStreetMap lookup failed: ' + (e instanceof Error ? e.message : String(e))
     }

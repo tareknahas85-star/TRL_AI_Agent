@@ -10,6 +10,7 @@ import { listCustomModels } from '../src/core/custom-models'
 import { workDir, quarantineEmptyFragments } from '../src/core/run-report'
 import { recordEngineRun, getEngineSeries } from '../src/core/usage-log'
 import { createStreamBatcher } from '../src/core/stream-batch'
+import { isOpenNow } from '../src/core/osm-hours'
 import { rotateLogFile, LOG_MAX_BYTES } from '../src/core/log-rotate'
 import { checkSideUrl, clampSideWidth, windowWidthFor } from '../src/core/side-url'
 import { interpretRelease, interpretFailure, describeUpdate, isNewer, shouldPrompt, POSTPONE_MS } from '../src/core/update-state'
@@ -662,4 +663,20 @@ test('todo store: ops are pure and tolerate junk', async () => {
   assert.equal(applyOp([], { op: 'import', items: [{ text: 'x' }, { nope: 1 }] }).length, 1)
   assert.deepEqual(splitLines('- a\n2) b\n\n• c'), ['a', 'b', 'c'])
   assert.deepEqual(cleanItems('bad'), [])
+})
+
+test('isOpenNow reads common OSM opening_hours', () => {
+  const sun10 = new Date(2026, 9, 25, 10, 20) // Sunday 10:20
+  const mon23 = new Date(2026, 9, 26, 23, 0)
+  const tue01 = new Date(2026, 9, 27, 1, 0)
+  assert.equal(isOpenNow('24/7', sun10), true)
+  assert.equal(isOpenNow('Mo-Su 09:00-21:00', sun10), true)
+  assert.equal(isOpenNow('Mo-Fr 09:00-21:00', sun10), false)
+  assert.equal(isOpenNow('Mo-Fr 09:00-21:00; Su 08:00-14:00', sun10), true)
+  assert.equal(isOpenNow('Mo-Su 09:00-21:00; Su off', sun10), false)
+  assert.equal(isOpenNow('Mo 22:00-02:00', mon23), true)
+  assert.equal(isOpenNow('Mo 22:00-02:00', tue01), true)
+  assert.equal(isOpenNow('Mo-Fr 09:00-18:00, PH off', sun10), null)
+  assert.equal(isOpenNow('sunrise-sunset', sun10), null)
+  assert.equal(isOpenNow(undefined, sun10), null)
 })

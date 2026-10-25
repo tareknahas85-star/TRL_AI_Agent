@@ -9,7 +9,7 @@ export const FRESH_HINT =
   '\n\nFRESHNESS RULE: this request depends on information that can change or that lives outside the chat (current versions, prices, news, weather, places, a link, a file or a service). Do NOT answer it from memory. First call the matching tool (web search, page fetch, location, places or the relevant connector), answer from what it returns, and say in one short line which tool or source you used. If no suitable tool is available this turn, say so plainly instead of guessing.'
 
 export const LOCATION_HINT =
-  '\n\nLOCATION: for "near me", "nearby", "closest" or local-weather requests, call get_location first, then nearby_places (or a web search) with those coordinates. Always tell the user where the location came from (phone GPS, Wi-Fi/Windows or IP) and how accurate it is; an IP location can be wrong when a VPN is on. For places from OpenStreetMap say the data may be incomplete and opening hours should be verified.'
+  '\n\nLOCATION: for "near me", "nearby", "closest" or local-weather requests, call get_location first, then nearby_places (or a web search) with those coordinates. Always tell the user where the location came from (phone GPS, Wi-Fi/Windows or IP) and how accurate it is; an IP location can be wrong when a VPN is on. For places from OpenStreetMap say the data may be incomplete. nearby_places already computes OPEN NOW / CLOSED NOW from the map hours (use only_open:true when the user wants places that are open): never run pc_run commands or extra searches to look up opening hours.'
 
 // Requests that need live data, a link, or an outside service. Matching is deliberately generous: offering a search tool is cheap, answering from stale memory is not.
 const FRESH_RE =
