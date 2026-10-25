@@ -16,6 +16,7 @@ let MEMORY = '';
 let MODEL = '';
 let TOOL = 'text';
 let SOURCES = [];
+let QUIET = false; // the phone switched Telegram off: results go to the phone only
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const GEMINI_KEY = E.GEMINI_KEY;
@@ -40,6 +41,13 @@ async function loadJob() {
   if (!TASK) throw new Error('empty job');
 }
 
+async function loadPrefs() {
+  try {
+    const r = await fetch(`${GATE_URL.replace(/\/$/, '')}/tg-prefs`, { headers: { 'x-gate-key': GATE_KEY } });
+    if (r.ok) QUIET = (await r.json()).tgQuiet === true;
+  } catch { /* keep default */ }
+}
+
 async function gpost(path, body) {
   try {
     const r = await fetch(GATE_URL.replace(/\/$/, '') + path, {
@@ -53,7 +61,7 @@ async function gpost(path, body) {
   }
 }
 async function tg(method, body) {
-  if (!TG_TOKEN || !TG_CHAT_ID) return {};
+  if (!TG_TOKEN || !TG_CHAT_ID || QUIET) return {};
   try {
     const r = await fetch(`https://api.telegram.org/bot${TG_TOKEN}/${method}`, {
       method: 'POST',
@@ -352,6 +360,7 @@ async function imageMain() {
 
 async function main() {
   await loadJob();
+  await loadPrefs();
   if (TOOL === 'image') return imageMain();
   await say(`☁️ بلّش ${AGENT ? 'الوكيل ' + AGENT : 'المهمة'} على الكمبيوتر السحابي.`);
   const models = await pickModels();

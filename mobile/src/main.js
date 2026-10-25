@@ -50,7 +50,7 @@ let L = null
 const S = {
   view: 'boot', tab: 'chat', device: null, ppk: '', psk: '',
   conn: 'offline', host: '', models: [], projects: [], tasks: [], sas: '', pairErr: '',
-  agents: lsGet('trl.agents', []), gate: lsGet('trl.gate', null), pc: '', themeMode: lsGet('trl.themeMode', 'dark'), pal: lsGet('trl.pal', 'default'), sched: null, todo: lsGet('trl.todo', null), todoDraft: '', todoFilter: 'open', report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null,
+  agents: lsGet('trl.agents', []), gate: lsGet('trl.gate', null), pc: '', themeMode: lsGet('trl.themeMode', 'dark'), pal: lsGet('trl.pal', 'default'), sched: null, todo: lsGet('trl.todo', null), todoDraft: '', todoFilter: 'open', report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null, feed: lsGet('trl.feed', []), feedLast: lsGet('trl.feedLast', 0), feedSeen: lsGet('trl.feedSeen', 0), feedOpen: 0, agView: 'list', tgQuiet: lsGet('trl.tgq', null),
   agentOut: Object.fromEntries(Object.entries(lsGet('trl.agentout', {})).map(([k, v]) => [k, { ...v, running: false }])),
   mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
   convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
@@ -280,6 +280,29 @@ async function gateCall(path, body) {
     return { status: r.status, ...j }
   } catch { return null }
 }
+// Results feed from the gate: every finished agent run (scheduled or manual, cloud or PC) shows up here, no Telegram needed.
+let feedBusy = false
+async function feedPoll() {
+  if (!S.gate || feedBusy) return
+  feedBusy = true
+  try {
+    if (S.tgQuiet === null) { const p = await gateCall('/prefs'); if (p && p.ok) { S.tgQuiet = !!p.tgQuiet; lsSet('trl.tgq', S.tgQuiet) } }
+    const r = await gateCall('/feed?after=' + S.feedLast)
+    if (!r || !r.ok) return
+    const items = Array.isArray(r.items) ? r.items : []
+    if (Number(r.last) < S.feedLast) { S.feed = []; S.feedLast = 0; S.feedSeen = 0 }
+    const first = S.feedLast === 0 && !S.feed.length
+    if (items.length) {
+      const mine = new Set(Object.values(S.agentOut).map((x) => x && x.job).filter(Boolean))
+      S.feed = [...S.feed, ...items].slice(-50)
+      if (!first) for (const it of items) if (!mine.has(it.job)) notify((it.agent || 'مهمة') + (it.kind === 'fail' ? ': ما خلصت' : ': خلص'), it.text || '')
+    }
+    S.feedLast = Number(r.last) || S.feedLast
+    if (first || (S.tab === 'agents' && S.agView === 'feed')) S.feedSeen = S.feedLast
+    lsSet('trl.feed', S.feed); lsSet('trl.feedLast', S.feedLast); lsSet('trl.feedSeen', S.feedSeen)
+    if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !(document.activeElement && document.activeElement.matches('textarea'))) renderPage() }
+  } finally { feedBusy = false }
+}
 let pcAt = 0
 async function pcStatus() {
   if (Date.now() - pcAt < 15000) return
@@ -368,6 +391,11 @@ function viewClick(t) {
   if (d.tdf) { S.todoFilter = d.tdf; renderPage(); return true }
   if (d.refresh) { sendHost({ k: d.refresh + '.get' }); toast('عم يحدّث…'); return true }
   if (d.agopen !== undefined) { S.agentOpen = S.agentOpen === d.agopen ? '' : d.agopen; renderPage(); return true }
+  if (d.agview) { S.agView = d.agview; if (d.agview === 'feed') { S.feedSeen = S.feedLast; lsSet('trl.feedSeen', S.feedSeen); void feedPoll() } renderTabs(); renderPage(); return true }
+  if (d.feedopen !== undefined) { const n = Number(d.feedopen); S.feedOpen = S.feedOpen === n ? 0 : n; renderPage(); return true }
+  if (d.tgq) { const v = S.tgQuiet !== true; S.tgQuiet = v; lsSet('trl.tgq', v); renderPage(); void gateCall('/prefs', { tgQuiet: v }).then((r) => { if (!r || !r.ok) { S.tgQuiet = !v; lsSet('trl.tgq', !v); renderPage(); toast('ما قدرت أغيّر الإعداد') } else toast(v ? 'تيليغرام انسكّر، النتائج هون بس' : 'تيليغرام رجع شغّال') }); return true }
+  if (d.stopall) { void gateCall('/stop', {}).then((r) => toast(r && r.ok ? 'انبعت الإيقاف (سحابي انلغى: ' + (r.cancelled || 0) + ')' : 'ما قدرت أوصل للبوابة')); return true }
+  if (d.feedclear) { S.feed = []; lsSet('trl.feed', []); renderTabs(); renderPage(); return true }
   if (d.agrun) { runAgentNow(d.agrun); return true }
   if (d.agstop) {
     const gs = S.agentOut[d.agstop]
@@ -656,7 +684,7 @@ function applyTheme() {
 }
 function renderTabs() {
   const t = $('#tabs'); if (!t) return
-  const n = S.tasks.length
+  const n = S.tasks.length + (S.feed || []).filter((x) => x.n > S.feedSeen).length
   t.innerHTML = [['chat', '💬', 'الشات'], ['proj', '📁', 'المشاريع'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['todo', '📝', 'ملاحظات'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
 }
 const lastPage = { tab: '', html: '' }
@@ -755,7 +783,7 @@ document.addEventListener('contextmenu', (e) => {
 
 // ---------- events (delegated) ----------
 document.addEventListener('click', (e) => {
-  const t = e.target.closest('button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj]'); if (!t) return
+  const t = e.target.closest('button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj],[data-feedopen]'); if (!t) return
   const id = t.id
   if (viewClick(t)) return
   if (t.dataset.close && (t === e.target || t.tagName === 'BUTTON') && t.closest('#sheetHost')) { if (t.classList.contains('sheet-bg') ? e.target === t : true) { S.sheet = null; renderSheet(); renderHeader() } return }
@@ -795,7 +823,9 @@ document.addEventListener('change', (e) => {
 })
 document.addEventListener('input', (e) => { const t = e.target; if (t.id === 'ta') { t.style.height = 'auto'; t.style.height = Math.min(140, t.scrollHeight) + 'px' } })
 document.addEventListener('keydown', (e) => { if (e.target.id === 'ta' && e.key === 'Enter' && !e.shiftKey && !('ontouchstart' in window)) { e.preventDefault(); sendChat() } })
-document.addEventListener('visibilitychange', () => { if (!document.hidden) wake() })
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { wake(); void feedPoll() } })
+setInterval(() => { if (!document.hidden && S.view === 'main') void feedPoll() }, 45000)
+setTimeout(() => { void feedPoll() }, 4000)
 window.addEventListener('online', wake)
 setInterval(() => { if (S.view === 'main' && S.tab === 'agents' && S.tasks.length && !document.activeElement.matches('textarea')) renderPage() }, 1000 * 5)
 

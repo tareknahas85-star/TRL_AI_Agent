@@ -41592,10 +41592,24 @@
   var EAGLE = '<img class="eagle" src="syria-eagle.svg" alt="">';
   var head = (icon, title, sub, right = "") => '<div class="ph"><div class="phi">' + icon + '</div><div class="pht"><h2>' + title + '</h2><div class="mut">' + sub + "</div></div>" + right + "</div>";
   var empty = (msg) => '<div class="emp">' + msg + "</div>";
+  function feedHtml(c) {
+    const { S: S2, esc: esc2, md: md2 } = c;
+    const q = S2.tgQuiet === true;
+    let h = '<div class="card"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>\u0625\u0634\u0639\u0627\u0631\u0627\u062A \u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645</b><div class="mut">' + (q ? "\u0645\u0633\u0643\u0651\u0631\u0629: \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u062A\u0637\u0644\u0639 \u0647\u0648\u0646 \u0628\u0633." : "\u0634\u063A\u0651\u0627\u0644\u0629: \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0628\u062A\u0646\u0628\u0639\u062A \u0644\u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645 \u0643\u0645\u0627\u0646.") + '</div></div><button class="chip' + (q ? " pri" : "") + '" data-tgq="1">' + (q ? "\u0634\u063A\u0651\u0644\u0647\u0627" : "\u0633\u0643\u0651\u0631\u0647\u0627") + '</button></div><div class="acts" style="margin-top:10px"><button class="btn danger" data-stopall="1">\u25A0 \u0623\u0648\u0642\u0641 \u0643\u0644 \u0627\u0644\u0645\u0647\u0627\u0645</button><button class="chip" data-feedclear="1">\u0645\u0633\u062D \u0627\u0644\u0642\u0627\u0626\u0645\u0629</button></div></div>';
+    const items = [...S2.feed || []].reverse();
+    if (!items.length) return h + empty("\u0645\u0627 \u0641\u064A \u0646\u062A\u0627\u0626\u062C \u0644\u0633\u0627. \u0623\u064A \u0648\u0643\u064A\u0644 \u0628\u064A\u062E\u0644\u0635 (\u0645\u062C\u062F\u0648\u0644 \u0623\u0648 \u0645\u0634\u063A\u0651\u0644 \u0645\u0646 \u0623\u064A \u0645\u0643\u0627\u0646) \u0628\u062A\u0637\u0644\u0639 \u0646\u062A\u064A\u062C\u062A\u0648 \u0647\u0648\u0646.");
+    return h + items.map((i) => {
+      const open = S2.feedOpen === i.n;
+      return '<div class="card' + (open ? " open" : "") + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === "fail" ? "\u26A0\uFE0F " : "\u2705 ") + esc2(i.agent || "\u0645\u0647\u0645\u0629") + '</b><span class="mut"> \xB7 ' + esc2(when(i.ts)) + "</span></div>" + (open ? '<div class="msg bot' + (i.kind === "fail" ? " err" : "") + '" style="margin-top:8px">' + md2(i.text || "") + "</div>" + (i.task ? '<div class="mut" style="margin-top:6px">\u0627\u0644\u0645\u0647\u0645\u0629: ' + esc2(i.task) + "</div>" : "") : '<div class="mut ag-h">' + esc2(String(i.text || "").replace(/\s+/g, " ").slice(0, 120)) + "</div>") + "</div>";
+    }).join("");
+  }
   function agentsHtml(c) {
     const { S: S2, esc: esc2, md: md2, fmtDur: fmtDur2 } = c;
     const online = S2.conn === "online";
     let h = head(S2.pal === "syrian" ? EAGLE : "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621", "\u0634\u063A\u0651\u0644 \u0623\u064A \u0648\u0643\u064A\u0644 \u0645\u0646 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0648\u0628\u064A\u0646\u0641\u0651\u0630 \u0639\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631", '<button class="chip" data-refresh="agents">\u062A\u062D\u062F\u064A\u062B</button>');
+    const unread = (S2.feed || []).filter((x) => x.n > S2.feedSeen).length;
+    h += '<div class="seg"><button data-agview="list" class="' + (S2.agView !== "feed" ? "act" : "") + '">\u0627\u0644\u0648\u0643\u0644\u0627\u0621</button><button data-agview="feed" class="' + (S2.agView === "feed" ? "act" : "") + '">\u0627\u0644\u0646\u062A\u0627\u0626\u062C' + (unread ? " (" + unread + ")" : "") + "</button></div>";
+    if (S2.agView === "feed") return h + feedHtml(c);
     h += '<div class="mut" style="margin:0 4px 10px">' + (online ? "\u{1F7E2} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0634\u063A\u0651\u0627\u0644." : S2.gate ? S2.pc === "on" ? "\u{1F7E1} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0634\u063A\u0651\u0627\u0644 \u0628\u0633 \u0627\u0644\u062A\u0644\u0641\u0648\u0646 \u0645\u0648 \u0648\u0627\u0635\u0644\u0648 \u0645\u0628\u0627\u0634\u0631\u0629\u060C \u0641\u0627\u0644\u0645\u0647\u0627\u0645 \u0628\u062A\u0646\u0628\u0639\u062A \u0639\u0628\u0631 \u0627\u0644\u0628\u0648\u0627\u0628\u0629." : S2.pc === "off" ? "\u{1F534} \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0645\u0637\u0641\u064A \u0623\u0648 \u0627\u0644\u062A\u0637\u0628\u064A\u0642 \u0645\u0633\u0643\u0651\u0631. \u0627\u0644\u0645\u0647\u0627\u0645 \u0628\u062A\u0634\u062A\u063A\u0644 \u0628\u0627\u0644\u0633\u062D\u0627\u0628\u0629." : "\u23F3 \u0639\u0645 \u064A\u0641\u062D\u0635 \u062D\u0627\u0644\u0629 \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u2026" : "\u26AA \u0645\u0648 \u0645\u062A\u0635\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631.") + "</div>";
     if (S2.tasks.length) {
       h += '<div class="card glow"><h3>\u23F3 \u0634\u063A\u0651\u0627\u0644 \u0647\u0644\u0623</h3>' + S2.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc2(t.label) + '</b> <span class="mut">\xB7 ' + fmtDur2(Date.now() - t.started) + '</span><div class="mut">' + esc2(t.text || "\u0639\u0645 \u064A\u0634\u062A\u063A\u0644\u2026") + '</div></div><button class="chip" data-stop="' + esc2(t.tab) + '">\u0625\u064A\u0642\u0627\u0641</button></div>').join("") + "</div>";
@@ -41689,7 +41703,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.18.0" : "5.10";
+  var VERSION = true ? "5.19.0" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -41777,6 +41791,12 @@
     schedOpen: "",
     rperiod: "30",
     activeProject: null,
+    feed: lsGet("trl.feed", []),
+    feedLast: lsGet("trl.feedLast", 0),
+    feedSeen: lsGet("trl.feedSeen", 0),
+    feedOpen: 0,
+    agView: "list",
+    tgQuiet: lsGet("trl.tgq", null),
     agentOut: Object.fromEntries(Object.entries(lsGet("trl.agentout", {})).map(([k, v]) => [k, { ...v, running: false }])),
     mode: lsGet("trl.mode", { kind: "free" }),
     project: lsGet("trl.project", null),
@@ -42240,6 +42260,47 @@
       return null;
     }
   }
+  var feedBusy = false;
+  async function feedPoll() {
+    if (!S.gate || feedBusy) return;
+    feedBusy = true;
+    try {
+      if (S.tgQuiet === null) {
+        const p = await gateCall("/prefs");
+        if (p && p.ok) {
+          S.tgQuiet = !!p.tgQuiet;
+          lsSet("trl.tgq", S.tgQuiet);
+        }
+      }
+      const r = await gateCall("/feed?after=" + S.feedLast);
+      if (!r || !r.ok) return;
+      const items = Array.isArray(r.items) ? r.items : [];
+      if (Number(r.last) < S.feedLast) {
+        S.feed = [];
+        S.feedLast = 0;
+        S.feedSeen = 0;
+      }
+      const first = S.feedLast === 0 && !S.feed.length;
+      if (items.length) {
+        const mine = new Set(Object.values(S.agentOut).map((x) => x && x.job).filter(Boolean));
+        S.feed = [...S.feed, ...items].slice(-50);
+        if (!first) {
+          for (const it of items) if (!mine.has(it.job)) notify((it.agent || "\u0645\u0647\u0645\u0629") + (it.kind === "fail" ? ": \u0645\u0627 \u062E\u0644\u0635\u062A" : ": \u062E\u0644\u0635"), it.text || "");
+        }
+      }
+      S.feedLast = Number(r.last) || S.feedLast;
+      if (first || S.tab === "agents" && S.agView === "feed") S.feedSeen = S.feedLast;
+      lsSet("trl.feed", S.feed);
+      lsSet("trl.feedLast", S.feedLast);
+      lsSet("trl.feedSeen", S.feedSeen);
+      if (S.view === "main") {
+        renderTabs();
+        if (S.tab === "agents" && !(document.activeElement && document.activeElement.matches("textarea"))) renderPage();
+      }
+    } finally {
+      feedBusy = false;
+    }
+  }
   var pcAt = 0;
   async function pcStatus() {
     if (Date.now() - pcAt < 15e3) return;
@@ -42398,6 +42459,49 @@
     }
     if (d.agopen !== void 0) {
       S.agentOpen = S.agentOpen === d.agopen ? "" : d.agopen;
+      renderPage();
+      return true;
+    }
+    if (d.agview) {
+      S.agView = d.agview;
+      if (d.agview === "feed") {
+        S.feedSeen = S.feedLast;
+        lsSet("trl.feedSeen", S.feedSeen);
+        void feedPoll();
+      }
+      renderTabs();
+      renderPage();
+      return true;
+    }
+    if (d.feedopen !== void 0) {
+      const n = Number(d.feedopen);
+      S.feedOpen = S.feedOpen === n ? 0 : n;
+      renderPage();
+      return true;
+    }
+    if (d.tgq) {
+      const v = S.tgQuiet !== true;
+      S.tgQuiet = v;
+      lsSet("trl.tgq", v);
+      renderPage();
+      void gateCall("/prefs", { tgQuiet: v }).then((r) => {
+        if (!r || !r.ok) {
+          S.tgQuiet = !v;
+          lsSet("trl.tgq", !v);
+          renderPage();
+          toast("\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u063A\u064A\u0651\u0631 \u0627\u0644\u0625\u0639\u062F\u0627\u062F");
+        } else toast(v ? "\u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645 \u0627\u0646\u0633\u0643\u0651\u0631\u060C \u0627\u0644\u0646\u062A\u0627\u0626\u062C \u0647\u0648\u0646 \u0628\u0633" : "\u062A\u064A\u0644\u064A\u063A\u0631\u0627\u0645 \u0631\u062C\u0639 \u0634\u063A\u0651\u0627\u0644");
+      });
+      return true;
+    }
+    if (d.stopall) {
+      void gateCall("/stop", {}).then((r) => toast(r && r.ok ? "\u0627\u0646\u0628\u0639\u062A \u0627\u0644\u0625\u064A\u0642\u0627\u0641 (\u0633\u062D\u0627\u0628\u064A \u0627\u0646\u0644\u063A\u0649: " + (r.cancelled || 0) + ")" : "\u0645\u0627 \u0642\u062F\u0631\u062A \u0623\u0648\u0635\u0644 \u0644\u0644\u0628\u0648\u0627\u0628\u0629"));
+      return true;
+    }
+    if (d.feedclear) {
+      S.feed = [];
+      lsSet("trl.feed", []);
+      renderTabs();
       renderPage();
       return true;
     }
@@ -42914,7 +43018,7 @@
   function renderTabs() {
     const t = $("#tabs");
     if (!t) return;
-    const n = S.tasks.length;
+    const n = S.tasks.length + (S.feed || []).filter((x) => x.n > S.feedSeen).length;
     t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["proj", "\u{1F4C1}", "\u0627\u0644\u0645\u0634\u0627\u0631\u064A\u0639"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["todo", "\u{1F4DD}", "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + (id === "agents" && S.pal === "syrian" ? EAGLE2 : i) + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
   }
   var lastPage = { tab: "", html: "" };
@@ -43069,7 +43173,7 @@
     }
   });
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj]");
+    const t = e.target.closest("button,[data-conv],[data-close],[data-agopen],[data-sopen],[data-proj],[data-feedopen]");
     if (!t) return;
     const id = t.id;
     if (viewClick(t)) return;
@@ -43234,8 +43338,17 @@
     }
   });
   document.addEventListener("visibilitychange", () => {
-    if (!document.hidden) wake();
+    if (!document.hidden) {
+      wake();
+      void feedPoll();
+    }
   });
+  setInterval(() => {
+    if (!document.hidden && S.view === "main") void feedPoll();
+  }, 45e3);
+  setTimeout(() => {
+    void feedPoll();
+  }, 4e3);
   window.addEventListener("online", wake);
   setInterval(() => {
     if (S.view === "main" && S.tab === "agents" && S.tasks.length && !document.activeElement.matches("textarea")) renderPage();

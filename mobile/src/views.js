@@ -25,10 +25,29 @@ const head = (icon, title, sub, right = '') =>
 const empty = (msg) => '<div class="emp">' + msg + '</div>'
 
 // ---------- agents ----------
+export function feedHtml(c) {
+  const { S, esc, md } = c
+  const q = S.tgQuiet === true
+  let h = '<div class="card"><div style="display:flex;align-items:center;gap:8px"><div style="flex:1"><b>إشعارات تيليغرام</b><div class="mut">' + (q ? 'مسكّرة: النتائج بتطلع هون بس.' : 'شغّالة: النتائج بتنبعت لتيليغرام كمان.') + '</div></div><button class="chip' + (q ? ' pri' : '') + '" data-tgq="1">' + (q ? 'شغّلها' : 'سكّرها') + '</button></div>' +
+    '<div class="acts" style="margin-top:10px"><button class="btn danger" data-stopall="1">■ أوقف كل المهام</button><button class="chip" data-feedclear="1">مسح القائمة</button></div></div>'
+  const items = [...(S.feed || [])].reverse()
+  if (!items.length) return h + empty('ما في نتائج لسا. أي وكيل بيخلص (مجدول أو مشغّل من أي مكان) بتطلع نتيجتو هون.')
+  return h + items.map((i) => {
+    const open = S.feedOpen === i.n
+    return '<div class="card' + (open ? ' open' : '') + '" data-feedopen="' + i.n + '"><div><b>' + (i.kind === 'fail' ? '⚠️ ' : '✅ ') + esc(i.agent || 'مهمة') + '</b><span class="mut"> · ' + esc(when(i.ts)) + '</span></div>' +
+      (open
+        ? '<div class="msg bot' + (i.kind === 'fail' ? ' err' : '') + '" style="margin-top:8px">' + md(i.text || '') + '</div>' + (i.task ? '<div class="mut" style="margin-top:6px">المهمة: ' + esc(i.task) + '</div>' : '')
+        : '<div class="mut ag-h">' + esc(String(i.text || '').replace(/\s+/g, ' ').slice(0, 120)) + '</div>') + '</div>'
+  }).join('')
+}
+
 export function agentsHtml(c) {
   const { S, esc, md, fmtDur } = c
   const online = S.conn === 'online'
   let h = head(S.pal === 'syrian' ? EAGLE : '🤖', 'الوكلاء', 'شغّل أي وكيل من التلفون وبينفّذ عالكمبيوتر', '<button class="chip" data-refresh="agents">تحديث</button>')
+  const unread = (S.feed || []).filter((x) => x.n > S.feedSeen).length
+  h += '<div class="seg"><button data-agview="list" class="' + (S.agView !== 'feed' ? 'act' : '') + '">الوكلاء</button><button data-agview="feed" class="' + (S.agView === 'feed' ? 'act' : '') + '">النتائج' + (unread ? ' (' + unread + ')' : '') + '</button></div>'
+  if (S.agView === 'feed') return h + feedHtml(c)
   h += '<div class="mut" style="margin:0 4px 10px">' + (online ? '🟢 الكمبيوتر شغّال.' : S.gate ? (S.pc === 'on' ? '🟡 الكمبيوتر شغّال بس التلفون مو واصلو مباشرة، فالمهام بتنبعت عبر البوابة.' : S.pc === 'off' ? '🔴 الكمبيوتر مطفي أو التطبيق مسكّر. المهام بتشتغل بالسحابة.' : '⏳ عم يفحص حالة الكمبيوتر…') : '⚪ مو متصل بالكمبيوتر.') + '</div>'
   if (S.tasks.length) {
     h += '<div class="card glow"><h3>⏳ شغّال هلأ</h3>' + S.tasks.map((t) => '<div class="task"><span class="spin" style="margin-top:4px"></span><div class="t"><b>' + esc(t.label) + '</b> <span class="mut">· ' + fmtDur(Date.now() - t.started) + '</span><div class="mut">' + esc(t.text || 'عم يشتغل…') + '</div></div><button class="chip" data-stop="' + esc(t.tab) + '">إيقاف</button></div>').join('') + '</div>'
