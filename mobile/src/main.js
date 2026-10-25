@@ -5,7 +5,7 @@ import { App as CapApp } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
-import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml } from './views.js'
+import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml, projHtml } from './views.js'
 
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '5.10'
 
@@ -142,7 +142,7 @@ function onHost(m) {
       S.models = m.models || []; S.projects = m.projects || []; S.host = m.host || S.host; S.activeProject = m.activeProject || null
       if (Array.isArray(m.urls) && m.urls.length && S.device) { const merged = [...new Set([...m.urls, ...S.device.urls])].slice(0, 8); if (merged.join() !== S.device.urls.join()) { S.device.urls = merged; lsSet('trl.device', S.device) } }
       if (S.project && S.projects.find((p) => p.id === S.project && p.confidential)) { S.project = null; lsSet('trl.project', null) }
-      if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet(); if (S.tab === 'more') renderPage() }
+      if (S.view === 'main') { renderHeader(); if (S.sheet) renderSheet(); if (S.tab === 'more' || S.tab === 'proj') renderPage() }
       return
     case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !document.activeElement.matches('textarea')) renderPage() } return
     case 'agents': S.agents = m.list || []; lsSet('trl.agents', S.agents); if (m.gate && m.gate.url && m.gate.key) { S.gate = m.gate; lsSet('trl.gate', m.gate) } if (S.tab === 'agents') renderPage(); return
@@ -656,7 +656,7 @@ function applyTheme() {
 function renderTabs() {
   const t = $('#tabs'); if (!t) return
   const n = S.tasks.length
-  t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['todo', '📝', 'ملاحظات'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
+  t.innerHTML = [['chat', '💬', 'الشات'], ['proj', '📁', 'المشاريع'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['todo', '📝', 'ملاحظات'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
 }
 const lastPage = { tab: '', html: '' }
 function renderPage() {
@@ -672,7 +672,7 @@ function renderPage() {
     renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
     lastPage.tab = 'chat'; lastPage.html = ''
   } else {
-    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, more: moreHtml }[S.tab] || moreHtml
+    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, proj: projHtml, more: moreHtml }[S.tab] || moreHtml
     const html = fn(VC)
     // same tab + same content: leave the DOM alone (no flicker); the fade-in only plays when switching tabs
     if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return

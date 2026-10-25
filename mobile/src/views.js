@@ -123,18 +123,25 @@ export function reportHtml(c) {
   return h
 }
 
-// ---------- more: projects, models, connection ----------
+// ---------- projects (own tab) ----------
+export function projHtml(c) {
+  const { S, esc } = c
+  let h = head('📁', 'المشاريع', 'المشروع يلي بتختاروا بتشتغل عليه محادثاتك من التلفون')
+  h += '<div class="card">' +
+    '<div class="prj' + (!S.project ? ' sel' : '') + '" data-proj=""><div class="pn">بدون مشروع</div></div>' +
+    S.projects.map((p) => '<div class="prj' + (S.project === p.id ? ' sel' : '') + (p.confidential ? ' lock' : '') + '" data-proj="' + esc(p.id) + '"><div class="pn">' + (p.confidential ? '🔒 ' : '📂 ') + esc(p.name) + '</div>' +
+      (S.activeProject === p.id ? '<span class="pill ok">فعّال عالكمبيوتر</span>' : (p.confidential ? '' : '<button class="chip" data-projdesk="' + esc(p.id) + '">فعّله عالكمبيوتر</button>')) + '</div>').join('') +
+    (S.projects.length ? '' : '<div class="mut">ما في مشاريع. أضف مشروع من برنامج الكمبيوتر.</div>') + '</div>'
+  return h
+}
+
+// ---------- more: models, look, connection ----------
 export function moreHtml(c) {
   const { S, esc, version } = c
   const d = S.device || {}
   const m = S.mode
   const opt = (id, v) => '<option value="' + esc(v.value) + '" ' + (id === v.value ? 'selected' : '') + '>' + esc(v.label) + '</option>'
-  let h = head('⚙️', 'المزيد', 'المشاريع والموديلات والاتصال')
-  h += '<div class="card"><h3>📁 المشاريع</h3><div class="mut" style="margin-bottom:8px">المشروع يلي بتختاروا بتشتغل عليه محادثاتك من التلفون.</div>' +
-    '<div class="prj' + (!S.project ? ' sel' : '') + '" data-proj=""><div class="pn">بدون مشروع</div></div>' +
-    S.projects.map((p) => '<div class="prj' + (S.project === p.id ? ' sel' : '') + (p.confidential ? ' lock' : '') + '" data-proj="' + esc(p.id) + '"><div class="pn">' + (p.confidential ? '🔒 ' : '📂 ') + esc(p.name) + '</div>' +
-      (S.activeProject === p.id ? '<span class="pill ok">فعّال عالكمبيوتر</span>' : (p.confidential ? '' : '<button class="chip" data-projdesk="' + esc(p.id) + '">فعّله عالكمبيوتر</button>')) + '</div>').join('') +
-    (S.projects.length ? '' : '<div class="mut">ما في مشاريع. أضف مشروع من برنامج الكمبيوتر.</div>') + '</div>'
+  let h = head('⚙️', 'المزيد', 'الموديلات والمظهر والاتصال')
   h += '<div class="card"><h3>🧠 الموديل وطريقة الشغل</h3><div class="seg">' +
     [['auto', 'تلقائي'], ['free', 'مجاني'], ['model', 'موديل'], ['council', 'council']].map(([k, l]) => '<button data-mode="' + k + '" class="' + (m.kind === k ? 'act' : '') + '">' + l + '</button>').join('') + '</div>' +
     '<div class="mut" style="margin-bottom:8px">' + ({ auto: 'يختار أنسب موديل (مجاني أو مدفوع) حسب الطلب.', free: 'موديلات مجانية بس (الأرخص والأأمن).', model: 'موديل محدد بتختاره إنت.', council: 'كاتب ومراجع: جواب أدق بس أبطأ.' })[m.kind] + '</div>' +
