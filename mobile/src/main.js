@@ -6,6 +6,7 @@ import { LocalNotifications } from '@capacitor/local-notifications'
 import { PushNotifications } from '@capacitor/push-notifications'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
+import { brandOf, brandBadgeHtml } from '../../src/core/brands'
 import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml, projHtml } from './views.js'
 
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '5.10'
@@ -485,7 +486,7 @@ function renderStatus() {
 function msgHtml(m, i) {
   if (m.role === 'user') return '<div class="msg user" data-mi="' + i + '">' + esc(m.content).replace(/\n/g, '<br>') + (m.atts && m.atts.length ? '<div class="meta">📎 ' + m.atts.map(esc).join(' · ') + '</div>' : '') + (m.queued ? '<div class="meta">⏳ بانتظار الكمبيوتر…</div>' : '') + (m.expired ? '<div class="meta">⚠️ ما انبعتت (قديمة)</div>' : '') + '</div>'
   const model = (String(m.meta || '').match(/Model: ([^|]+?)(?: \||$)/) || [])[1]
-  return '<div class="msg bot' + (m.failed ? ' err' : '') + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta">' + esc(model || m.meta || '') + '</div>' : '') + '</div>'
+  return '<div class="msg bot' + (m.failed ? ' err' : '') + '">' + md(m.content) + (model || m.cancelled ? '<div class="meta" style="display:flex;align-items:center;gap:6px">' + (brandOf(model) ? brandBadgeHtml(brandOf(model), 20) : '') + '<span>' + esc(model || m.meta || '') + '</span></div>' : '') + '</div>'
 }
 function renderMsgs(stick = true) {
   const el = $('#msgs'); if (!el) return

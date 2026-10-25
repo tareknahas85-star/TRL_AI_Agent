@@ -9,6 +9,7 @@ import { CostDashboard } from './CostDashboard'
 import { Chip } from './components/ui'
 import { FileChips } from './FileChips'
 import type { AttachmentInfo, ChatMode, ProjectInfo, StoredMessage } from '../preload/index.d'
+import { brandOf, type Brand } from '../core/brands'
 
 type ChatMessage = StoredMessage
 
@@ -39,28 +40,17 @@ function pickerForMode<T extends { tier: string }>(mode: ChatMode, picker: T[]):
   return picker
 }
 
-type Brand = 'claude' | 'openai' | 'gemini'
-const brandOf = (model: string): Brand | null =>
-  /claude|sonnet|opus|haiku/i.test(model) ? 'claude' : /gemini|nano-banana|veo/i.test(model) ? 'gemini' : /gpt|codex|openai|\bo[1-9]\b/i.test(model) ? 'openai' : null
-
 function BrandAvatar({ brand }: { brand: Brand }): ReactElement {
-  const bg = brand === 'claude' ? '#D97757' : brand === 'openai' ? '#10A37F' : '#1A73E8'
   return (
-    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: bg }} title={brand === 'claude' ? 'Claude' : brand === 'openai' ? 'ChatGPT' : 'Gemini'}>
-      {brand === 'claude' ? (
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2.2" strokeLinecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4" /></svg>
-      ) : brand === 'openai' ? (
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="#fff" strokeWidth="2" strokeLinejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z" /><path d="M12 8l3.9 2.25v4.5L12 17l-3.9-2.25v-4.5z" /></svg>
-      ) : (
-        <svg viewBox="0 0 24 24" width="18" height="18" fill="#fff"><path d="M12 2c.6 5.4 4.6 9.4 10 10-5.4.6-9.4 4.6-10 10-.6-5.4-4.6-9.4-10-10 5.4-.6 9.4-4.6 10-10z" /></svg>
-      )}
+    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ background: brand.color }} title={brand.label}>
+      <svg viewBox="0 0 24 24" width="18" height="18" dangerouslySetInnerHTML={{ __html: brand.glyph }} />
     </div>
   )
 }
 
-function Avatar({ model, pin }: { model?: string; pin?: boolean } = {}): ReactElement {
+function Avatar({ model }: { model?: string; pin?: boolean } = {}): ReactElement {
   const { palette } = useTheme()
-  const brand = pin && model ? brandOf(model) : null
+  const brand = brandOf(model)
   if (brand) return <BrandAvatar brand={brand} />
   if (palette === 'syrian')
     return (
