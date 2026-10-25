@@ -680,3 +680,29 @@ test('isOpenNow reads common OSM opening_hours', () => {
   assert.equal(isOpenNow('sunrise-sunset', sun10), null)
   assert.equal(isOpenNow(undefined, sun10), null)
 })
+
+test('PDF tools: merge, extract pages, info (local, never overwrite)', async () => {
+  const { pdfMerge, pdfSplit, pdfInfo, parsePages } = await import('../src/tools/doc-tools')
+  const { PDFDocument } = await import('pdf-lib')
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'trl-pdf-'))
+  const mk = async (name: string, pages: number): Promise<string> => {
+    const d = await PDFDocument.create()
+    for (let i = 0; i < pages; i++) d.addPage()
+    const p = path.join(dir, name)
+    fs.writeFileSync(p, await d.save())
+    return p
+  }
+  const a = await mk('a.pdf', 2)
+  const b = await mk('b.pdf', 3)
+  assert.deepEqual(parsePages('1-2,4', 5), [0, 1, 3])
+  const o = (r: string): string => (JSON.parse(r) as { output: string }).output
+  const merged = o(await pdfMerge([a, b], path.join(dir, 'm.pdf')))
+  assert.equal((await PDFDocument.load(fs.readFileSync(merged))).getPageCount(), 5)
+  const merged2 = o(await pdfMerge([a, b], path.join(dir, 'm.pdf')))
+  assert.notEqual(merged2, merged)
+  const part = o(await pdfSplit(merged, '2-3', undefined))
+  assert.equal((await PDFDocument.load(fs.readFileSync(part))).getPageCount(), 2)
+  assert.match(await pdfInfo(merged), /5/)
+})
+
+

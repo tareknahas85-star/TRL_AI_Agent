@@ -202,7 +202,7 @@ function StatusBar({
           </>
         ) : st && last ? (
           <>
-            <span dir="ltr" title="الموديل اللي جاوب فعلاً">جاوب: {last.model}{last.tried.length > 1 ? ` (بعد فشل ${last.tried.slice(0, -1).join(' ← ')})` : ''}</span>
+            <span dir="ltr" title="الموديل اللي جاوب فعلاً" style={{ color: brandOf(last.model)?.color }}>جاوب: {last.model}{last.tried.length > 1 ? ` (بعد فشل ${last.tried.slice(0, -1).join(' ← ')})` : ''}</span>
             <span dir="ltr">⏱ {fmtMs(st.totalMs)}</span>
             <span dir="ltr">
               ⇅ {st.promptTokens || '—'}/{st.completionTokens}
@@ -360,7 +360,7 @@ function MetaBar({ meta }: { meta: string }): ReactElement {
     <div className="mt-2 flex flex-wrap items-center gap-1.5">
       <Chip cls={t.cls}>{t.label}</Chip>
       <Chip>
-        <span dir="ltr">{m.model}</span>
+        <span dir="ltr" style={{ color: brandOf(m.model)?.color }}>{m.model}</span>
       </Chip>
       {m.skill && m.skill !== 'none' && <Chip cls="bg-primary/10 text-primary">{m.skill}</Chip>}
       {m.tools.length > 0 && (
