@@ -7,7 +7,8 @@ type Filter = 'all' | 'open' | 'done'
 
 const KEY = 'air.todo.items'
 
-function load(): Item[] {
+// Old storage (browser only). Read once and moved to the shared file so the phone app sees the same list.
+function legacy(): Item[] {
   try {
     const raw = localStorage.getItem(KEY)
     const v = raw ? (JSON.parse(raw) as unknown) : []
@@ -18,17 +19,33 @@ function load(): Item[] {
 }
 
 export function TodoPage() {
-  const [items, setItems] = useState<Item[]>(load)
+  const [items, setItems] = useState<Item[]>([])
   const [text, setText] = useState('')
   const [filter, setFilter] = useState<Filter>('open')
 
   useEffect(() => {
-    try {
-      localStorage.setItem(KEY, JSON.stringify(items))
-    } catch {
-      /* storage unavailable */
+    let alive = true
+    const pull = (): void => void window.api.todo.list().then((l) => alive && setItems(l))
+    void window.api.todo.list().then(async (l) => {
+      const old = legacy()
+      if (l.length === 0 && old.length > 0) {
+        const merged = await window.api.todo.op({ op: 'import', items: old })
+        try {
+          localStorage.removeItem(KEY)
+        } catch {
+          /* ignore */
+        }
+        if (alive) setItems(merged)
+      } else if (alive) setItems(l)
+    })
+    const off = window.api.todo.onChanged(pull)
+    return () => {
+      alive = false
+      off()
     }
-  }, [items])
+  }, [])
+
+  const run = (op: unknown): void => void window.api.todo.op(op).then(setItems)
 
   const add = (): void => {
     // كل سطر بيصير مهمة، فبتقدر تلصق قائمة كاملة مرة وحدة
@@ -37,8 +54,7 @@ export function TodoPage() {
       .map((l) => l.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
       .filter(Boolean)
     if (!lines.length) return
-    const now = Date.now()
-    setItems((a) => [...lines.map((t, i) => ({ id: `${now}-${i}`, text: t, done: false, at: now })), ...a])
+    run({ op: 'add', lines })
     setText('')
   }
 
@@ -52,10 +68,10 @@ export function TodoPage() {
   return (
     <PageShell
       title="ملاحظات"
-      subtitle="قائمة مهامك الشخصية. محفوظة عندك على الجهاز بس. كل سطر بتلصقو بيصير مهمة لحاله."
+      subtitle="قائمة مهامك الشخصية. محفوظة عندك على الجهاز، ومتزامنة مع تبويب «ملاحظات» بتطبيق الموبايل. كل سطر بتلصقو بيصير مهمة لحاله."
       action={
         done > 0 ? (
-          <button className={ghostBtn} onClick={() => setItems((a) => a.filter((i) => !i.done))}>
+          <button className={ghostBtn} onClick={() => run({ op: 'clearDone' })}>
             امسح المنجزة ({done})
           </button>
         ) : undefined
@@ -106,7 +122,7 @@ export function TodoPage() {
             <li key={i.id} className={cardCls + ' flex items-start gap-3 !p-3'}>
               <button
                 aria-label={i.done ? 'رجّعها' : 'خلصت'}
-                onClick={() => setItems((a) => a.map((x) => (x.id === i.id ? { ...x, done: !x.done } : x)))}
+                onClick={() => run({ op: 'toggle', id: i.id })}
                 className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
                   i.done ? 'border-success bg-success text-white' : 'border-outline hover:border-primary'
                 }`}
@@ -116,7 +132,7 @@ export function TodoPage() {
               <span dir="auto" className={`min-w-0 flex-1 whitespace-pre-wrap break-words text-sm ${i.done ? 'text-muted line-through' : ''}`}>
                 {i.text}
               </span>
-              <button aria-label="احذف" className="shrink-0 text-muted hover:text-danger" onClick={() => setItems((a) => a.filter((x) => x.id !== i.id))}>
+              <button aria-label="احذف" className="shrink-0 text-muted hover:text-danger" onClick={() => run({ op: 'del', id: i.id })}>
                 <Trash2 size={16} />
               </button>
             </li>

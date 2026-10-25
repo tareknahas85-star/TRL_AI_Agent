@@ -41609,6 +41609,20 @@
     }).join("");
     return h;
   }
+  function todoHtml(c) {
+    const S2 = c.S;
+    const esc2 = c.esc;
+    let h = head("\u{1F4DD}", "\u0645\u0644\u0627\u062D\u0638\u0627\u062A", "\u0646\u0641\u0633 \u0642\u0627\u0626\u0645\u0629 \xAB\u0645\u0644\u0627\u062D\u0638\u0627\u062A\xBB \u0628\u0628\u0631\u0646\u0627\u0645\u062C \u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631\u060C \u0628\u062A\u062A\u0632\u0627\u0645\u0646 \u0628\u064A\u0646 \u0627\u0644\u062C\u0647\u0627\u0632\u064A\u0646", '<button class="chip" data-refresh="todo">\u062A\u062D\u062F\u064A\u062B</button>');
+    h += '<div class="card"><textarea id="todoIn" class="tdin" rows="3" dir="auto" placeholder="\u0627\u0643\u062A\u0628 \u0645\u0647\u0645\u0629\u060C \u0623\u0648 \u0627\u0644\u0635\u0642 \u0639\u062F\u0629 \u0623\u0633\u0637\u0631 \u0644\u064A\u0635\u064A\u0631 \u0643\u0644 \u0633\u0637\u0631 \u0645\u0647\u0645\u0629\u2026">' + esc2(S2.todoDraft || "") + '</textarea><button class="btn" data-tdadd="1" style="margin-top:8px">\u2795 \u0636\u064A\u0641</button></div>';
+    if (S2.todo === null) return h + empty(S2.conn === "online" ? '<span class="spin"></span> \u0639\u0645 \u064A\u062C\u064A\u0628 \u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A\u2026' : "\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u062A\u0638\u0647\u0631 \u0627\u0644\u0645\u0644\u0627\u062D\u0638\u0627\u062A.");
+    const open = S2.todo.filter((i) => !i.done).length;
+    const done = S2.todo.length - open;
+    const f = S2.todoFilter || "open";
+    h += '<div class="tdf">' + [["open", "\u0627\u0644\u0645\u062A\u0628\u0642\u064A (" + open + ")"], ["done", "\u0627\u0644\u0645\u0646\u062C\u0632 (" + done + ")"], ["all", "\u0627\u0644\u0643\u0644 (" + S2.todo.length + ")"]].map(([id, l]) => '<button class="chip' + (f === id ? " act" : "") + '" data-tdf="' + id + '">' + l + "</button>").join("") + (done ? '<button class="chip" data-tdclear="1">\u0627\u0645\u0633\u062D \u0627\u0644\u0645\u0646\u062C\u0632\u0629</button>' : "") + "</div>";
+    const shown = S2.todo.filter((i) => f === "all" ? true : f === "open" ? !i.done : i.done);
+    if (!shown.length) return h + empty(S2.todo.length ? "\u0645\u0627 \u0641\u064A \u0634\u064A \u0628\u0647\u0627\u0644\u062A\u0635\u0646\u064A\u0641." : "\u0645\u0627 \u0641\u064A \u0645\u0647\u0627\u0645 \u0644\u0633\u0627. \u0636\u064A\u0641 \u0623\u0648\u0644 \u0648\u062D\u062F\u0629 \u0645\u0646 \u0641\u0648\u0642.");
+    return h + shown.map((i) => '<div class="card tdrow"><button class="tdchk' + (i.done ? " on" : "") + '" data-tdtog="' + esc2(i.id) + '" aria-label="\u062A\u0628\u062F\u064A\u0644">' + (i.done ? "\u2713" : "") + '</button><div class="tdtxt' + (i.done ? " dn" : "") + '" dir="auto">' + esc2(i.text) + '</div><button class="tddel" data-tddel="' + esc2(i.id) + '" aria-label="\u0627\u062D\u0630\u0641">\u{1F5D1}</button></div>').join("");
+  }
   function schedHtml(c) {
     const { S: S2, esc: esc2, md: md2 } = c;
     let h = head("\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629", "\u0645\u0647\u0627\u0645 \u0628\u062A\u0634\u062A\u063A\u0644 \u0644\u062D\u0627\u0644\u0647\u0627 \u0628\u0623\u0648\u0642\u0627\u062A \u0645\u062D\u062F\u062F\u0629", '<button class="chip" data-refresh="sched">\u062A\u062D\u062F\u064A\u062B</button>');
@@ -41670,7 +41684,7 @@
   }
 
   // src/main.js
-  var VERSION = true ? "5.17.4" : "5.10";
+  var VERSION = true ? "5.18.0" : "5.10";
   var AirNative = registerPlugin("AirNative", {
     web: () => Promise.resolve({
       async info() {
@@ -41750,6 +41764,9 @@
     themeMode: lsGet("trl.themeMode", "dark"),
     pal: lsGet("trl.pal", "default"),
     sched: null,
+    todo: lsGet("trl.todo", null),
+    todoDraft: "",
+    todoFilter: "open",
     report: null,
     agentOpen: "",
     schedOpen: "",
@@ -41904,6 +41921,7 @@
         link.send({ k: "hello" });
         link.send({ k: "agents.get" });
         link.send({ k: "sched.get" });
+        link.send({ k: "todo.get" });
         setTimeout(flushQueue, 400);
       },
       onMessage: (m) => onHost(m),
@@ -42000,6 +42018,11 @@
           lsSet("trl.gate", m.gate);
         }
         if (S.tab === "agents") renderPage();
+        return;
+      case "todo":
+        S.todo = Array.isArray(m.list) ? m.list : [];
+        lsSet("trl.todo", S.todo);
+        if (S.tab === "todo" && !(document.activeElement && document.activeElement.id === "todoIn")) renderPage();
         return;
       case "sched":
         S.sched = m.list || [];
@@ -42327,6 +42350,31 @@
     const d = t.dataset;
     if (d.tab) {
       openTab(d.tab);
+      return true;
+    }
+    if (d.tdadd) {
+      const el = $("#todoIn");
+      const text = el ? el.value.trim() : "";
+      if (!text) return true;
+      if (!sendHost({ k: "todo.add", text })) {
+        toast("\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644 \u0639\u0634\u0627\u0646 \u062A\u0646\u0636\u0627\u0641");
+        return true;
+      }
+      S.todoDraft = "";
+      if (el) el.value = "";
+      return true;
+    }
+    if (d.tdtog || d.tddel) {
+      if (!sendHost({ k: d.tdtog ? "todo.toggle" : "todo.del", id: d.tdtog || d.tddel })) toast("\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644");
+      return true;
+    }
+    if (d.tdclear) {
+      if (!sendHost({ k: "todo.clear" })) toast("\u0648\u0635\u0651\u0644 \u0628\u0627\u0644\u0643\u0645\u0628\u064A\u0648\u062A\u0631 \u0623\u0648\u0644");
+      return true;
+    }
+    if (d.tdf) {
+      S.todoFilter = d.tdf;
+      renderPage();
       return true;
     }
     if (d.refresh) {
@@ -42849,12 +42897,14 @@
     const t = $("#tabs");
     if (!t) return;
     const n = S.tasks.length;
-    t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + (id === "agents" && S.pal === "syrian" ? EAGLE2 : i) + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
+    t.innerHTML = [["chat", "\u{1F4AC}", "\u0627\u0644\u0634\u0627\u062A"], ["agents", "\u{1F916}", "\u0627\u0644\u0648\u0643\u0644\u0627\u0621"], ["sched", "\u{1F4C5}", "\u0627\u0644\u062C\u062F\u0648\u0644\u0629"], ["report", "\u{1F4CA}", "\u0627\u0644\u062A\u0642\u0627\u0631\u064A\u0631"], ["todo", "\u{1F4DD}", "\u0645\u0644\u0627\u062D\u0638\u0627\u062A"], ["more", "\u2699\uFE0F", "\u0627\u0644\u0645\u0632\u064A\u062F"]].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? "act" : "") + '"><span class="i">' + (id === "agents" && S.pal === "syrian" ? EAGLE2 : i) + "</span>" + l + (id === "agents" && n ? '<span class="badge">' + n + "</span>" : "") + "</button>").join("");
   }
   var lastPage = { tab: "", html: "" };
   function renderPage() {
     const p = $("#page");
     if (!p) return;
+    const tdi = $("#todoIn");
+    if (tdi) S.todoDraft = tdi.value;
     const ta0 = $("#agTask");
     if (ta0 && S.agentOpen) {
       const st0 = S.agentOut[S.agentOpen] || (S.agentOut[S.agentOpen] = {});
@@ -42872,7 +42922,7 @@
       lastPage.tab = "chat";
       lastPage.html = "";
     } else {
-      const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, more: moreHtml }[S.tab] || moreHtml;
+      const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, more: moreHtml }[S.tab] || moreHtml;
       const html = fn(VC);
       if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return;
       p.innerHTML = '<div class="page' + (lastPage.tab === S.tab ? "" : " fade") + '">' + html + "</div>";

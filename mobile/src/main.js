@@ -5,7 +5,7 @@ import { App as CapApp } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
-import { agentsHtml, schedHtml, reportHtml, moreHtml } from './views.js'
+import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml } from './views.js'
 
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '5.10'
 
@@ -50,7 +50,7 @@ let L = null
 const S = {
   view: 'boot', tab: 'chat', device: null, ppk: '', psk: '',
   conn: 'offline', host: '', models: [], projects: [], tasks: [], sas: '', pairErr: '',
-  agents: lsGet('trl.agents', []), gate: lsGet('trl.gate', null), pc: '', themeMode: lsGet('trl.themeMode', 'dark'), pal: lsGet('trl.pal', 'default'), sched: null, report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null,
+  agents: lsGet('trl.agents', []), gate: lsGet('trl.gate', null), pc: '', themeMode: lsGet('trl.themeMode', 'dark'), pal: lsGet('trl.pal', 'default'), sched: null, todo: lsGet('trl.todo', null), todoDraft: '', todoFilter: 'open', report: null, agentOpen: '', schedOpen: '', rperiod: '30', activeProject: null,
   agentOut: Object.fromEntries(Object.entries(lsGet('trl.agentout', {})).map(([k, v]) => [k, { ...v, running: false }])),
   mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
   convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
@@ -108,7 +108,7 @@ async function connect() {
   const link = new GuestLink({
     sodium, ppk: S.ppk, psk: S.psk, name: S.device.me, mode: 'device', device: { dpk: S.device.dpk, room: S.device.room },
     send: (f) => { if (ws.readyState === 1) ws.send(f) },
-    onReady: () => { conn.retry = 0; setConn('online'); if (conn.recon) { conn.recon = false; toast('متصل ✅') }; link.send({ k: 'hello' }); link.send({ k: 'agents.get' }); link.send({ k: 'sched.get' }); setTimeout(flushQueue, 400) },
+    onReady: () => { conn.retry = 0; setConn('online'); if (conn.recon) { conn.recon = false; toast('متصل ✅') }; link.send({ k: 'hello' }); link.send({ k: 'agents.get' }); link.send({ k: 'sched.get' }); link.send({ k: 'todo.get' }); setTimeout(flushQueue, 400) },
     onMessage: (m) => onHost(m),
     onPeer: (up) => setConn(up ? 'connecting' : 'hostdown')
   })
@@ -146,6 +146,7 @@ function onHost(m) {
       return
     case 'tasks': S.tasks = m.list || []; if (S.view === 'main') { renderTabs(); if (S.tab === 'agents' && !document.activeElement.matches('textarea')) renderPage() } return
     case 'agents': S.agents = m.list || []; lsSet('trl.agents', S.agents); if (m.gate && m.gate.url && m.gate.key) { S.gate = m.gate; lsSet('trl.gate', m.gate) } if (S.tab === 'agents') renderPage(); return
+    case 'todo': S.todo = Array.isArray(m.list) ? m.list : []; lsSet('trl.todo', S.todo); if (S.tab === 'todo' && !(document.activeElement && document.activeElement.id === 'todoIn')) renderPage(); return
     case 'sched': S.sched = m.list || []; if (S.tab === 'sched') renderPage(); return
     case 'report': S.report = m.rows || []; if (S.tab === 'report') renderPage(); return
     case 'prog': { const p = S.pending.get(m.id); if (p) { p.status = m.text; if (p.agent) agProg(p); else renderStatus() } return }
@@ -351,6 +352,16 @@ function openTab(id) {
 function viewClick(t) {
   const d = t.dataset
   if (d.tab) { openTab(d.tab); return true }
+  if (d.tdadd) {
+    const el = $('#todoIn'); const text = el ? el.value.trim() : ''
+    if (!text) return true
+    if (!sendHost({ k: 'todo.add', text })) { toast('وصّل بالكمبيوتر أول عشان تنضاف'); return true }
+    S.todoDraft = ''; if (el) el.value = ''
+    return true
+  }
+  if (d.tdtog || d.tddel) { if (!sendHost({ k: d.tdtog ? 'todo.toggle' : 'todo.del', id: d.tdtog || d.tddel })) toast('وصّل بالكمبيوتر أول'); return true }
+  if (d.tdclear) { if (!sendHost({ k: 'todo.clear' })) toast('وصّل بالكمبيوتر أول'); return true }
+  if (d.tdf) { S.todoFilter = d.tdf; renderPage(); return true }
   if (d.refresh) { sendHost({ k: d.refresh + '.get' }); toast('عم يحدّث…'); return true }
   if (d.agopen !== undefined) { S.agentOpen = S.agentOpen === d.agopen ? '' : d.agopen; renderPage(); return true }
   if (d.agrun) { runAgentNow(d.agrun); return true }
@@ -642,11 +653,12 @@ function applyTheme() {
 function renderTabs() {
   const t = $('#tabs'); if (!t) return
   const n = S.tasks.length
-  t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
+  t.innerHTML = [['chat', '💬', 'الشات'], ['agents', '🤖', 'الوكلاء'], ['sched', '📅', 'الجدولة'], ['report', '📊', 'التقارير'], ['todo', '📝', 'ملاحظات'], ['more', '⚙️', 'المزيد']].map(([id, i, l]) => '<button data-tab="' + id + '" class="' + (S.tab === id ? 'act' : '') + '"><span class="i">' + (id === 'agents' && S.pal === 'syrian' ? EAGLE : i) + '</span>' + l + (id === 'agents' && n ? '<span class="badge">' + n + '</span>' : '') + '</button>').join('')
 }
 const lastPage = { tab: '', html: '' }
 function renderPage() {
   const p = $('#page'); if (!p) return
+  const tdi = $('#todoIn'); if (tdi) S.todoDraft = tdi.value
   const ta0 = $('#agTask'); if (ta0 && S.agentOpen) { const st0 = S.agentOut[S.agentOpen] || (S.agentOut[S.agentOpen] = {}); st0.task = ta0.value }
   const top = document.querySelector('.top'); if (top) top.style.display = S.tab === 'chat' ? 'flex' : 'none'
   if (S.tab === 'chat') {
@@ -657,7 +669,7 @@ function renderPage() {
     renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
     lastPage.tab = 'chat'; lastPage.html = ''
   } else {
-    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, more: moreHtml }[S.tab] || moreHtml
+    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, more: moreHtml }[S.tab] || moreHtml
     const html = fn(VC)
     // same tab + same content: leave the DOM alone (no flicker); the fade-in only plays when switching tabs
     if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return

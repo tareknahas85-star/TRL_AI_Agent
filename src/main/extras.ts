@@ -1,5 +1,5 @@
 import { secureStoreMode } from '../store/secure-store'
-import { dialog, ipcMain, nativeImage, shell } from 'electron'
+import { BrowserWindow, dialog, ipcMain, nativeImage, shell } from 'electron'
 import fsp from 'fs/promises'
 import path from 'path'
 import { prepareFile } from './attach'
@@ -9,6 +9,7 @@ import { costOf, knownPrice } from '../core/pricing'
 import { readJson, writeJson } from '../core/json-store'
 import { getConversation, listConversations } from '../core/workspace'
 import { deleteAgent, listAgents, saveAgent } from '../core/agents'
+import { listTodo, onTodoChange, todoOp } from '../core/todo-store'
 import { cloudMemoryPack, getBlocked, projectNames, setBlocked } from '../core/agent-memory'
 import { gateState, setGate, syncAgents, testGate } from '../core/gate'
 import { clearTelegramToken, detectChatId, sendTelegram, setTelegram, telegramState } from '../core/telegram'
@@ -210,6 +211,11 @@ ipcMain.handle('security:status', () => {
     const l = deleteAgent(String(id))
     void syncAgents()
     return l
+  })
+  ipcMain.handle('todo:list', () => listTodo())
+  ipcMain.handle('todo:op', (_e, op: unknown) => todoOp(op))
+  onTodoChange(() => {
+    for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('todo:changed')
   })
   ipcMain.handle('agentmem:get', () => {
     const p = cloudMemoryPack()

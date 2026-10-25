@@ -305,6 +305,15 @@ const api = {
     import: (password: string) => ipcRenderer.invoke('transfer:import', password)
   },
   security: { status: () => ipcRenderer.invoke('security:status') },
+  todo: {
+    list: () => ipcRenderer.invoke('todo:list'),
+    op: (op: unknown) => ipcRenderer.invoke('todo:op', op),
+    onChanged: (cb: () => void): (() => void) => {
+      const h = (): void => cb()
+      ipcRenderer.on('todo:changed', h)
+      return () => ipcRenderer.removeListener('todo:changed', h)
+    }
+  },
   agentMem: {
     get: () => ipcRenderer.invoke('agentmem:get'),
     set: (list: string[]) => ipcRenderer.invoke('agentmem:set', list)

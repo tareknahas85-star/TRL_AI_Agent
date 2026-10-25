@@ -12,6 +12,7 @@ import WebSocket from 'ws'
 import QRCode from 'qrcode'
 import sodium from 'libsodium-wrappers'
 import { readJson, writeJson, newId } from '../core/json-store'
+import { listTodo, onTodoChange, splitLines, todoOp } from '../core/todo-store'
 import { listProjects, activeProject, setActiveProject } from '../core/workspace'
 import { listAgents } from '../core/agents'
 import { phoneGateInfo } from '../core/gate'
@@ -329,6 +330,8 @@ export function pushTasks(): void {
   }, 400)
 }
 runHub.on('change', pushTasks)
+const todoMsg = (): Json => ({ k: 'todo', list: listTodo().slice(0, 300) })
+onTodoChange(() => broadcast(todoMsg()))
 
 const confIds = (): Set<string> => new Set(listProjects().projects.filter((p) => p.confidential).map((p) => p.id))
 const schedMsg = (): Json => {
@@ -381,6 +384,23 @@ async function handle(dev: Device, m: Json): Promise<void> {
         return
       case 'sched.get':
         send(dev.id, schedMsg())
+        return
+      case 'todo.get':
+        send(dev.id, todoMsg())
+        return
+      case 'todo.add': {
+        const text = str(m.text, 20000)
+        if (text) todoOp({ op: 'add', lines: splitLines(text) })
+        return
+      }
+      case 'todo.toggle':
+      case 'todo.del': {
+        const id = str(m.id, 80)
+        if (id) todoOp({ op: m.k === 'todo.toggle' ? 'toggle' : 'del', id })
+        return
+      }
+      case 'todo.clear':
+        todoOp({ op: 'clearDone' })
         return
       case 'sched.run': {
         const id = str(m.id, 40)

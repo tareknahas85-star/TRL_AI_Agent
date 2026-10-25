@@ -646,3 +646,20 @@ test('agents: schedule and mail sources are validated', () => {
   assert.deepEqual(cleanSources('Gmail, out look;x'), ['gmail', 'out', 'lookx'])
   assert.deepEqual(cleanSources(['A', '', 'b']), ['a', 'b'])
 }) 
+
+test('todo store: ops are pure and tolerate junk', async () => {
+  const { applyOp, splitLines, cleanItems } = await import('../src/core/todo-store')
+  const a = applyOp([], { op: 'add', lines: ['one', '  ', 'two'] }, 1000)
+  assert.equal(a.length, 2)
+  assert.equal(a[0].text, 'one')
+  const t = applyOp(a, { op: 'toggle', id: a[0].id })
+  assert.equal(t[0].done, true)
+  assert.equal(applyOp(t, { op: 'clearDone' }).length, 1)
+  assert.equal(applyOp(t, { op: 'del', id: a[1].id }).length, 1)
+  assert.equal(applyOp(a, { op: 'nonsense' }), a)
+  assert.equal(applyOp(a, null), a)
+  assert.equal(applyOp(a, { op: 'import', items: [{ text: 'x' }] }).length, 2) // never overwrites a non-empty list
+  assert.equal(applyOp([], { op: 'import', items: [{ text: 'x' }, { nope: 1 }] }).length, 1)
+  assert.deepEqual(splitLines('- a\n2) b\n\n• c'), ['a', 'b', 'c'])
+  assert.deepEqual(cleanItems('bad'), [])
+})

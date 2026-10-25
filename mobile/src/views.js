@@ -56,6 +56,20 @@ export function agentsHtml(c) {
   return h
 }
 
+// ---------- notes (same list as the desktop «ملاحظات» page) ----------
+export function todoHtml(c) {
+  const S = c.S; const esc = c.esc
+  let h = head('📝', 'ملاحظات', 'نفس قائمة «ملاحظات» ببرنامج الكمبيوتر، بتتزامن بين الجهازين', '<button class="chip" data-refresh="todo">تحديث</button>')
+  h += '<div class="card"><textarea id="todoIn" class="tdin" rows="3" dir="auto" placeholder="اكتب مهمة، أو الصق عدة أسطر ليصير كل سطر مهمة…">' + esc(S.todoDraft || '') + '</textarea><button class="btn" data-tdadd="1" style="margin-top:8px">➕ ضيف</button></div>'
+  if (S.todo === null) return h + empty(S.conn === 'online' ? '<span class="spin"></span> عم يجيب الملاحظات…' : 'وصّل بالكمبيوتر أول عشان تظهر الملاحظات.')
+  const open = S.todo.filter((i) => !i.done).length; const done = S.todo.length - open
+  const f = S.todoFilter || 'open'
+  h += '<div class="tdf">' + [['open', 'المتبقي (' + open + ')'], ['done', 'المنجز (' + done + ')'], ['all', 'الكل (' + S.todo.length + ')']].map(([id, l]) => '<button class="chip' + (f === id ? ' act' : '') + '" data-tdf="' + id + '">' + l + '</button>').join('') + (done ? '<button class="chip" data-tdclear="1">امسح المنجزة</button>' : '') + '</div>'
+  const shown = S.todo.filter((i) => (f === 'all' ? true : f === 'open' ? !i.done : i.done))
+  if (!shown.length) return h + empty(S.todo.length ? 'ما في شي بهالتصنيف.' : 'ما في مهام لسا. ضيف أول وحدة من فوق.')
+  return h + shown.map((i) => '<div class="card tdrow"><button class="tdchk' + (i.done ? ' on' : '') + '" data-tdtog="' + esc(i.id) + '" aria-label="تبديل">' + (i.done ? '✓' : '') + '</button><div class="tdtxt' + (i.done ? ' dn' : '') + '" dir="auto">' + esc(i.text) + '</div><button class="tddel" data-tddel="' + esc(i.id) + '" aria-label="احذف">🗑</button></div>').join('')
+}
+
 // ---------- schedules ----------
 export function schedHtml(c) {
   const { S, esc, md } = c

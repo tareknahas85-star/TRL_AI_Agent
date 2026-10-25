@@ -84,6 +84,7 @@ export type RemoteEvent = { type: 'sas'; sas: string; name: string } | { type: '
 export type AgentSchedule = { time: string; days: 'all' | 'work'; task: string; tz: string }
 export type AgentInfo = { id: string; name: string; prompt: string; runOn: 'local' | 'cloud' | 'auto'; memory: 'basic' | 'none'; model: string; tool: 'text' | 'image'; schedule: AgentSchedule | null; sources: string[] }
 export type AgentMemInfo = { blocked: string[]; projects: string[]; text: string; used: number; dropped: number }
+export type TodoInfo = { id: string; text: string; done: boolean; at: number }
 export type GateInfo = { enabled: boolean; url: string; hasKey: boolean }
 export type TelegramInfo = { enabled: boolean; chatId: string; minSeconds: number; inbound: boolean; hasToken: boolean }
 export type TaskRowInfo = {
@@ -297,6 +298,11 @@ declare global {
         import: (password: string) => Promise<{ ok: boolean; error?: string; files?: number; skills?: number; at?: string }>
       }
       security: { status: () => Promise<{ keyStorage: 'os-protected' | 'legacy' | 'memory'; phoneApproval: boolean }> }
+    todo: {
+      list: () => Promise<TodoInfo[]>
+      op: (op: unknown) => Promise<TodoInfo[]>
+      onChanged: (cb: () => void) => () => void
+    }
     agentMem: {
       get: () => Promise<AgentMemInfo>
       set: (list: string[]) => Promise<AgentMemInfo>
