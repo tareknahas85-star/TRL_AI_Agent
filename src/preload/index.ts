@@ -17,7 +17,8 @@ const api = {
   media: {
     models: (kind: 'image' | 'video' | 'audio'): Promise<unknown[]> => ipcRenderer.invoke('media:models', kind),
     generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string): Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }> => ipcRenderer.invoke('media:generate', kind, modelId, prompt),
-    site: (id: string): Promise<boolean> => ipcRenderer.invoke('media:site', id),
+    site: (id: string, prompt?: string, external?: boolean): Promise<string | null> => ipcRenderer.invoke('media:site', id, prompt, !!external),
+    geminiLogin: (): Promise<boolean> => ipcRenderer.invoke('media:gemini-login'),
     preview: (p: string): Promise<string> => ipcRenderer.invoke('media:preview', p),
     open: (p: string, reveal?: boolean): Promise<boolean> => ipcRenderer.invoke('media:open', p, !!reveal)
   },

@@ -119,12 +119,39 @@ export function MediaPanel({
       </div>
 
       {isSite ? (
-        <button onClick={() => void window.api.media.site(sel)} className={primaryBtn + ' mt-4 flex items-center gap-2'}>
-          <ExternalLink size={15} /> افتح الموقع
-        </button>
+        <div className="mt-4 space-y-2">
+          <textarea dir="auto" rows={2} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder="اكتب وصفك هون، بينسخ للحافظة وبتلصقو بالموقع" className={inputCls + ' resize-none'} />
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() =>
+                void window.api.media.site(sel, prompt).then((url) => {
+                  if (!url) return
+                  window.dispatchEvent(new CustomEvent('trl:open-side', { detail: url }))
+                  onClose()
+                })
+              }
+              className={primaryBtn + ' flex items-center gap-2'}
+            >
+              <ExternalLink size={15} /> افتح بالمتصفح الداخلي
+            </button>
+            <button onClick={() => void window.api.media.site(sel, prompt, true)} className="rounded-full border border-outline px-3 py-2 text-xs hover:bg-surface2">
+              بمتصفح النظام
+            </button>
+          </div>
+          <p className="text-[11px] text-muted">المتصفح الداخلي بيمنع التنزيل لأسباب أمان؛ إذا بدك تحفظ الصورة افتح الموقع بمتصفح النظام.</p>
+        </div>
       ) : (
         <>
           <textarea dir="auto" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={HINT[kind]} className={inputCls + ' mt-4 resize-none'} />
+          {chosen?.id.startsWith('gemini-web') && (
+            <p className="mt-2 text-[11px] text-muted">
+              أول مرة؟ سجّل دخول Google مرة وحدة بالنافذة الداخلية:{' '}
+              <button onClick={() => void window.api.media.geminiLogin()} className="text-primary underline">
+                تسجيل دخول Gemini
+              </button>
+              . إذا ما اشتغلت، بيجرّب Chrome تلقائياً.
+            </p>
+          )}
           <div className="mt-3 flex items-center gap-3">
             <button onClick={() => void go()} disabled={busy || !prompt.trim()} className={primaryBtn + ' flex items-center gap-2'}>
               {busy ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />} {busy ? 'عم يولّد…' : 'ولّد'}

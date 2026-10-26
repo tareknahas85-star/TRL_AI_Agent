@@ -145,7 +145,8 @@ declare global {
       media: {
         models: (kind: 'image' | 'video' | 'audio') => Promise<import('../core/media-registry').ModelStatus[]>
         generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string) => Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }>
-        site: (id: string) => Promise<boolean>
+        site: (id: string, prompt?: string, external?: boolean) => Promise<string | null>
+        geminiLogin: () => Promise<boolean>
         preview: (p: string) => Promise<string>
         open: (p: string, reveal?: boolean) => Promise<boolean>
       }

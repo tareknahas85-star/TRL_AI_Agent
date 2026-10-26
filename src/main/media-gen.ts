@@ -1,6 +1,6 @@
 // Direct image / video / audio generation (no language model in the loop) behind the three buttons.
 // Walks the registry in priority order; a failed model falls through to the next one.
-import { app, ipcMain, shell } from 'electron'
+import { app, clipboard, ipcMain, shell } from 'electron'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import fsp from 'fs/promises'
@@ -11,6 +11,7 @@ import { readJson, writeJson } from '../core/json-store'
 import { freeOnly } from '../core/spend'
 import { activeProject } from '../core/workspace'
 import { generate as geminiWeb } from '../tools/google-media-tools'
+import { showGeminiWindow } from '../tools/gemini-internal'
 import { listCustomModels, customEndpoint, type CustomModel } from '../core/custom-models'
 import { isChatKind, parseImageResponse } from '../core/media-custom'
 import { MEDIA_MODELS, autoOrder, bumpUsage, describeModels, rollUsage, type KeyName, type MediaKind, type MediaModel, type Usage } from '../core/media-registry'
@@ -175,11 +176,28 @@ $s.SelectVoice($v.Name); $s.SetOutputToWaveFile('${out.replace(/'/g, "''")}'); $
   throw new Error(arabic ? 'ما لقيت صوت عربي مثبّت بويندوز (' + last + ')' : 'ما لقيت صوت إنجليزي مثبّت (' + last + ')')
 }
 
-async function viaGemini(kind: 'image' | 'video', prompt: string): Promise<string> {
-  const r = await geminiWeb(kind, prompt)
+const savedPath = (r: string): string | null => {
   const m = r.match(/هون:\s*(.+)$/m)
-  if (m && fs.existsSync(m[1].trim())) return m[1].trim()
-  throw new Error(r.replace(/^ERROR:\s*/, '').slice(0, 200))
+  return m && fs.existsSync(m[1].trim()) ? m[1].trim() : null
+}
+
+// Gemini runs inside the app first (hidden window). If that window is not signed in / did not load (nothing was
+// generated yet), it falls back to the dedicated Chrome. Failures after the prompt was sent do not retry (quota).
+async function viaGemini(kind: 'image' | 'video', prompt: string): Promise<string> {
+  let inner = ''
+  try {
+    const r = await geminiWeb(kind, prompt, 'internal')
+    const f = savedPath(r)
+    if (f) return f
+    inner = r.replace(/^ERROR:\s*/, '')
+  } catch (e) {
+    inner = e instanceof Error ? e.message : String(e)
+  }
+  if (!/^NEEDS_LOGIN|ما حمّلت|Gemini page|انتهت المهلة: خيار/.test(inner)) throw new Error(inner.slice(0, 200))
+  const r2 = await geminiWeb(kind, prompt, 'chrome')
+  const f2 = savedPath(r2)
+  if (f2) return f2
+  throw new Error('داخلي: ' + inner.slice(0, 90) + ' | Chrome: ' + r2.replace(/^ERROR:\s*/, '').slice(0, 110))
 }
 
 async function run(m: MediaModel, prompt: string): Promise<string> {
@@ -250,10 +268,16 @@ export function registerMediaIpc(): void {
     if ((kind !== 'image' && kind !== 'video' && kind !== 'audio') || typeof modelId !== 'string' || typeof prompt !== 'string') return { ok: false, note: 'طلب غير صالح' }
     return generateMedia(kind, modelId, prompt.slice(0, 4000))
   })
-  ipcMain.handle('media:site', (_e, id: unknown) => {
+  ipcMain.handle('media:site', (_e, id: unknown, prompt: unknown, external: unknown) => {
     const m = MEDIA_MODELS.find((x) => x.id === id && x.route === 'site' && x.url)
-    if (!m?.url) return false
-    void shell.openExternal(m.url)
+    if (!m?.url) return null
+    // The prompt is copied so it can be pasted into the site's own box.
+    if (typeof prompt === 'string' && prompt.trim()) clipboard.writeText(prompt.slice(0, 4000))
+    if (external) void shell.openExternal(m.url)
+    return m.url
+  })
+  ipcMain.handle('media:gemini-login', async () => {
+    await showGeminiWindow()
     return true
   })
   ipcMain.handle('media:preview', async (_e, p: unknown) => {

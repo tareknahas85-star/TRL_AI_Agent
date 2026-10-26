@@ -176,6 +176,20 @@ function Shell(): ReactElement {
     void window.api.side.close()
     setSidePanel((p) => ({ ...p, open: false }))
   }
+  // The media panel asks to open a generation site inside the side browser.
+  useEffect(() => {
+    const h = (e: Event): void => {
+      const url = (e as CustomEvent<string>).detail
+      if (typeof url !== 'string') return
+      void (async () => {
+        const s = await window.api.side.state()
+        setSidePanel({ open: true, width: s.width })
+        await window.api.side.open(url)
+      })()
+    }
+    window.addEventListener('trl:open-side', h)
+    return () => window.removeEventListener('trl:open-side', h)
+  }, [])
   const [convs, setConvs] = useState<ConversationSummary[]>([])
   const [projects, setProjects] = useState<ProjectInfo[]>([])
   const [tabs, setTabs] = useState<Tab[]>([])

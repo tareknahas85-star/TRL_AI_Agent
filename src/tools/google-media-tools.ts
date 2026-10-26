@@ -6,6 +6,7 @@ import fs from 'fs'
 import path from 'path'
 import type OpenAI from 'openai'
 import { ensureChrome, newPage, typeText, pressEnter, sleep, PORT, Page } from './notebook-tools'
+import { openInternal, expectDownload, GEMINI_APP_URL, type Drv } from './gemini-internal'
 
 type Handlers = Map<string, (a: Record<string, unknown>) => Promise<string>>
 
@@ -29,7 +30,7 @@ const clickAria = (rx: string): string => `(()=>{const r=new RegExp(${JSON.strin
  const b=[...document.querySelectorAll('button')].filter(e=>e.getBoundingClientRect().width>0).find(e=>r.test(e.getAttribute('aria-label')||''));if(!b)return false;b.click();return true})()`
 const bodyHas = (rx: string): string => `new RegExp(${JSON.stringify(rx)},'i').test(document.body.innerText)`
 
-async function until(p: Page, expr: string, ms: number, what: string, step = 700): Promise<void> {
+async function until(p: Drv, expr: string, ms: number, what: string, step = 700): Promise<void> {
   const end = Date.now() + ms
   while (Date.now() < end) {
     if (await p.eval<boolean>(expr).catch(() => false)) return
@@ -50,9 +51,14 @@ async function listFiles(dir: string): Promise<Map<string, number>> {
   return m
 }
 
-export async function generate(kind: 'image' | 'video', prompt: string): Promise<string> {
-  await ensureChrome()
-  const p = await newPage(GEMINI_URL)
+export async function generate(kind: 'image' | 'video', prompt: string, mode: 'internal' | 'chrome' = 'chrome'): Promise<string> {
+  let p: Drv
+  if (mode === 'internal') p = await openInternal(GEMINI_APP_URL)
+  else {
+    await ensureChrome()
+    p = await newPage(GEMINI_URL)
+  }
+  const loginMsg = mode === 'internal' ? 'NEEDS_LOGIN: النافذة الداخلية مو مسجّل فيها دخول Google (زر "تسجيل دخول Gemini" بنافذة التوليد)' : LOGIN_MSG
   let browser: Page | null = null
   try {
     // Wait for the composer or a sign-in redirect.
@@ -60,14 +66,20 @@ export async function generate(kind: 'image' | 'video', prompt: string): Promise
     for (let i = 0; i < 60 && !ready; i++) {
       await sleep(700)
       const url = await p.eval<string>('location.href').catch(() => '')
-      if (/accounts\.google\.com/.test(url)) return LOGIN_MSG
+      if (/accounts\.google\.com/.test(url)) return loginMsg
+      if (i === 14 && /sign in|تسجيل الدخول/i.test(await p.eval<string>('document.body.innerText.slice(0,400)').catch(() => ''))) return loginMsg
       ready = !!(await p.eval<boolean>(clickAria('^Upload & tools$').replace('b.click();return true', 'return true')).catch(() => false))
     }
     if (!ready) {
       const body = await p.eval<string>('document.body.innerText.slice(0,300)').catch(() => '')
-      if (/sign in|تسجيل الدخول/i.test(body)) return LOGIN_MSG
+      if (/sign in|تسجيل الدخول/i.test(body)) return loginMsg
       throw new Error('صفحة Gemini ما حمّلت')
     }
+    // Gemini lets signed-out visitors chat, but images and video need an account: stop early instead of waiting minutes.
+    const guest = await p
+      .eval<boolean>(`[...document.querySelectorAll('a,button')].some(e=>{const b=e.getBoundingClientRect();return b.width>0&&b.height>0&&/^\\s*sign in\\s*$/i.test(e.innerText||'')})`)
+      .catch(() => false)
+    if (guest) return loginMsg
     // Open "Upload & tools" and pick Create image / Create video.
     const label = kind === 'image' ? 'create image' : 'create video'
     for (let i = 0; i < 6; i++) {
@@ -79,9 +91,9 @@ export async function generate(kind: 'image' | 'video', prompt: string): Promise
     await sleep(1500)
     const before = await p.eval<number>(kind === 'image' ? `document.querySelectorAll('img[alt*="AI generated"]').length` : `document.querySelectorAll('video').length`)
     await until(p, `(()=>{const e=document.querySelector('div[contenteditable=true]');if(!e)return false;e.focus();return true})()`, 10000, 'خانة الكتابة')
-    await typeText(p, prompt)
+    await typeText(p as unknown as Page, prompt)
     await sleep(600)
-    await pressEnter(p)
+    await pressEnter(p as unknown as Page)
     // Wait for the result (image ~30s, video up to ~8 min).
     const end = Date.now() + (kind === 'image' ? 180000 : 600000)
     let done = false
@@ -98,6 +110,15 @@ export async function generate(kind: 'image' | 'video', prompt: string): Promise
     await sleep(1500)
     // Download through Chrome's own download button (full size).
     const dir = outDir()
+    if (mode === 'internal') {
+      const got = expectDownload(dir, 120000)
+      const clicked = await p.eval<boolean>(clickAria(kind === 'image' ? 'download full size image' : '^download video$'))
+      if (!clicked) {
+        got.cancel()
+        throw new Error('ما لقيت زر التنزيل')
+      }
+      return `تم. الملف انحفظ هون: ${await got.promise}`
+    }
     const seen = await listFiles(dir)
     const ver = (await (await fetch(`http://127.0.0.1:${PORT}/json/version`)).json()) as { webSocketDebuggerUrl: string }
     browser = new Page('browser', ver.webSocketDebuggerUrl)
