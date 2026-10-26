@@ -2,17 +2,35 @@ import { useCallback, useEffect, useState } from 'react'
 import { askConfirm } from './components/confirm'
 import { cardCls, ghostBtn, primaryBtn } from './components/ui'
 
-type Row = { id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no'; where: string }
+type Row = { id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no' | 'unknown' | 'checking'; where: string }
 const ST = {
   yes: { t: 'مسجّل دخول ✓', c: 'bg-success/15 text-success' },
   maybe: { t: 'غالباً مسجّل', c: 'bg-warning/20 text-warning' },
-  no: { t: 'مو مسجّل', c: 'bg-surface2 text-muted' }
+  no: { t: 'مو مسجّل', c: 'bg-surface2 text-muted' },
+  unknown: { t: 'ما قدرت أتحقق', c: 'bg-surface2 text-muted' },
+  checking: { t: 'عم يتحقق…', c: 'bg-surface2 text-muted' }
 }
 
 /** Sites behind the generate-image/video/audio buttons: sign in once inside the app, see the state, sign out. */
 export function MediaAccountsPanel() {
   const [rows, setRows] = useState<Row[]>([])
-  const load = useCallback(() => void window.api.media.accounts().then(setRows).catch(() => setRows([])), [])
+  const load = useCallback(() => {
+    void (async () => {
+      let list: Row[] = []
+      try {
+        list = (await window.api.media.accounts()) as Row[]
+      } catch { /* empty */ }
+      setRows(list.map((r) => ({ ...r, state: 'checking' as const })))
+      // The quick list is only a hint; each site is then checked for real, one after another.
+      for (const r of list) {
+        let s: Row['state'] = 'unknown'
+        try {
+          s = await window.api.media.accountVerify(r.id)
+        } catch { /* keep unknown */ }
+        setRows((cur) => cur.map((x) => (x.id === r.id ? { ...x, state: s } : x)))
+      }
+    })()
+  }, [])
   useEffect(() => {
     load()
   }, [load])

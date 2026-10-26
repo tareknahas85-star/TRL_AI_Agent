@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Check, ChevronUp, Search } from 'lucide-react'
 import type { ChatMode } from '../preload/index.d'
+import { nameColor } from './brandColor'
 
 type Entry = { value: string; label: string; tier: string }
 
@@ -83,7 +84,7 @@ export function ModelPicker({ mode, picker, onModeChange }: { mode: ChatMode; pi
         aria-expanded={open}
         className="flex max-w-[22rem] items-center gap-2 rounded-full border border-outline bg-surface px-3 py-0.5 text-fg hover:bg-surface2"
       >
-        <span className="truncate">{curAuto ? curAuto.label : curEntry ? curEntry.label : (MODE_NAME[cur] ?? cur)}</span>
+        <span className="truncate" style={{ color: curEntry ? nameColor(curEntry.value + ' ' + curEntry.label) : undefined }}>{curAuto ? curAuto.label : curEntry ? curEntry.label : (MODE_NAME[cur] ?? cur)}</span>
         {curTier && <span className={`shrink-0 rounded-full px-1.5 text-[10px] ${curTier.cls}`}>{curTier.badge}</span>}
         {!curTier && paid && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-warning" />}
         <ChevronUp size={12} className={`shrink-0 transition-transform ${open ? '' : 'rotate-180'}`} />
@@ -136,7 +137,7 @@ export function ModelPicker({ mode, picker, onModeChange }: { mode: ChatMode; pi
                     onClick={() => select(p.value)}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-start hover:bg-surface2"
                   >
-                    <span dir="ltr" className="min-w-0 flex-1 truncate text-start">
+                    <span dir="ltr" className="min-w-0 flex-1 truncate text-start" style={{ color: nameColor(p.value + ' ' + p.label) }}>
                       {p.label}
                     </span>
                     <span className={`shrink-0 rounded-full px-1.5 text-[10px] ${g.cls}`}>{g.badge}</span>

@@ -148,6 +148,7 @@ declare global {
         site: (id: string, prompt?: string, external?: boolean) => Promise<string | null>
         geminiLogin: () => Promise<boolean>
         accounts: () => Promise<{ id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no'; where: string }[]>
+        accountVerify: (id: string) => Promise<'yes' | 'no' | 'unknown'>
         accountLogin: (id: string) => Promise<string | null>
         accountLogout: (id: string) => Promise<boolean>
         preview: (p: string) => Promise<string>

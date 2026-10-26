@@ -20,6 +20,7 @@ const api = {
     site: (id: string, prompt?: string, external?: boolean): Promise<string | null> => ipcRenderer.invoke('media:site', id, prompt, !!external),
     geminiLogin: (): Promise<boolean> => ipcRenderer.invoke('media:gemini-login'),
     accounts: (): Promise<{ id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no'; where: string }[]> => ipcRenderer.invoke('media:accounts'),
+    accountVerify: (id: string): Promise<'yes' | 'no' | 'unknown'> => ipcRenderer.invoke('media:account-verify', id),
     accountLogin: (id: string): Promise<string | null> => ipcRenderer.invoke('media:account-login', id),
     accountLogout: (id: string): Promise<boolean> => ipcRenderer.invoke('media:account-logout', id),
     preview: (p: string): Promise<string> => ipcRenderer.invoke('media:preview', p),

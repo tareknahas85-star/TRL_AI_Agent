@@ -9,6 +9,7 @@ import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
 import { CapIcons, guessCaps, type Caps } from './Caps'
 import { guessKind } from '../core/media-custom'
+import { nameColor } from './brandColor'
 import { HostField } from './HostField'
 import { FreeProbePanel } from './FreeProbePanel'
 import { CheckButton, CheckPanel, useFullCheck } from './FullCheck'
@@ -147,6 +148,7 @@ export function ModelsPage() {
   const [form, setForm] = useState(empty)
   const [kindAuto, setKindAuto] = useState(true)
   const [error, setError] = useState('')
+  const [mq, setMq] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [keyFor, setKeyFor] = useState<CustomModelInfo | null>(null)
   const [keyVal, setKeyVal] = useState('')
@@ -227,13 +229,14 @@ export function ModelsPage() {
         <Empty text="ما في موديلات مخصصة - ضيف موديل خارجي (OpenAI-compatible أو OpenRouter)" />
       ) : (
         <div className="space-y-2">
-          {list.map((m) => {
+          {list.length > 4 && <input className={inputCls} value={mq} onChange={(e) => setMq(e.target.value)} placeholder="ابحث عن موديل بالاسم…" dir="auto" />}
+          {list.filter((m) => !mq.trim() || (m.name + ' ' + m.model + ' ' + (m.baseURL ?? '')).toLowerCase().includes(mq.trim().toLowerCase())).map((m) => {
             const r = results[m.id]
             return (
               <div key={m.id} className={cardCls + ' flex flex-wrap items-center justify-between gap-3'}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className={'font-semibold' + (isLocal(m) ? ' text-success' : '')}>{m.name}</span>
+                    <span className={'font-semibold' + (isLocal(m) ? ' text-success' : '')} style={isLocal(m) ? undefined : { color: nameColor(m.model + ' ' + m.name) }}>{m.name}</span>
                     {isLocal(m) && <Chip cls="bg-success/15 text-success">محلي</Chip>}
                     {m.kind && m.kind !== 'chat' ? <Chip cls="bg-primary/15 text-primary">{KIND_LABEL[m.kind]}</Chip> : <Chip cls={TIER_LABEL[m.tier].cls}>{TIER_LABEL[m.tier].label}</Chip>}
                     {m.hasKey && <Chip>مفتاح محفوظ</Chip>}
