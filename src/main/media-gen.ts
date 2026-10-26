@@ -287,6 +287,10 @@ export function registerMediaIpc(): void {
     const mime = /^(png|jpe?g|webp)$/.test(ext) ? 'image/' + ext.replace('jpg', 'jpeg') : ext === 'mp3' ? 'audio/mpeg' : 'audio/' + ext
     return `data:${mime};base64,` + (await fsp.readFile(f)).toString('base64')
   })
+  ipcMain.handle('media:info', (_e, p: unknown) => {
+    const f = inOut(p)
+    return f ? { name: path.basename(f), size: fs.statSync(f).size } : null
+  })
   ipcMain.handle('media:open', async (_e, p: unknown, reveal: unknown) => {
     const f = inOut(p)
     if (!f) return false

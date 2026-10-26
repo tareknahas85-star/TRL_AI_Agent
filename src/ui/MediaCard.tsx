@@ -6,10 +6,21 @@ import type { MediaRef } from '../core/media-msg'
 export function MediaCard({ mediaRef, text, onRetry }: { mediaRef: MediaRef; text: string; onRetry: (r: MediaRef) => void }) {
   const [src, setSrc] = useState('')
   const [gone, setGone] = useState(false)
+  const [file, setFile] = useState<{ name: string; size: number } | null>(null)
 
   useEffect(() => {
     let live = true
-    if (mediaRef.k === 'video') return
+    if (mediaRef.k === 'video') {
+      // Video is not embedded in the chat: the card names the file and hands it to the system player.
+      void window.api.media.info(mediaRef.p).then((i) => {
+        if (!live) return
+        if (i) setFile(i)
+        else setGone(true)
+      })
+      return () => {
+        live = false
+      }
+    }
     void window.api.media.preview(mediaRef.p).then((d) => {
       if (!live) return
       if (d) setSrc(d)
@@ -28,6 +39,11 @@ export function MediaCard({ mediaRef, text, onRetry }: { mediaRef: MediaRef; tex
       </div>
       {mediaRef.k === 'image' && src && <img src={src} alt={mediaRef.q} className="max-h-96 w-full rounded-lg object-contain" />}
       {mediaRef.k === 'audio' && src && <audio controls src={src} className="w-full" />}
+      {mediaRef.k === 'video' && file && (
+        <p dir="ltr" className="rounded-lg border border-outline px-3 py-2 text-start text-xs">
+          🎬 {file.name} · {(file.size / 1048576).toFixed(1)} MB
+        </p>
+      )}
       {gone && <p className="text-xs text-warning">الملف انحذف أو انتقل من مكانو.</p>}
       <p dir="auto" className="mt-2 text-xs text-muted">
         الوصف: {mediaRef.q}

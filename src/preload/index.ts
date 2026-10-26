@@ -24,6 +24,7 @@ const api = {
     accountLogin: (id: string): Promise<string | null> => ipcRenderer.invoke('media:account-login', id),
     accountLogout: (id: string): Promise<boolean> => ipcRenderer.invoke('media:account-logout', id),
     preview: (p: string): Promise<string> => ipcRenderer.invoke('media:preview', p),
+    info: (p: string): Promise<{ name: string; size: number } | null> => ipcRenderer.invoke('media:info', p),
     open: (p: string, reveal?: boolean): Promise<boolean> => ipcRenderer.invoke('media:open', p, !!reveal)
   },
   check: {

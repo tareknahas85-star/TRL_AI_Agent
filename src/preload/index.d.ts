@@ -147,6 +147,7 @@ declare global {
         generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string) => Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }>
         site: (id: string, prompt?: string, external?: boolean) => Promise<string | null>
         geminiLogin: () => Promise<boolean>
+        info: (p: string) => Promise<{ name: string; size: number } | null>
         accounts: () => Promise<{ id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no'; where: string }[]>
         accountVerify: (id: string) => Promise<'yes' | 'no' | 'unknown'>
         accountLogin: (id: string) => Promise<string | null>
