@@ -8,6 +8,7 @@ import { KeyField, type KeyName } from './KeyField'
 import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
 import { CapIcons, guessCaps, type Caps } from './Caps'
+import { guessKind } from '../core/media-custom'
 import { HostField } from './HostField'
 import { FreeProbePanel } from './FreeProbePanel'
 import { CheckButton, CheckPanel, useFullCheck } from './FullCheck'
@@ -82,7 +83,8 @@ function ApinexPanel() {
 }
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai/'
-const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier }
+const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier, kind: 'chat' as 'chat' | 'image' | 'audio', desc: '', limit: '' }
+const KIND_LABEL = { chat: 'محادثة', image: 'توليد صور', audio: 'توليد صوت' } as const
 
 // شرح المفاتيح + التنبيه: البرنامج ما بيستعمل حسابات الاشتراك الشخصية، كل واحد يضيف مفاتيحه من حسابه.
 function KeysNotice(): ReactElement {
@@ -143,6 +145,7 @@ export function ModelsPage() {
   const [models, setModels] = useState<CustomModelInfo[]>([])
   const [adding, setAdding] = useState(false)
   const [form, setForm] = useState(empty)
+  const [kindAuto, setKindAuto] = useState(true)
   const [error, setError] = useState('')
   const [testing, setTesting] = useState<string | null>(null)
   const [keyFor, setKeyFor] = useState<CustomModelInfo | null>(null)
@@ -189,7 +192,10 @@ export function ModelsPage() {
       model: form.model.trim(),
       baseURL: form.baseURL.trim(),
       apiKey: form.apiKey,
-      tier: form.tier
+      tier: form.tier,
+      kind: form.kind,
+      desc: form.desc,
+      limit: form.limit
     })
     if (!r.ok) return setError(r.error ?? 'خطأ')
     setAdding(false)
@@ -229,7 +235,7 @@ export function ModelsPage() {
                   <div className="flex items-center gap-2">
                     <span className={'font-semibold' + (isLocal(m) ? ' text-success' : '')}>{m.name}</span>
                     {isLocal(m) && <Chip cls="bg-success/15 text-success">محلي</Chip>}
-                    <Chip cls={TIER_LABEL[m.tier].cls}>{TIER_LABEL[m.tier].label}</Chip>
+                    {m.kind && m.kind !== 'chat' ? <Chip cls="bg-primary/15 text-primary">{KIND_LABEL[m.kind]}</Chip> : <Chip cls={TIER_LABEL[m.tier].cls}>{TIER_LABEL[m.tier].label}</Chip>}
                     {m.hasKey && <Chip>مفتاح محفوظ</Chip>}
                     <CapIcons caps={capMap[m.model] ?? guessCaps(m.model)} />
                   </div>
@@ -465,12 +471,46 @@ export function ModelsPage() {
         <Modal title="ضيف موديل خارجي" onClose={() => setAdding(false)}>
           <div className="space-y-3">
             <input className={inputCls} placeholder="اسم للعرض (e.g. Llama محلي)" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <input dir="ltr" className={inputCls + ' font-mono'} placeholder="Model ID (e.g. gpt-4o-mini)" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} />
+            <input
+              dir="ltr"
+              className={inputCls + ' font-mono'}
+              placeholder="Model ID (e.g. gpt-4o-mini)"
+              value={form.model}
+              onChange={(e) => {
+                const g = guessKind(e.target.value, form.name)
+                setForm({ ...form, model: e.target.value, kind: form.kind === 'chat' || kindAuto ? (g === 'video' ? form.kind : g) : form.kind })
+                setKindAuto(true)
+              }}
+            />
             <input dir="ltr" className={inputCls + ' font-mono'} placeholder="Base URL (فاضي = OpenRouter) e.g. http://localhost:11434/v1" value={form.baseURL} onChange={(e) => setForm({ ...form, baseURL: e.target.value })} />
             <input dir="ltr" type="password" className={inputCls} placeholder="API Key (اختياري للسيرفرات المحلية)" value={form.apiKey} onChange={(e) => setForm({ ...form, apiKey: e.target.value })} />
-            <select className={inputCls} value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value as Tier })}>
-              {(Object.keys(TIER_LABEL) as Tier[]).map((t) => <option key={t} value={t}>الطبقة: {TIER_LABEL[t].label}</option>)}
+            <select
+              className={inputCls}
+              value={form.kind}
+              onChange={(e) => {
+                setKindAuto(false)
+                setForm({ ...form, kind: e.target.value as 'chat' | 'image' | 'audio' })
+              }}
+            >
+              {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((k) => <option key={k} value={k}>نوع الموديل: {KIND_LABEL[k]}</option>)}
             </select>
+            {guessKind(form.model, form.name) === 'video' && (
+              <p className="text-xs text-warning">الاسم بيوحي إنو موديل فيديو: ما في واجهة موحّدة لتوليد الفيديو، فما بينضاف هون. الفيديو بيشتغل من Gemini Veo ومن المواقع.</p>
+            )}
+            {form.kind === 'chat' ? (
+              <select className={inputCls} value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value as Tier })}>
+                {(Object.keys(TIER_LABEL) as Tier[]).map((t) => <option key={t} value={t}>الطبقة: {TIER_LABEL[t].label}</option>)}
+              </select>
+            ) : (
+              <>
+                <input className={inputCls} placeholder="بيفيد بشو أكتر؟ (بيظهر جنبو بالقايمة)" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
+                <input className={inputCls} placeholder="الحد اليومي (مثلاً: 50 صورة باليوم)" value={form.limit} onChange={(e) => setForm({ ...form, limit: e.target.value })} />
+                <p className="text-xs text-muted">
+                  {form.kind === 'image' ? 'بيشتغل مع السيرفرات اللي بتدعم /images/generations (OpenAI وأمثالو)، أو مع OpenRouter إذا الموديل بيطلّع صور.' : 'بيشتغل مع السيرفرات اللي بتدعم /audio/speech (OpenAI وأمثالو).'}
+                  {' '}بعد الحفظ بيطلع لحالو تحت زر "{form.kind === 'image' ? 'توليد صورة' : 'توليد صوت'}" بالشات.
+                </p>
+              </>
+            )}
             <p className="text-xs text-muted">أي سيرفر بيدعم واجهة OpenAI (chat/completions) بيشتغل: OpenAI, Groq, Together, Ollama, LM Studio…</p>
             {error && <p className="text-sm text-danger">{error}</p>}
             <div className="flex justify-end gap-2">

@@ -3,7 +3,7 @@
 // Pure data + helpers (no electron) so it can be unit-tested. The UI renders this list; the generator walks it.
 
 export type MediaKind = 'image' | 'video' | 'audio'
-export type MediaRoute = 'chrome' | 'api' | 'http' | 'local' | 'site'
+export type MediaRoute = 'chrome' | 'api' | 'http' | 'local' | 'site' | 'custom'
 export type KeyName = 'GEMINI_API_KEY' | 'HUGGINGFACE_API_KEY' | 'OPENROUTER_API_KEY' | 'OPENAI_API_KEY'
 
 export interface MediaModel {
@@ -22,6 +22,10 @@ export interface MediaModel {
   key?: KeyName
   /** Needs the "free only" guard OFF (the key may be a paid one). */
   paidRisk?: boolean
+  /** Why it cannot be used right now (custom models decide this themselves). */
+  blocked?: string
+  /** For route 'custom': id of the user-added model. */
+  customId?: string
   /** For route 'site': the page to open. */
   url?: string
   /** Brand color for the little badge. */
@@ -96,12 +100,15 @@ export interface ModelStatus extends MediaModel {
   usedToday: number
 }
 
-export function describeModels(kind: MediaKind, ctx: { hasKey: (k: KeyName) => boolean; freeOnly: boolean; usage: Usage }): ModelStatus[] {
+export function describeModels(kind: MediaKind, ctx: { hasKey: (k: KeyName) => boolean; freeOnly: boolean; usage: Usage; extra?: MediaModel[] }): ModelStatus[] {
   const u = rollUsage(ctx.usage)
-  return MEDIA_MODELS.filter((m) => m.kind === kind)
+  return [...MEDIA_MODELS, ...(ctx.extra ?? [])]
+    .filter((m) => m.kind === kind)
     .map((m): ModelStatus => {
-      let reason = ''
-      if (m.key && !ctx.hasKey(m.key)) reason = 'ما في مفتاح ' + m.key
+      let reason = m.blocked ?? ''
+      if (reason) {
+        /* custom model decided */
+      } else if (m.key && !ctx.hasKey(m.key)) reason = 'ما في مفتاح ' + m.key
       else if (m.paidRisk && ctx.freeOnly) reason = 'وضع "مجاني فقط" شغّال (المفتاح ممكن يكون مدفوع)'
       else if (m.dailyCap > 0 && (u.counts[m.id] ?? 0) >= m.dailyCap) reason = 'خلص حدّ اليوم'
       return { ...m, available: !reason, reason, usedToday: u.counts[m.id] ?? 0 }

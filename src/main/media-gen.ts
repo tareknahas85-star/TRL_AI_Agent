@@ -11,6 +11,8 @@ import { readJson, writeJson } from '../core/json-store'
 import { freeOnly } from '../core/spend'
 import { activeProject } from '../core/workspace'
 import { generate as geminiWeb } from '../tools/google-media-tools'
+import { listCustomModels, customEndpoint, type CustomModel } from '../core/custom-models'
+import { isChatKind, parseImageResponse } from '../core/media-custom'
 import { MEDIA_MODELS, autoOrder, bumpUsage, describeModels, rollUsage, type KeyName, type MediaKind, type MediaModel, type Usage } from '../core/media-registry'
 
 const USAGE_FILE = 'media-usage.json'
@@ -22,12 +24,61 @@ const outDir = (): string => {
 const stamp = (): string => new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
 const hasKey = (k: KeyName): boolean => !!getApiKey(k as never)
 const getUsage = (): Usage => rollUsage(readJson<Usage | undefined>(USAGE_FILE, undefined))
-const ctx = () => ({ hasKey, freeOnly: freeOnly(), usage: getUsage() })
+// User-added models of kind image/audio join the list of their button automatically.
+function customExtras(): MediaModel[] {
+  return listCustomModels()
+    .filter((m) => m.enabled && !isChatKind(m.kind))
+    .map((m): MediaModel => {
+      const local = /localhost|127\.0\.0\.1/i.test(m.baseURL)
+      const noKey = !local && !customEndpoint(m).key
+      return {
+        id: 'custom:' + m.id,
+        kind: m.kind as MediaKind,
+        label: m.name,
+        route: 'custom',
+        priority: 10,
+        color: '#9e9e9e',
+        dailyCap: 0,
+        customId: m.id,
+        best: m.desc || 'موديل ضفتو أنت (' + m.model + ')',
+        limitText: m.limit || 'حسب مزوّدك',
+        blocked: noKey ? 'ما في مفتاح لهالموديل (ضيفو بصفحة الموديلات)' : undefined
+      }
+    })
+}
+const ctx = () => ({ hasKey, freeOnly: freeOnly(), usage: getUsage(), extra: customExtras() })
+
+async function customRun(m: MediaModel, prompt: string): Promise<string> {
+  const cm = listCustomModels().find((x) => x.id === m.customId) as CustomModel | undefined
+  if (!cm) throw new Error('الموديل انحذف')
+  const { base, key } = customEndpoint(cm)
+  const headers: Record<string, string> = { 'content-type': 'application/json' }
+  if (key) headers.authorization = 'Bearer ' + key
+  if (m.kind === 'audio') {
+    if (!cm.baseURL) throw new Error('OpenRouter ما بيدعم التحويل لصوت؛ حط Base URL لمزوّد بيدعم /audio/speech')
+    const r = await fetch(base + '/audio/speech', { method: 'POST', headers, body: JSON.stringify({ model: cm.model, input: prompt, voice: 'alloy' }), signal: AbortSignal.timeout(180000) })
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 120))
+    return save(Buffer.from(await r.arrayBuffer()), extOf(r.headers.get('content-type') ?? '', 'mp3'), 'custom-voice')
+  }
+  const body = cm.baseURL
+    ? { model: cm.model, prompt, n: 1, size: '1024x1024' }
+    : { model: cm.model, modalities: ['image', 'text'], messages: [{ role: 'user', content: prompt }] }
+  const r = await fetch(base + (cm.baseURL ? '/images/generations' : '/chat/completions'), { method: 'POST', headers, body: JSON.stringify(body), signal: AbortSignal.timeout(180000) })
+  if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 120))
+  const img = parseImageResponse(await r.json())
+  if (!img) throw new Error('الرد ما فيه صورة')
+  if (img.b64) return save(Buffer.from(img.b64, 'base64'), 'png', 'custom-image')
+  const d = await fetch(img.url as string, { signal: AbortSignal.timeout(120000) })
+  if (!d.ok) throw new Error('ما قدرت أنزّل الصورة ' + d.status)
+  return save(Buffer.from(await d.arrayBuffer()), extOf(d.headers.get('content-type') ?? '', 'png'), 'custom-image')
+}
 
 export interface GenResult {
   ok: boolean
   path?: string
   model?: string
+  modelId?: string
+  color?: string
   note: string
 }
 
@@ -148,6 +199,7 @@ async function run(m: MediaModel, prompt: string): Promise<string> {
     case 'hf-mms-ara':
       return hfBinary('facebook/mms-tts-ara', { inputs: prompt }, 'mms', 'flac')
     default:
+      if (m.route === 'custom') return customRun(m, prompt)
       throw new Error('هالموديل بيفتح بالمتصفح بس')
   }
 }
@@ -174,7 +226,7 @@ export async function generateMedia(kind: MediaKind, modelId: string, prompt: st
       try {
         const file = await run(m, text)
         writeJson(USAGE_FILE, bumpUsage(getUsage(), m.id))
-        return { ok: true, path: file, model: m.label, note: 'تم بـ ' + m.label + (notes.length ? ' (بعد ما فشل: ' + notes.join(' | ') + ')' : '') }
+        return { ok: true, path: file, model: m.label, modelId: m.id, color: m.color, note: 'تم بـ ' + m.label + (notes.length ? ' (بعد ما فشل: ' + notes.join(' | ') + ')' : '') }
       } catch (e) {
         notes.push(m.label + ': ' + (e instanceof Error ? e.message : String(e)))
       }
@@ -206,9 +258,10 @@ export function registerMediaIpc(): void {
   })
   ipcMain.handle('media:preview', async (_e, p: unknown) => {
     const f = inOut(p)
-    if (!f || !/\.(png|jpe?g|webp)$/i.test(f) || fs.statSync(f).size > 12_000_000) return ''
-    const ext = path.extname(f).slice(1).toLowerCase().replace('jpg', 'jpeg')
-    return `data:image/${ext};base64,` + (await fsp.readFile(f)).toString('base64')
+    if (!f || !/\.(png|jpe?g|webp|wav|mp3|flac|ogg)$/i.test(f) || fs.statSync(f).size > 15_000_000) return ''
+    const ext = path.extname(f).slice(1).toLowerCase()
+    const mime = /^(png|jpe?g|webp)$/.test(ext) ? 'image/' + ext.replace('jpg', 'jpeg') : ext === 'mp3' ? 'audio/mpeg' : 'audio/' + ext
+    return `data:${mime};base64,` + (await fsp.readFile(f)).toString('base64')
   })
   ipcMain.handle('media:open', async (_e, p: unknown, reveal: unknown) => {
     const f = inOut(p)

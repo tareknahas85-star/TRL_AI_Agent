@@ -3,6 +3,7 @@ import OpenAI from 'openai'
 import { readJson, writeJson, newId } from './json-store'
 import { getSecret, setSecret } from '../store/secure-store'
 import { knownPrice, type Price } from './pricing'
+import { isChatKind, normKind } from './media-custom'
 
 export type Tier = 'TIER_1_FREE' | 'TIER_2_CHEAP' | 'TIER_3_EXPENSIVE'
 export type CustomModel = {
@@ -12,6 +13,9 @@ export type CustomModel = {
   baseURL: string // empty => OpenRouter
   tier: Tier
   enabled: boolean
+  kind?: 'chat' | 'image' | 'audio' // missing = chat. image/audio models only appear under the generation buttons.
+  desc?: string // what it is best at (shown next to it in the generation list)
+  limit?: string // daily limit text (shown next to it)
   last?: boolean // true => tried after the OpenRouter models of its tier
   priceIn?: number // USD per 1M input tokens (manual; wins over the built-in table)
   priceOut?: number // USD per 1M output tokens
@@ -30,12 +34,14 @@ export const listCustomModels = (): CustomModel[] =>
 export const getCustomModel = (id: string): CustomModel | undefined =>
   listCustomModels().find((m) => m.id === id)
 
-export const listCustomModelViews = (): CustomModelView[] =>
-  listCustomModels().map((m) => ({ ...m, hasKey: !!getSecret(`model:${m.id}`), autoPrice: knownPrice(m.model) }))
+const toView = (m: CustomModel): CustomModelView => ({ ...m, hasKey: !!getSecret(`model:${m.id}`), autoPrice: knownPrice(m.model) })
+// Chat routing (picker, tiers, reviewers) only ever sees chat models; the Models page sees everything.
+export const listCustomModelViews = (): CustomModelView[] => listCustomModels().filter((m) => isChatKind(m.kind)).map(toView)
+export const listAllCustomModelViews = (): CustomModelView[] => listCustomModels().map(toView)
 
 export function customModelsForTier(tier: Tier, last = false): string[] {
   return listCustomModels()
-    .filter((m) => m.enabled && m.tier === tier && !!m.last === last)
+    .filter((m) => m.enabled && isChatKind(m.kind) && m.tier === tier && !!m.last === last)
     .map((m) => CUSTOM_PREFIX + m.id)
 }
 
@@ -55,6 +61,9 @@ export function addCustomModel(input: {
   baseURL?: string
   apiKey?: string
   tier?: string
+  kind?: string
+  desc?: string
+  limit?: string
 }): CustomModelView {
   const name = String(input.name ?? '').trim()
   const model = String(input.model ?? '').trim()
@@ -62,7 +71,13 @@ export function addCustomModel(input: {
   if (!name || !model) throw new Error('الاسم ومعرّف الموديل مطلوبين')
   if (!validBaseURL(baseURL)) throw new Error('Base URL مو صالح')
   const tier = TIERS.includes(input.tier as Tier) ? (input.tier as Tier) : 'TIER_2_CHEAP'
+  const kind = normKind(input.kind)
   const m: CustomModel = { id: newId(), name, model, baseURL, tier, enabled: true }
+  if (kind !== 'chat') m.kind = kind
+  const desc = String(input.desc ?? '').trim().slice(0, 200)
+  const limit = String(input.limit ?? '').trim().slice(0, 120)
+  if (desc) m.desc = desc
+  if (limit) m.limit = limit
   writeJson(FILE, [...listCustomModels(), m])
   if (input.apiKey) setSecret(`model:${m.id}`, String(input.apiKey))
   return { ...m, hasKey: !!input.apiKey, autoPrice: knownPrice(m.model) }
@@ -106,6 +121,11 @@ export function toggleCustomModel(id: string): boolean | null {
   m.enabled = !m.enabled
   writeJson(FILE, all)
   return m.enabled
+}
+
+/** Endpoint + key of a custom model, for the image/speech calls that the OpenAI SDK wrapper does not cover. */
+export function customEndpoint(m: CustomModel): { base: string; key: string } {
+  return { base: m.baseURL || hostOf('openrouter'), key: getSecret(`model:${m.id}`) || (m.baseURL ? '' : process.env.OPENROUTER_API_KEY || '') }
 }
 
 export function clientForCustomModel(m: CustomModel): { client: OpenAI; modelId: string } {

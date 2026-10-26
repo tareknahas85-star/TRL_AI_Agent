@@ -3,6 +3,8 @@ import type { ReactElement } from 'react'
 import { ModelPicker } from './ModelPicker'
 import { ArrowUp, AudioLines, Bot, Check, Copy, FolderOpen, Image as ImageIcon, Loader2, Mic, Paperclip, Play, RotateCcw, Square, Video as VideoIcon, X } from 'lucide-react'
 import { MediaPanel } from './MediaPanel'
+import { MediaCard } from './MediaCard'
+import { encodeMediaMsg, parseMediaMsg, type MediaRef } from '../core/media-msg'
 import { Markdown } from './Markdown'
 import { useTheme } from './ThemeContext'
 import eagle from '../renderer/src/assets/syria-eagle.svg'
@@ -463,7 +465,7 @@ export function ChatWindow({
   const [prep, setPrep] = useState(0)
   // voice note: record with the mic, transcribe locally (Whisper) and drop the text into the input box
   const [rec, setRec] = useState(false)
-  const [media, setMedia] = useState<'image' | 'video' | 'audio' | null>(null)
+  const [media, setMedia] = useState<{ kind: 'image' | 'video' | 'audio'; prompt?: string; exclude?: string } | null>(null)
   const recRef = useRef<MediaRecorder | null>(null)
   const toggleRec = async (): Promise<void> => {
     if (recRef.current) {
@@ -759,7 +761,14 @@ export function ChatWindow({
               <div key={i} className="flex gap-3">
                 <Avatar model={msg.meta ? parseMeta(msg.meta).model : undefined} pin={msg.pin} />
                 <div className="min-w-0 flex-1 rounded-card border border-outline bg-surface p-4 shadow-card">
-                  <Markdown text={msg.content} />
+                  {(() => {
+                    const mm = parseMediaMsg(msg.content)
+                    return mm ? (
+                      <MediaCard mediaRef={mm.ref} text={mm.text} onRetry={(r: MediaRef) => setMedia({ kind: r.k, prompt: r.q, exclude: r.i })} />
+                    ) : (
+                      <Markdown text={msg.content} />
+                    )
+                  })()}
                   <FileChips text={msg.content} />
                   {msg.meta && <MetaBar meta={msg.meta} />}
                   <MsgFooter text={msg.content} at={msg.at} />
@@ -1015,7 +1024,7 @@ export function ChatWindow({
           {(['image', 'video', 'audio'] as const).map((k) => (
             <button
               key={k}
-              onClick={() => setMedia(k)}
+              onClick={() => setMedia({ kind: k })}
               title={k === 'image' ? 'توليد صورة' : k === 'video' ? 'توليد فيديو' : 'توليد صوت'}
               aria-label={k === 'image' ? 'توليد صورة' : k === 'video' ? 'توليد فيديو' : 'توليد صوت'}
               className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface2"
@@ -1065,7 +1074,26 @@ export function ChatWindow({
           )}
         </div>
         <StatusBar loading={loading} progress={progress} elapsed={elapsed} messages={messages} />
-        {media && <MediaPanel kind={media} onClose={() => setMedia(null)} />}
+        {media && (
+          <MediaPanel
+            key={media.kind + (media.exclude ?? '')}
+            kind={media.kind}
+            initialPrompt={media.prompt}
+            excludeId={media.exclude}
+            onClose={() => setMedia(null)}
+            onResult={(kind, prompt, r) => {
+              if (!r.ok || !r.path) return
+              const at = Date.now()
+              const next: ChatMessage[] = [
+                ...messages,
+                { role: 'user', content: (kind === 'image' ? 'ولّد صورة: ' : kind === 'video' ? 'ولّد فيديو: ' : 'حوّل لصوت: ') + prompt, at },
+                { role: 'assistant', content: encodeMediaMsg({ k: kind, p: r.path, m: r.model ?? '', i: r.modelId ?? '', q: prompt, c: r.color }), at }
+              ]
+              setMessages(next)
+              void persist(next)
+            }}
+          />
+        )}
       </div>
     </div>
   )

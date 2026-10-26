@@ -738,3 +738,41 @@ test('media registry: عدّاد الاستخدام بيتصفّر مع تغيّ
   assert.equal(u.counts.pollinations, 2)
   assert.equal(rollUsage(u, '2026-01-02').counts.pollinations, undefined)
 })
+
+import { encodeMediaMsg, parseMediaMsg, nextModelId } from '../src/core/media-msg'
+import { guessKind, parseImageResponse, isChatKind } from '../src/core/media-custom'
+
+test('media msg: الترميز والفك بيرجّعوا نفس البيانات والنص العادي ما بينقرأ كميديا', () => {
+  const ref = { k: 'image' as const, p: 'C:\\a b\\x.png', m: 'Nano Banana', i: 'gemini-web-image', q: 'قطة [[غريبة]] \n سطر', c: '#4285f4' }
+  const s = encodeMediaMsg(ref)
+  const back = parseMediaMsg(s)
+  assert.deepEqual(back?.ref, ref)
+  assert.ok(back?.text.includes('Nano Banana'))
+  assert.equal(parseMediaMsg('مرحبا كيفك'), null)
+  assert.equal(parseMediaMsg('[[media:v1:%7Bbad]]'), null)
+  assert.equal(parseMediaMsg('[[media:v1:' + encodeURIComponent('{"k":"zip","p":"x","m":"m","i":"i","q":"q"}') + ']]'), null)
+})
+
+test('media msg: جرّب غيرو بيختار موديل تاني مش المستعمل', () => {
+  assert.equal(nextModelId(['a', 'b', 'c'], 'a'), 'b')
+  assert.equal(nextModelId(['a'], 'a'), 'auto')
+})
+
+test('custom kind: تخمين نوع الموديل من الاسم', () => {
+  assert.equal(guessKind('black-forest-labs/FLUX.1-schnell'), 'image')
+  assert.equal(guessKind('gemini-2.5-flash-image'), 'image')
+  assert.equal(guessKind('tts-1-hd'), 'audio')
+  assert.equal(guessKind('elevenlabs/eleven_multilingual_v2'), 'audio')
+  assert.equal(guessKind('veo-3'), 'video')
+  assert.equal(guessKind('gpt-4o-mini'), 'chat')
+  assert.equal(guessKind('qwen/qwen3.8-27b:free'), 'chat')
+  assert.equal(isChatKind(undefined), true)
+  assert.equal(isChatKind('image'), false)
+})
+
+test('custom kind: قراءة الصورة من ردّ OpenAI أو OpenRouter', () => {
+  assert.deepEqual(parseImageResponse({ data: [{ b64_json: 'QQ==' }] }), { b64: 'QQ==' })
+  assert.deepEqual(parseImageResponse({ data: [{ url: 'https://x/y.png' }] }), { url: 'https://x/y.png' })
+  assert.deepEqual(parseImageResponse({ choices: [{ message: { images: [{ image_url: { url: 'data:image/png;base64,QUJD' } }] } }] }), { b64: 'QUJD' })
+  assert.equal(parseImageResponse({ choices: [{ message: { content: 'no image' } }] }), null)
+})

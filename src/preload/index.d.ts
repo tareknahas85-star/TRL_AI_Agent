@@ -36,6 +36,9 @@ export type CustomModelInfo = {
   enabled: boolean
   hasKey: boolean
   last?: boolean
+  kind?: 'chat' | 'image' | 'audio'
+  desc?: string
+  limit?: string
   priceIn?: number
   priceOut?: number
   autoPrice?: { in: number; out: number } | null
@@ -141,7 +144,7 @@ declare global {
       modelPicker: () => Promise<{ value: string; label: string; tier: string; keyed?: boolean }[]>
       media: {
         models: (kind: 'image' | 'video' | 'audio') => Promise<import('../core/media-registry').ModelStatus[]>
-        generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string) => Promise<{ ok: boolean; path?: string; model?: string; note: string }>
+        generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string) => Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }>
         site: (id: string) => Promise<boolean>
         preview: (p: string) => Promise<string>
         open: (p: string, reveal?: boolean) => Promise<boolean>
@@ -226,6 +229,9 @@ declare global {
           baseURL?: string
           apiKey?: string
           tier: Tier
+          kind?: 'chat' | 'image' | 'audio'
+          desc?: string
+          limit?: string
         }) => Promise<{ ok: boolean; error?: string }>
         remove: (id: string) => Promise<boolean>
         toggle: (id: string) => Promise<boolean | null>

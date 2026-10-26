@@ -16,7 +16,7 @@ const api = {
   modelPicker: (): Promise<{ value: string; label: string; tier: string }[]> => ipcRenderer.invoke('models:picker'),
   media: {
     models: (kind: 'image' | 'video' | 'audio'): Promise<unknown[]> => ipcRenderer.invoke('media:models', kind),
-    generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string): Promise<{ ok: boolean; path?: string; model?: string; note: string }> => ipcRenderer.invoke('media:generate', kind, modelId, prompt),
+    generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string): Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }> => ipcRenderer.invoke('media:generate', kind, modelId, prompt),
     site: (id: string): Promise<boolean> => ipcRenderer.invoke('media:site', id),
     preview: (p: string): Promise<string> => ipcRenderer.invoke('media:preview', p),
     open: (p: string, reveal?: boolean): Promise<boolean> => ipcRenderer.invoke('media:open', p, !!reveal)

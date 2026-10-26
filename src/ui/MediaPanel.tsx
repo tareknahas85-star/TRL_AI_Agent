@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, FolderOpen, Loader2, Play, Sparkles } from 'lucide-react'
 import { Modal, inputCls, primaryBtn } from './components/ui'
 import type { MediaKind, ModelStatus } from '../core/media-registry'
+import { nextModelId } from '../core/media-msg'
 
 const TITLE: Record<MediaKind, string> = { image: 'توليد صورة', video: 'توليد فيديو', audio: 'توليد صوت' }
 const HINT: Record<MediaKind, string> = {
@@ -22,16 +23,33 @@ function Badge({ m }: { m: ModelStatus }) {
   )
 }
 
-export function MediaPanel({ kind, onClose }: { kind: MediaKind; onClose: () => void }) {
+export function MediaPanel({
+  kind,
+  onClose,
+  initialPrompt = '',
+  excludeId,
+  onResult
+}: {
+  kind: MediaKind
+  onClose: () => void
+  initialPrompt?: string
+  /** Model that was just used: the panel preselects the next available one ('try another'). */
+  excludeId?: string
+  onResult?: (kind: MediaKind, prompt: string, r: { ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }) => void
+}) {
   const [models, setModels] = useState<ModelStatus[]>([])
   const [sel, setSel] = useState('auto')
-  const [prompt, setPrompt] = useState('')
+  const [prompt, setPrompt] = useState(initialPrompt)
   const [busy, setBusy] = useState(false)
-  const [res, setRes] = useState<{ ok: boolean; path?: string; model?: string; note: string } | null>(null)
+  const [res, setRes] = useState<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string } | null>(null)
   const [img, setImg] = useState('')
 
-  const load = (): void => void window.api.media.models(kind).then(setModels)
-  useEffect(load, [kind])
+  const load = (first = false): void =>
+    void window.api.media.models(kind).then((l) => {
+      setModels(l)
+      if (first && excludeId) setSel(nextModelId(l.filter((m) => m.available && m.route !== 'site').map((m) => m.id), excludeId))
+    })
+  useEffect(() => load(true), [kind])
 
   async function go(): Promise<void> {
     if (!prompt.trim() || busy) return
@@ -40,6 +58,11 @@ export function MediaPanel({ kind, onClose }: { kind: MediaKind; onClose: () => 
     setImg('')
     try {
       const r = await window.api.media.generate(kind, sel, prompt)
+      if (r.ok && onResult) {
+        onResult(kind, prompt, r)
+        onClose()
+        return
+      }
       setRes(r)
       if (r.ok && r.path && kind === 'image') setImg(await window.api.media.preview(r.path))
     } catch (e) {

@@ -52,6 +52,7 @@ import {
   addCustomModel,
   detectLocalModels,
   listCustomModelViews,
+  listAllCustomModelViews,
   removeCustomModel,
   testCustomModel,
   toggleCustomModel,
@@ -162,7 +163,7 @@ export function registerManagementHandlers(): void {
   ipcMain.handle('tools:remove', (_e, name: unknown) => typeof name === 'string' && removeCustomTool(name))
 
   // ---- Custom models
-  ipcMain.handle('models:list', () => listCustomModelViews())
+  ipcMain.handle('models:list', () => listAllCustomModelViews())
   ipcMain.handle('models:detectLocal', () => detectLocalModels())
   // ---- Ollama: install / start / download / delete from inside the app
   ipcMain.handle('ollama:status', async () => ({
