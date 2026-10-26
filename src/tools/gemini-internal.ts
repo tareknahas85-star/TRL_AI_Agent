@@ -76,6 +76,12 @@ function ensureWin(): BrowserWindow {
   return w
 }
 
+/** True when the internal session already holds a Google sign-in (Google refuses to sign in inside an embedded window, so this is rare). */
+export async function hasGoogleLogin(): Promise<boolean> {
+  const cs = await session.fromPartition(GEMINI_PARTITION).cookies.get({})
+  return cs.some((c) => /^(__Secure-1PSID|SID)$/.test(c.name) && /google\.com$/.test(c.domain ?? ''))
+}
+
 /** Shows the window on Gemini so the user can sign in (once). */
 export async function showGeminiWindow(): Promise<void> {
   const w = ensureWin()

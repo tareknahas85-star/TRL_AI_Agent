@@ -51,6 +51,12 @@ async function listFiles(dir: string): Promise<Map<string, number>> {
   return m
 }
 
+/** Opens Gemini in the dedicated automation Chrome so the user can sign in there (Google refuses sign-in inside an embedded window). */
+export async function openGeminiInChrome(): Promise<void> {
+  await ensureChrome()
+  await newPage(GEMINI_APP_URL)
+}
+
 export async function generate(kind: 'image' | 'video', prompt: string, mode: 'internal' | 'chrome' = 'chrome'): Promise<string> {
   let p: Drv
   if (mode === 'internal') p = await openInternal(GEMINI_APP_URL)

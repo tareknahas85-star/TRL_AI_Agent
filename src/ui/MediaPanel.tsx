@@ -145,11 +145,11 @@ export function MediaPanel({
           <textarea dir="auto" rows={3} value={prompt} onChange={(e) => setPrompt(e.target.value)} placeholder={HINT[kind]} className={inputCls + ' mt-4 resize-none'} />
           {chosen?.id.startsWith('gemini-web') && (
             <p className="mt-2 text-[11px] text-muted">
-              أول مرة؟ سجّل دخول Google مرة وحدة بالنافذة الداخلية:{' '}
+              أول مرة؟ Google بيرفض الدخول من نافذة مدمجة، فسجّل دخول مرة وحدة من Chrome:{' '}
               <button onClick={() => void window.api.media.geminiLogin()} className="text-primary underline">
-                تسجيل دخول Gemini
+                افتح Chrome لتسجيل الدخول
               </button>
-              . إذا ما اشتغلت، بيجرّب Chrome تلقائياً.
+              .
             </p>
           )}
           <div className="mt-3 flex items-center gap-3">

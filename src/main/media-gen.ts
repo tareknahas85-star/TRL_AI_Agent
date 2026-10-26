@@ -10,8 +10,8 @@ import { getApiKey } from '../store/secure-store'
 import { readJson, writeJson } from '../core/json-store'
 import { freeOnly } from '../core/spend'
 import { activeProject } from '../core/workspace'
-import { generate as geminiWeb } from '../tools/google-media-tools'
-import { showGeminiWindow } from '../tools/gemini-internal'
+import { generate as geminiWeb, openGeminiInChrome } from '../tools/google-media-tools'
+import { hasGoogleLogin } from '../tools/gemini-internal'
 import { listCustomModels, customEndpoint, type CustomModel } from '../core/custom-models'
 import { isChatKind, parseImageResponse } from '../core/media-custom'
 import { MEDIA_MODELS, autoOrder, bumpUsage, describeModels, rollUsage, type KeyName, type MediaKind, type MediaModel, type Usage } from '../core/media-registry'
@@ -184,16 +184,19 @@ const savedPath = (r: string): string | null => {
 // Gemini runs inside the app first (hidden window). If that window is not signed in / did not load (nothing was
 // generated yet), it falls back to the dedicated Chrome. Failures after the prompt was sent do not retry (quota).
 async function viaGemini(kind: 'image' | 'video', prompt: string): Promise<string> {
-  let inner = ''
-  try {
-    const r = await geminiWeb(kind, prompt, 'internal')
-    const f = savedPath(r)
-    if (f) return f
-    inner = r.replace(/^ERROR:\s*/, '')
-  } catch (e) {
-    inner = e instanceof Error ? e.message : String(e)
+  let inner = 'ما في جلسة Google جوا البرنامج (الدخول بيتم من Chrome)'
+  // Google refuses sign-in inside an embedded window, so the internal window is only tried when it already holds a sign-in.
+  if (await hasGoogleLogin()) {
+    try {
+      const r = await geminiWeb(kind, prompt, 'internal')
+      const f = savedPath(r)
+      if (f) return f
+      inner = r.replace(/^ERROR:\s*/, '')
+    } catch (e) {
+      inner = e instanceof Error ? e.message : String(e)
+    }
   }
-  if (!/^NEEDS_LOGIN|ما حمّلت|Gemini page|انتهت المهلة: خيار/.test(inner)) throw new Error(inner.slice(0, 200))
+  if (!/^NEEDS_LOGIN|ما حمّلت|Gemini page|انتهت المهلة: خيار|ما في جلسة Google/.test(inner)) throw new Error(inner.slice(0, 200))
   const r2 = await geminiWeb(kind, prompt, 'chrome')
   const f2 = savedPath(r2)
   if (f2) return f2
@@ -277,7 +280,7 @@ export function registerMediaIpc(): void {
     return m.url
   })
   ipcMain.handle('media:gemini-login', async () => {
-    await showGeminiWindow()
+    await openGeminiInChrome()
     return true
   })
   ipcMain.handle('media:preview', async (_e, p: unknown) => {

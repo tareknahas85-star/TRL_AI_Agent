@@ -1,7 +1,8 @@
 // Sign-in state for the sites behind the image/video/audio buttons. Each site keeps its own login inside the app
 // (Gemini in its own window session, the others in the side browser), so the user signs in once and can see / clear it here.
 import { BrowserWindow, ipcMain, session } from 'electron'
-import { GEMINI_PARTITION, showGeminiWindow } from '../tools/gemini-internal'
+import { GEMINI_PARTITION } from '../tools/gemini-internal'
+import { openGeminiInChrome } from '../tools/google-media-tools'
 
 const SIDE = 'persist:side-browser'
 interface Acc { id: string; label: string; url: string; partition: string; domains: string[]; auth?: RegExp }
@@ -84,16 +85,16 @@ const find = (id: unknown): Acc | undefined => (typeof id === 'string' ? ACCS.fi
 
 export function registerMediaAccountsIpc(): void {
   ipcMain.handle('media:accounts', async () => {
-    const out: { id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no' | 'unknown'; where: string }[] = []
+    const out: { id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no' | 'unknown' | 'unknown'; where: string }[] = []
     for (const a of ACCS) {
-      let state: 'yes' | 'maybe' | 'no' = 'no'
+      let state: 'yes' | 'maybe' | 'no' | 'unknown' = 'no'
       try {
         const cs = await cookiesOf(a)
         // Google has a definite sign-in cookie; for the others a few cookies is only a hint.
-        if (a.auth) state = cs.some((c) => a.auth!.test(c.name)) ? 'yes' : 'no'
+        if (a.auth) state = cs.some((c) => a.auth!.test(c.name)) ? 'yes' : a.id === 'gemini' ? 'unknown' : 'no'
         else state = cs.length >= 3 ? 'maybe' : 'no'
       } catch { /* keep "no" */ }
-      out.push({ id: a.id, label: a.label, url: a.url, state, where: a.partition === SIDE ? 'المتصفح الجانبي' : 'نافذة Gemini الداخلية' })
+      out.push({ id: a.id, label: a.label, url: a.url, state, where: a.id === 'gemini' ? 'بيسجّل دخول من Chrome المخصص (Google بيرفض النافذة المدمجة)، فالحالة ما بتنفحص' : 'المتصفح الجانبي' })
     }
     return out
   })
@@ -101,7 +102,7 @@ export function registerMediaAccountsIpc(): void {
   ipcMain.handle('media:account-verify', async (_e, id: unknown) => {
     const a = find(id)
     if (!a) return 'unknown'
-    if (a.auth) return (await cookiesOf(a)).some((c) => a.auth!.test(c.name)) ? 'yes' : 'no'
+    if (a.auth) return (await cookiesOf(a)).some((c) => a.auth!.test(c.name)) ? 'yes' : a.id === 'gemini' ? 'unknown' : 'no'
     return probe(a)
   })
   /** Gemini shows its own window and returns null; the others return the URL for the renderer to open in the side browser. */
@@ -109,7 +110,7 @@ export function registerMediaAccountsIpc(): void {
     const a = find(id)
     if (!a) return null
     if (a.id === 'gemini') {
-      await showGeminiWindow()
+      await openGeminiInChrome()
       return null
     }
     return a.url
