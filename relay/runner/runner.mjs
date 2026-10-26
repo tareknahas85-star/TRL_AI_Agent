@@ -380,11 +380,24 @@ async function callTool(name, args) {
 }
 
 // Primary: Gemini (pinned model names, OpenAI-compatible endpoint). Optional fallback: free OpenRouter models.
+// Static model router: when an agent has no model of its own, the order depends on how heavy the task looks.
+// Always a chain, so a missing quota or a bad alias just falls through to the next model. GEMINI_MODELS overrides all of it.
+function taskClass(t) {
+  const s = String(t || '');
+  if (s.length < 80 && /^(hi|hello|مرحبا|هلا|السلام|شو|كيف|كم|اي|ايش|what|how|when)(\s|$)/i.test(s.trim())) return 'light';
+  if (s.length > 700 || /(حلّل|حلل|قارن|خطة|تقرير مفصّل|تقرير مفصل|برمج|كود|analy[sz]e|compare|refactor|debug|code|plan\b)/i.test(s)) return 'hard';
+  return 'normal';
+}
+const ROUTES = {
+  light: 'gemini-flash-lite-latest,gemini-flash-latest',
+  normal: 'gemini-flash-latest,gemini-flash-lite-latest',
+  hard: 'gemini-pro-latest,gemini-flash-latest,gemini-flash-lite-latest',
+};
 async function pickModels() {
   const list = [];
   if (GEMINI_KEY && MODEL) list.push({ p: 'gemini', id: MODEL }); // per-agent model first, defaults stay as fallback
   if (GEMINI_KEY) {
-    for (const m of (E.GEMINI_MODELS || 'gemini-flash-lite-latest,gemini-flash-latest').split(',')) {
+    for (const m of (E.GEMINI_MODELS || ROUTES[taskClass(TASK)]).split(',')) {
       if (m.trim()) list.push({ p: 'gemini', id: m.trim() });
     }
   }
