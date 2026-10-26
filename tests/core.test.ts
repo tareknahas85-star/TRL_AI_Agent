@@ -545,7 +545,7 @@ test('isTrivialChat: أي إشارة لملف/مشروع/تنفيذ/معلومة
     'a'.repeat(120),
     ''
   ]
-  for (const s of no) assert.equal(isTrivialChat(s), false, s)
+  for (const s of [...no, 'ارسملي صورة قطة', 'ارسم لي شعار', 'generate an image of a cat', 'اعطيني فيديو']) assert.equal(isTrivialChat(s), false, s)
 })
 
 test('localSuitable: المحلي بس للمحادثة الخفيفة', () => {

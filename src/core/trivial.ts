@@ -12,7 +12,7 @@ export const DEFAULT_CITY = 'Damascus'
 
 // أي إشارة لملف/مشروع/تنفيذ/كتابة كود = مو بسيط، بيضل على المسار الكامل (أدوات).
 const ACTION_RE =
-  /ملف|ملفات|مجلد|مشروع|افتح|اقرأ|راجع|حلل|ولّد|ولد|بني|ابني|بناء|احفظ|انقل|انسخ|شغّل|شغل|نفّذ|نفذ|ثبّت|اعمل|عدّل|عدل|اكتب|كود|سكريبت|ابحث|دوّر|\.[a-z0-9]{1,5}\b|\b(file|folder|project|readme|open|read|review|analy[sz]e|build|compile|save|install|deploy|execute|run|code|script|search|fix|write)\b/i
+  /ملف|ملفات|مجلد|مشروع|افتح|اقرأ|راجع|حلل|ولّد|ولد|بني|ابني|بناء|احفظ|انقل|انسخ|شغّل|شغل|نفّذ|نفذ|ثبّت|اعمل|عدّل|عدل|اكتب|كود|سكريبت|ابحث|دوّر|ارسم|رسم|صورة|صور|لوحة|شعار|لوغو|فيديو|كولاب|كومبوزيو|\.[a-z0-9]{1,5}\b|\b(file|folder|project|readme|open|read|review|analy[sz]e|build|compile|save|install|deploy|execute|run|code|script|search|fix|write|image|images|picture|draw|logo|video|colab|composio|huggingface|hfspace)\b/i
 export const DATE_RE = /تاريخ اليوم|تاريخ هلق|شو اليوم|أي يوم|اي يوم|كم الساعة|الساعة كم|الوقت هلق|what('s| is) (the )?(date|time|day)|today'?s date|what time/i
 export const WEATHER_RE = /طقس|الجو |الجو$|درجة الحرارة|حرارة|weather|temperature/i
 
