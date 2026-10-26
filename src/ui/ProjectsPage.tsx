@@ -134,7 +134,7 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
               <Fragment key={p.id}><div className={cardCls + ` flex items-center justify-between gap-3 ${active ? 'ring-2 ring-primary' : ''}`}>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold">{p.name}</span>
+                    <button className="font-semibold hover:underline" title="صفحة المشروع" onClick={() => setView(p.id)}>{p.name}</button>
                     {active && <Chip cls="bg-primary/15 text-primary"><CheckCircle2 size={12} /> مفتوح بتبويب</Chip>}
                     {p.confidential && <Chip cls="bg-warning/20 text-warning"><Lock size={12} /> سري — موديلات مدفوعة قوية بس</Chip>}
                   </div>

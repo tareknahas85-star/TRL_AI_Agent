@@ -8,8 +8,9 @@ export type RunOn = 'local' | 'cloud' | 'auto'
 export type AgentMemory = 'basic' | 'none'
 export type Agent = { id: string; name: string; prompt: string; runOn: RunOn; memory: AgentMemory; model: string; tool: AgentTool; schedule: AgentSchedule | null; sources: string[] }
 
-// tool: 'text' = normal chat agent, 'image' = generates a picture (cloud runner, Gemini image model). model = optional model id override.
-export type AgentTool = 'text' | 'image'
+// tool: 'text' = normal chat agent, 'image' = generates a picture, 'video' = generates a video (cloud runner, Gemini API, billing-enabled key). model = optional model id override.
+export type AgentTool = 'text' | 'image' | 'video'
+export const cleanTool = (t: unknown): AgentTool => (t === 'image' || t === 'video' ? t : 'text')
 // Cloud schedule: the gate's cron fires the agent with 	ask at 	ime (HH:MM in 	z); days 'work' = Sun-Thu.
 export type AgentSchedule = { time: string; days: 'all' | 'work'; task: string; tz: string }
 export function cleanSchedule(s: unknown): AgentSchedule | null {
@@ -37,7 +38,7 @@ export function listAgents(): Agent[] {
         ...x,
         memory: x.memory === 'none' ? ('none' as const) : ('basic' as const),
         model: typeof x.model === 'string' && MODEL_RE.test(x.model) ? x.model : '',
-        tool: x.tool === 'image' ? ('image' as const) : ('text' as const),
+        tool: cleanTool(x.tool),
         schedule: cleanSchedule(x.schedule),
         sources: cleanSources(x.sources)
       }))
@@ -51,7 +52,7 @@ function clean(a: Partial<Agent>): Agent | null {
   const runOn = MODES.includes(a.runOn as RunOn) ? (a.runOn as RunOn) : 'auto'
   const memory: AgentMemory = a.memory === 'none' ? 'none' : 'basic'
   const model = typeof a.model === 'string' && MODEL_RE.test(a.model.trim()) ? a.model.trim() : ''
-  const tool: AgentTool = a.tool === 'image' ? 'image' : 'text'
+  const tool: AgentTool = cleanTool(a.tool)
   return { id, name, prompt: String(a.prompt ?? '').slice(0, 3000), runOn, memory, model, tool, schedule: cleanSchedule(a.schedule), sources: cleanSources(a.sources) }
 }
 

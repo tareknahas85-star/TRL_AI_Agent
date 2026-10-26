@@ -214,7 +214,7 @@ export class Gate extends DurableObject {
           runOn: Object.hasOwn(MODES, a?.runOn) ? a.runOn : 'auto',
           memory: a?.memory === 'none' ? 'none' : 'basic',
       model: /^[A-Za-z0-9._:\/-]{1,80}$/.test(String(a?.model || '')) ? String(a.model) : '',
-      tool: a?.tool === 'image' ? 'image' : 'text',
+      tool: a?.tool === 'image' || a?.tool === 'video' ? a.tool : 'text',
       sources: cleanSrcList(a?.sources),
       schedule:
         a?.schedule && /^([01]\d|2[0-3]):[0-5]\d$/.test(String(a.schedule.time || '')) && String(a.schedule.task || '').trim()
@@ -551,7 +551,7 @@ export class Gate extends DurableObject {
       agent: clip(agent?.name || '', 40),
       prompt: clip(agent?.prompt || '', 3000),
       model: agent?.model || '',
-      tool: agent?.tool === 'image' ? 'image' : 'text',
+      tool: agent?.tool === 'image' || agent?.tool === 'video' ? agent.tool : 'text',
       sources: cleanSrcList(agent?.sources),
       memory: agent && agent.memory === 'none' ? '' : clip((await this.ctx.storage.get('memory')) || '', 6000),
     });

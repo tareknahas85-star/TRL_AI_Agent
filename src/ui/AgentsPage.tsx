@@ -104,8 +104,9 @@ export function AgentsPage() {
           <select value={form.tool} onChange={(e) => setForm({ ...form, tool: e.target.value as AgentInfo['tool'] })} className={field}>
             <option value="text">نوع الوكيل: نصّي (محادثة وأدوات)</option>
             <option value="image">نوع الوكيل: توليد صور (نانو بنانا، سحابي، بدو مفتاح مدفوع)</option>
+            <option value="video">نوع الوكيل: توليد فيديو (Gemini Omni، سحابي، بدو مفتاح مدفوع)</option>
           </select>
-          <input dir="ltr" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.tool === 'image' ? 'الموديل (فاضي = gemini-2.5-flash-image)' : 'الموديل (فاضي = الافتراضي، مثلاً gemini-flash-latest)'} maxLength={80} className={field} />
+          <input dir="ltr" value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} placeholder={form.tool === 'image' ? 'الموديل (فاضي = gemini-2.5-flash-image)' : form.tool === 'video' ? 'الموديل (فاضي = gemini-omni-1.1-flash)' : 'الموديل (فاضي = الافتراضي، مثلاً gemini-flash-latest)'} maxLength={80} className={field} />
           <input dir="ltr" value={form.sources.join(', ')} onChange={(e) => setForm({ ...form, sources: e.target.value.split(',').map((s) => s.trim()) })} placeholder="مصادر الإيميل يلي بيقراها (مثلاً: gmail, outlook) - فاضي = كل الصناديق" className={field} />
           <label className="flex items-center gap-2 text-xs">
             <input type="checkbox" checked={!!form.schedule} onChange={(e) => setForm({ ...form, schedule: e.target.checked ? { time: '08:00', days: 'all', task: '', tz: Intl.DateTimeFormat().resolvedOptions().timeZone } : null })} />

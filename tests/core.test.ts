@@ -524,7 +524,7 @@ test('allowWeaker: طلب فيه أدوات يبقى قوي حتى لو البس
 })
 
 // 5.17.3: بوابة "الرسالة البسيطة" (بدون أدوات، المحلي أولاً) + ذاكرة آخر موديل نجح/فشل
-import { cleanSchedule, cleanSources } from '../src/core/agents'
+import { cleanSchedule, cleanSources, cleanTool } from '../src/core/agents'
 import { looksSecret, filterLines, buildPack, cleanTerms } from '../src/core/agent-memory'
 import { isTrivialChat, localSuitable, hasCjk, cityFrom, DEFAULT_CITY, pickLocalModel, noteLocal, needsNoThink, stripThink, preferGood, noteResult, resetTrivialState } from '../src/core/trivial'
 
@@ -775,4 +775,11 @@ test('custom kind: قراءة الصورة من ردّ OpenAI أو OpenRouter', 
   assert.deepEqual(parseImageResponse({ data: [{ url: 'https://x/y.png' }] }), { url: 'https://x/y.png' })
   assert.deepEqual(parseImageResponse({ choices: [{ message: { images: [{ image_url: { url: 'data:image/png;base64,QUJD' } }] } }] }), { b64: 'QUJD' })
   assert.equal(parseImageResponse({ choices: [{ message: { content: 'no image' } }] }), null)
+})
+
+test('agents: tool type accepts text, image and video only', () => {
+  assert.equal(cleanTool('video'), 'video')
+  assert.equal(cleanTool('image'), 'image')
+  assert.equal(cleanTool('x'), 'text')
+  assert.equal(cleanTool(undefined), 'text')
 })

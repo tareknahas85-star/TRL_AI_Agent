@@ -36,7 +36,7 @@ async function loadJob() {
   PROMPT = String(j.prompt || '').trim();
   MEMORY = String(j.memory || '').trim();
   MODEL = /^[A-Za-z0-9._:\/-]{1,80}$/.test(String(j.model || '')) ? String(j.model) : '';
-  TOOL = j.tool === 'image' ? 'image' : 'text';
+  TOOL = j.tool === 'image' || j.tool === 'video' ? j.tool : 'text';
   SOURCES = Array.isArray(j.sources) ? j.sources.filter((s) => /^[a-z0-9_-]{1,20}$/.test(s)).slice(0, 5) : [];
   if (!TASK) throw new Error('empty job');
 }
@@ -457,10 +457,65 @@ async function imageMain() {
   await say('⚠️ انولدت الصورة بس ما قدرت ابعتها (لازم Telegram مضبوط).', 'fail');
 }
 
+// Video agent: one Gemini Interactions call (gemini-omni-1.1-flash), the clip goes to Telegram. Needs GEMINI_KEY with billing enabled.
+function findVideo(o, depth = 0) {
+  if (!o || typeof o !== 'object' || depth > 8) return null;
+  if (o.type === 'video' && (o.data || o.uri)) return o;
+  for (const v of Array.isArray(o) ? o : Object.values(o)) { const r = findVideo(v, depth + 1); if (r) return r; }
+  return null;
+}
+async function videoMain() {
+  if (!GEMINI_KEY) { await say('⚠️ وكيل الفيديو بدو GEMINI_KEY (مفتاح مع Billing).', 'fail'); return; }
+  const base = 'https://generativelanguage.googleapis.com/v1beta';
+  const hdr = { 'x-goog-api-key': GEMINI_KEY };
+  const id = MODEL || 'gemini-omni-1.1-flash';
+  await say('🎬 عم يولّد الفيديو (ممكن ياخد كم دقيقة)…');
+  let res;
+  try {
+    res = await fetch(base + '/interactions', {
+      method: 'POST',
+      headers: { ...hdr, 'content-type': 'application/json' },
+      body: JSON.stringify({ model: id, input: (PROMPT ? PROMPT + '\n\n' : '') + TASK, response_format: { type: 'video', delivery: 'uri' } }),
+      signal: AbortSignal.timeout(300000),
+    });
+  } catch { await say('⚠️ ما قدرت وصل لخدمة الفيديو.', 'fail'); return; }
+  if (!res.ok) { await say('⚠️ فشل توليد الفيديو (HTTP ' + res.status + '). تأكد إنو المفتاح مفعّل عليه Billing واسم الموديل صحيح.', 'fail'); return; }
+  const v = findVideo(await res.json().catch(() => ({})));
+  if (!v) { await say('⚠️ الموديل ما رجّع فيديو.', 'fail'); return; }
+  let buf;
+  try {
+    if (v.data) buf = Buffer.from(v.data, 'base64');
+    else {
+      const fid = (String(v.uri).match(/files\/([A-Za-z0-9_-]+)/) || [])[1];
+      if (!fid) throw new Error('no file id');
+      const until = Date.now() + 300000;
+      for (;;) {
+        const st = await (await fetch(base + '/files/' + fid, { headers: hdr })).json().catch(() => ({}));
+        if (st.state === 'ACTIVE') break;
+        if (st.state === 'FAILED' || Date.now() > until) throw new Error('file not ready');
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      const dl = await fetch(base + '/files/' + fid + ':download?alt=media', { headers: hdr, redirect: 'follow', signal: AbortSignal.timeout(180000) });
+      if (!dl.ok) throw new Error('download ' + dl.status);
+      buf = Buffer.from(await dl.arrayBuffer());
+    }
+  } catch { await say('⚠️ انولد الفيديو بس ما قدرت أنزّلو.', 'fail'); return; }
+  if (buf.length > 49 * 1024 * 1024) { await say('⚠️ انولد الفيديو بس حجمو أكبر من حد تيليغرام (50MB).', 'fail'); return; }
+  if (TG_TOKEN && TG_CHAT_ID) {
+    const fd = new FormData();
+    fd.append('chat_id', TG_CHAT_ID);
+    fd.append('video', new Blob([buf], { type: 'video/mp4' }), 'video.mp4');
+    const tr = await fetch('https://api.telegram.org/bot' + TG_TOKEN + '/sendVideo', { method: 'POST', body: fd }).catch(() => null);
+    if (tr && tr.ok) { await gpost('/result', { job: JOB, kind: 'done', text: '🎬 انبعت الفيديو على تيليغرام.' }); return; }
+  }
+  await say('⚠️ انولد الفيديو بس ما قدرت ابعتو (لازم Telegram مضبوط).', 'fail');
+}
+
 async function main() {
   await loadJob();
   await loadPrefs();
   if (TOOL === 'image') return imageMain();
+  if (TOOL === 'video') return videoMain();
   await say(`☁️ بلّش ${AGENT ? 'الوكيل ' + AGENT : 'المهمة'} على الكمبيوتر السحابي.`);
   const models = await pickModels();
   if (!models.length) { await say('⚠️ ما لقيت نموذج متاح.', 'fail'); return; }
