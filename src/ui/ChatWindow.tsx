@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { ModelPicker } from './ModelPicker'
-import { ArrowUp, Bot, Check, Copy, FolderOpen, Loader2, Mic, Paperclip, Play, RotateCcw, Square, X } from 'lucide-react'
+import { ArrowUp, AudioLines, Bot, Check, Copy, FolderOpen, Image as ImageIcon, Loader2, Mic, Paperclip, Play, RotateCcw, Square, Video as VideoIcon, X } from 'lucide-react'
+import { MediaPanel } from './MediaPanel'
 import { Markdown } from './Markdown'
 import { useTheme } from './ThemeContext'
 import eagle from '../renderer/src/assets/syria-eagle.svg'
@@ -462,6 +463,7 @@ export function ChatWindow({
   const [prep, setPrep] = useState(0)
   // voice note: record with the mic, transcribe locally (Whisper) and drop the text into the input box
   const [rec, setRec] = useState(false)
+  const [media, setMedia] = useState<'image' | 'video' | 'audio' | null>(null)
   const recRef = useRef<MediaRecorder | null>(null)
   const toggleRec = async (): Promise<void> => {
     if (recRef.current) {
@@ -1010,9 +1012,19 @@ export function ChatWindow({
           >
             <Mic size={18} />
           </button>
+          {(['image', 'video', 'audio'] as const).map((k) => (
+            <button
+              key={k}
+              onClick={() => setMedia(k)}
+              title={k === 'image' ? 'توليد صورة' : k === 'video' ? 'توليد فيديو' : 'توليد صوت'}
+              aria-label={k === 'image' ? 'توليد صورة' : k === 'video' ? 'توليد فيديو' : 'توليد صوت'}
+              className="mb-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-muted hover:bg-surface2"
+            >
+              {k === 'image' ? <ImageIcon size={18} /> : k === 'video' ? <VideoIcon size={18} /> : <AudioLines size={18} />}
+            </button>
+          ))}
           <textarea
-            ref={taRef}
-            rows={1}
+            ref={taRef}            rows={1}
             dir="auto"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -1053,6 +1065,7 @@ export function ChatWindow({
           )}
         </div>
         <StatusBar loading={loading} progress={progress} elapsed={elapsed} messages={messages} />
+        {media && <MediaPanel kind={media} onClose={() => setMedia(null)} />}
       </div>
     </div>
   )

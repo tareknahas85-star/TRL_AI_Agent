@@ -16,6 +16,7 @@ import { refreshFreeRanking } from '../core/free-best'
 import { buildProjectContext } from '../core/project-context'
 import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
 import { registerAccountsHandlers } from './accounts-ipc'
+import { registerMediaIpc } from './media-gen'
 import { registerAttachHandlers } from './attach'
 import { registerExtrasHandlers } from './extras'
 import { registerTransferHandlers } from './transfer'
@@ -80,6 +81,7 @@ export function hydrateEnvFromStore(): void {
 export function registerIpcHandlers(): void {
   registerManagementHandlers()
   registerAccountsHandlers()
+  registerMediaIpc()
   registerConnectorsHandlers()
   registerAttachHandlers()
   registerExtrasHandlers()

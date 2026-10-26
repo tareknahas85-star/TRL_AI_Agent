@@ -139,6 +139,13 @@ declare global {
       retryChat: (opts: ChatOpts) => Promise<ChatResult>
       cancelChat: (tabId: string) => Promise<boolean>
       modelPicker: () => Promise<{ value: string; label: string; tier: string; keyed?: boolean }[]>
+      media: {
+        models: (kind: 'image' | 'video' | 'audio') => Promise<import('../core/media-registry').ModelStatus[]>
+        generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string) => Promise<{ ok: boolean; path?: string; model?: string; note: string }>
+        site: (id: string) => Promise<boolean>
+        preview: (p: string) => Promise<string>
+        open: (p: string, reveal?: boolean) => Promise<boolean>
+      }
       spend: {
         get: () => Promise<boolean>
         set: (on: boolean) => Promise<boolean>

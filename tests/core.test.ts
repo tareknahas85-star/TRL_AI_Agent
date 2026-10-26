@@ -705,4 +705,36 @@ test('PDF tools: merge, extract pages, info (local, never overwrite)', async () 
   assert.match(await pdfInfo(merged), /5/)
 })
 
+import { MEDIA_MODELS, describeModels, autoOrder, bumpUsage, rollUsage } from '../src/core/media-registry'
 
+test('media registry: كل موديل له بيانات كاملة وأولويات فريدة ضمن النوع', () => {
+  for (const m of MEDIA_MODELS) {
+    assert.ok(m.id && m.label && m.best && m.limitText, m.id)
+    if (m.route === 'site') assert.ok(m.url?.startsWith('https://'), m.id)
+  }
+  assert.equal(new Set(MEDIA_MODELS.map((m) => m.id)).size, MEDIA_MODELS.length)
+  for (const k of ['image', 'video', 'audio'] as const) assert.ok(MEDIA_MODELS.some((m) => m.kind === k && m.route !== 'site'), k)
+})
+
+test('media registry: المفتاح والمجاني-فقط بيحدّدوا التوفّر والترتيب التلقائي', () => {
+  const u = { day: '2026-01-01', counts: {} }
+  const none = describeModels('image', { hasKey: () => false, freeOnly: true, usage: u })
+  assert.equal(none.find((m) => m.id === 'hf-flux')?.available, false)
+  assert.equal(none.find((m) => m.id === 'gemini-api-image')?.available, false)
+  assert.equal(none.find((m) => m.id === 'pollinations')?.available, true)
+  const all = describeModels('image', { hasKey: () => true, freeOnly: true, usage: u })
+  assert.equal(all.find((m) => m.id === 'gemini-api-image')?.available, false, 'مفتاح محتمل مدفوع محجوب بوضع مجاني فقط')
+  const paidOk = describeModels('image', { hasKey: () => true, freeOnly: false, usage: u })
+  assert.equal(paidOk.find((m) => m.id === 'gemini-api-image')?.available, true)
+  const order = autoOrder(all).map((m) => m.id)
+  assert.deepEqual(order, ['gemini-web-image', 'hf-flux', 'pollinations'])
+  assert.ok(autoOrder(paidOk).every((m) => m.route !== 'site'))
+})
+
+test('media registry: عدّاد الاستخدام بيتصفّر مع تغيّر اليوم', () => {
+  let u = rollUsage(undefined, '2026-01-01')
+  u = bumpUsage(u, 'pollinations', '2026-01-01')
+  u = bumpUsage(u, 'pollinations', '2026-01-01')
+  assert.equal(u.counts.pollinations, 2)
+  assert.equal(rollUsage(u, '2026-01-02').counts.pollinations, undefined)
+})

@@ -14,6 +14,13 @@ const api = {
   retryChat: (opts: ChatOpts): Promise<ChatResult> => ipcRenderer.invoke('chat:retry', opts),
   cancelChat: (tabId: string): Promise<boolean> => ipcRenderer.invoke('chat:cancel', tabId),
   modelPicker: (): Promise<{ value: string; label: string; tier: string }[]> => ipcRenderer.invoke('models:picker'),
+  media: {
+    models: (kind: 'image' | 'video' | 'audio'): Promise<unknown[]> => ipcRenderer.invoke('media:models', kind),
+    generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string): Promise<{ ok: boolean; path?: string; model?: string; note: string }> => ipcRenderer.invoke('media:generate', kind, modelId, prompt),
+    site: (id: string): Promise<boolean> => ipcRenderer.invoke('media:site', id),
+    preview: (p: string): Promise<string> => ipcRenderer.invoke('media:preview', p),
+    open: (p: string, reveal?: boolean): Promise<boolean> => ipcRenderer.invoke('media:open', p, !!reveal)
+  },
   check: {
     run: (kind: 'mcp' | 'tools' | 'connectors' | 'models') => ipcRenderer.invoke('check:run', kind),
     cancel: (kind: string): Promise<boolean> => ipcRenderer.invoke('check:cancel', kind),

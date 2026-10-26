@@ -50,7 +50,7 @@ async function listFiles(dir: string): Promise<Map<string, number>> {
   return m
 }
 
-async function generate(kind: 'image' | 'video', prompt: string): Promise<string> {
+export async function generate(kind: 'image' | 'video', prompt: string): Promise<string> {
   await ensureChrome()
   const p = await newPage(GEMINI_URL)
   let browser: Page | null = null
