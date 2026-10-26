@@ -17,6 +17,7 @@ import { buildProjectContext } from '../core/project-context'
 import { masterMemoryPrompt, recordTurn } from '../core/master-memory'
 import { registerAccountsHandlers } from './accounts-ipc'
 import { registerMediaIpc } from './media-gen'
+import { registerMediaAccountsIpc } from './media-accounts'
 import { registerAttachHandlers } from './attach'
 import { registerExtrasHandlers } from './extras'
 import { registerTransferHandlers } from './transfer'
@@ -82,6 +83,7 @@ export function registerIpcHandlers(): void {
   registerManagementHandlers()
   registerAccountsHandlers()
   registerMediaIpc()
+  registerMediaAccountsIpc()
   registerConnectorsHandlers()
   registerAttachHandlers()
   registerExtrasHandlers()

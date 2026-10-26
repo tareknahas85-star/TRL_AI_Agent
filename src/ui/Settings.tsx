@@ -3,6 +3,7 @@ import { Modal, PageShell, inputCls } from './components/ui'
 import { MemoryPanel } from './MemoryPanel'
 import { MasterMemoryPanel } from './MasterMemoryPanel'
 import { AccountsPanel } from './AccountsPanel'
+import { MediaAccountsPanel } from './MediaAccountsPanel'
 import { ComputerPanel } from './ComputerPanel'
 import { LocationPanel } from './LocationPanel'
 import { SecurityPanel } from './SecurityPanel'
@@ -115,7 +116,12 @@ export function Settings({ onClose, variant = 'modal' }: { onClose?: () => void;
             <UpdatePanel />
           </>
         )}
-        {tab === 'connectors' && <AccountsPanel />}
+        {tab === 'connectors' && (
+          <>
+            <AccountsPanel />
+            <MediaAccountsPanel />
+          </>
+        )}
         {tab === 'memory' && (
           <>
             <LearningPanel />
