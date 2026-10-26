@@ -213,7 +213,7 @@ export function mediaHtml(c) {
   const { S, esc } = c
   const M = S.media
   const online = S.conn === 'online'
-  let h = head('🎨', 'توليد', 'صورة · فيديو · صوت — بينعمل عالكمبيوتر', '<button class="chip" data-tab="more">رجوع</button>')
+  let h = head('🎨', 'توليد', 'صورة · فيديو · صوت — بينعمل عالكمبيوتر', '<button class="chip" data-tab="chat">رجوع للشات</button>')
   h += '<div class="seg">' + Object.entries(MKIND).map(([k, v]) => '<button data-mkind="' + k + '" class="' + (M.kind === k ? 'act' : '') + '">' + v[0] + ' ' + v[1] + '</button>').join('') + '</div>'
   const list = M.models[M.kind] || []
   h += '<div class="card"><select class="sel" id="selMedia"><option value="auto">تلقائي (أول موديل متاح)</option>' +

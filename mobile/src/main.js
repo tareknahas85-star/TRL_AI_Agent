@@ -794,7 +794,7 @@ function renderPage() {
   const top = document.querySelector('.top'); if (top) top.style.display = S.tab === 'chat' ? 'flex' : 'none'
   if (S.tab === 'chat') {
     p.innerHTML = '<div class="msgs" id="msgs"></div><div class="status" id="status"></div><div class="composer"><div class="atts" id="atts"></div><div class="row">' +
-      '<button class="iconbtn" id="attBtn">📎</button><button class="iconbtn" id="camBtn">📷</button><button class="iconbtn" id="mic">🎙️</button>' +
+      '<button class="iconbtn" id="attBtn">📎</button><button class="iconbtn" id="camBtn">📷</button><button class="iconbtn" id="mic">🎙️</button><button class="iconbtn" data-tab="media" id="genBtn" title="توليد صورة / فيديو / صوت">🎨</button>' +
       '<textarea id="ta" rows="1" placeholder="اكتب هون…"></textarea><button class="send" id="send">➤</button></div>' +
       '<input type="file" id="fileIn" multiple hidden><input type="file" id="camIn" accept="image/*" capture="environment" hidden></div>'
     renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
