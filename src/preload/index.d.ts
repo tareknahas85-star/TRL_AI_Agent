@@ -36,7 +36,7 @@ export type CustomModelInfo = {
   enabled: boolean
   hasKey: boolean
   last?: boolean
-  kind?: 'chat' | 'image' | 'audio'
+  kind?: 'chat' | 'image' | 'audio' | 'video'
   desc?: string
   limit?: string
   priceIn?: number
@@ -148,10 +148,11 @@ declare global {
         site: (id: string, prompt?: string, external?: boolean) => Promise<string | null>
         geminiLogin: () => Promise<boolean>
         info: (p: string) => Promise<{ name: string; size: number } | null>
-        accounts: () => Promise<{ id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no'; where: string }[]>
+        accounts: () => Promise<{ id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no'; where: string; manual: boolean }[]>
         accountVerify: (id: string) => Promise<'yes' | 'no' | 'unknown'>
         accountLogin: (id: string) => Promise<string | null>
         accountLogout: (id: string) => Promise<boolean>
+  accountMark: (id: string, state: 'yes' | 'no' | null) => Promise<boolean>
         preview: (p: string) => Promise<string>
         open: (p: string, reveal?: boolean) => Promise<boolean>
       }
@@ -235,7 +236,7 @@ declare global {
           baseURL?: string
           apiKey?: string
           tier: Tier
-          kind?: 'chat' | 'image' | 'audio'
+          kind?: 'chat' | 'image' | 'audio' | 'video'
           desc?: string
           limit?: string
         }) => Promise<{ ok: boolean; error?: string }>

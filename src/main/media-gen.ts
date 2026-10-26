@@ -1,6 +1,6 @@
 // Direct image / video / audio generation (no language model in the loop) behind the three buttons.
 // Walks the registry in priority order; a failed model falls through to the next one.
-import { app, clipboard, ipcMain, shell } from 'electron'
+import { app, clipboard, ipcMain, nativeImage, shell } from 'electron'
 import { spawn } from 'child_process'
 import fs from 'fs'
 import fsp from 'fs/promises'
@@ -13,7 +13,7 @@ import { activeProject } from '../core/workspace'
 import { generate as geminiWeb, openGeminiInChrome } from '../tools/google-media-tools'
 import { hasGoogleLogin } from '../tools/gemini-internal'
 import { listCustomModels, customEndpoint, type CustomModel } from '../core/custom-models'
-import { isChatKind, parseImageResponse } from '../core/media-custom'
+import { isChatKind, parseImageResponse, parseVideoJob } from '../core/media-custom'
 import { MEDIA_MODELS, autoOrder, bumpUsage, describeModels, rollUsage, type KeyName, type MediaKind, type MediaModel, type Usage } from '../core/media-registry'
 
 const USAGE_FILE = 'media-usage.json'
@@ -55,6 +55,26 @@ async function customRun(m: MediaModel, prompt: string): Promise<string> {
   const { base, key } = customEndpoint(cm)
   const headers: Record<string, string> = { 'content-type': 'application/json' }
   if (key) headers.authorization = 'Bearer ' + key
+  if (m.kind === 'video') {
+    if (!cm.baseURL) throw new Error('حط Base URL لمزوّد بيدعم واجهة /videos')
+    const r = await fetch(base + '/videos', { method: 'POST', headers, body: JSON.stringify({ model: cm.model, prompt }), signal: AbortSignal.timeout(120000) })
+    if (!r.ok) throw new Error('HTTP ' + r.status + ' ' + (await r.text().catch(() => '')).slice(0, 120))
+    let job = parseVideoJob(await r.json())
+    const until = Date.now() + 10 * 60 * 1000
+    while (!job.url && !job.b64 && job.status !== 'completed') {
+      if (job.error || job.status === 'failed' || job.status === 'cancelled' || job.status === 'canceled') throw new Error(job.error || 'فشل توليد الفيديو عند المزوّد')
+      if (!job.id) throw new Error('الرد ما فيه فيديو ولا رقم مهمة')
+      if (Date.now() > until) throw new Error('الفيديو تأخر أكتر من 10 دقايق')
+      await new Promise((res) => setTimeout(res, 5000))
+      const p = await fetch(base + '/videos/' + encodeURIComponent(job.id), { headers, signal: AbortSignal.timeout(60000) })
+      if (!p.ok) throw new Error('HTTP ' + p.status + ' (متابعة المهمة)')
+      job = { ...parseVideoJob(await p.json()), id: job.id }
+    }
+    if (job.b64) return save(Buffer.from(job.b64, 'base64'), 'mp4', 'custom-video')
+    const d = await fetch(job.url ?? base + '/videos/' + encodeURIComponent(job.id ?? '') + '/content', { headers: job.url ? {} : headers, signal: AbortSignal.timeout(300000) })
+    if (!d.ok) throw new Error('ما قدرت أنزّل الفيديو ' + d.status)
+    return save(Buffer.from(await d.arrayBuffer()), 'mp4', 'custom-video')
+  }
   if (m.kind === 'audio') {
     if (!cm.baseURL) throw new Error('OpenRouter ما بيدعم التحويل لصوت؛ حط Base URL لمزوّد بيدعم /audio/speech')
     const r = await fetch(base + '/audio/speech', { method: 'POST', headers, body: JSON.stringify({ model: cm.model, input: prompt, voice: 'alloy' }), signal: AbortSignal.timeout(180000) })
@@ -256,6 +276,45 @@ export async function generateMedia(kind: MediaKind, modelId: string, prompt: st
   } finally {
     busy = false
   }
+}
+
+/** For the phone: models of one kind (sites excluded, they only open in a browser). */
+export function phoneModels(kind: MediaKind): { id: string; label: string; ok: boolean; why: string }[] {
+  return describeModels(kind, ctx())
+    .filter((m) => m.route !== 'site')
+    .map((m) => ({ id: m.id, label: m.label, ok: m.available, why: m.reason || '' }))
+}
+
+/** For the phone: a small preview that fits one relay frame (image ≤ ~150KB, short audio ≤ 400KB). Video stays on the PC. */
+export async function phonePreview(p: string): Promise<{ name: string; size: number; preview: string }> {
+  const f = inOut(p)
+  if (!f) return { name: '', size: 0, preview: '' }
+  const st = fs.statSync(f)
+  const base = { name: path.basename(f), size: st.size }
+  const ext = path.extname(f).slice(1).toLowerCase()
+  try {
+    if (/^(png|jpe?g|webp)$/.test(ext)) {
+      const img = nativeImage.createFromPath(f)
+      if (img.isEmpty()) return { ...base, preview: '' }
+      const w = img.getSize().width
+      const jpg = (w > 720 ? img.resize({ width: 720 }) : img).toJPEG(70)
+      return { ...base, preview: jpg.length <= 200_000 ? 'data:image/jpeg;base64,' + jpg.toString('base64') : '' }
+    }
+    if (/^(mp3|wav|flac|ogg)$/.test(ext) && st.size <= 400_000) {
+      const mime = ext === 'mp3' ? 'audio/mpeg' : 'audio/' + ext
+      return { ...base, preview: `data:${mime};base64,` + (await fsp.readFile(f)).toString('base64') }
+    }
+  } catch {
+    /* preview is optional */
+  }
+  return { ...base, preview: '' }
+}
+
+export async function phoneOpenOnPc(name: string): Promise<boolean> {
+  const f = inOut(path.join(outDir(), path.basename(name)))
+  if (!f) return false
+  await shell.openPath(f)
+  return true
 }
 
 const inOut = (p: unknown): string | null => {

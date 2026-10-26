@@ -3,6 +3,11 @@
 import { BrowserWindow, ipcMain, session } from 'electron'
 import { GEMINI_PARTITION } from '../tools/gemini-internal'
 import { openGeminiInChrome } from '../tools/google-media-tools'
+import { readJson, writeJson } from '../core/json-store'
+
+// Manual corrections: when the automatic check is wrong for a site, the user marks the real state and it wins until cleared.
+const MARKS_FILE = 'media-account-marks.json'
+const marks = (): Record<string, 'yes' | 'no'> => readJson<Record<string, 'yes' | 'no'>>(MARKS_FILE, {})
 
 const SIDE = 'persist:side-browser'
 interface Acc { id: string; label: string; url: string; partition: string; domains: string[]; auth?: RegExp }
@@ -85,7 +90,8 @@ const find = (id: unknown): Acc | undefined => (typeof id === 'string' ? ACCS.fi
 
 export function registerMediaAccountsIpc(): void {
   ipcMain.handle('media:accounts', async () => {
-    const out: { id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no' | 'unknown' | 'unknown'; where: string }[] = []
+    const out: { id: string; label: string; url: string; state: 'yes' | 'maybe' | 'no' | 'unknown'; where: string; manual: boolean }[] = []
+    const mk = marks()
     for (const a of ACCS) {
       let state: 'yes' | 'maybe' | 'no' | 'unknown' = 'no'
       try {
@@ -94,7 +100,9 @@ export function registerMediaAccountsIpc(): void {
         if (a.auth) state = cs.some((c) => a.auth!.test(c.name)) ? 'yes' : a.id === 'gemini' ? 'unknown' : 'no'
         else state = cs.length >= 3 ? 'maybe' : 'no'
       } catch { /* keep "no" */ }
-      out.push({ id: a.id, label: a.label, url: a.url, state, where: a.id === 'gemini' ? 'بيسجّل دخول من Chrome المخصص (Google بيرفض النافذة المدمجة)، فالحالة ما بتنفحص' : 'المتصفح الجانبي' })
+      const manual = !!mk[a.id] && a.id !== 'gemini'
+      if (manual) state = mk[a.id]
+      out.push({ id: a.id, label: a.label, url: a.url, state, manual, where: a.id === 'gemini' ? 'بيسجّل دخول من Chrome المخصص (Google بيرفض النافذة المدمجة)، فالحالة ما بتنفحص' : 'المتصفح الجانبي' })
     }
     return out
   })
@@ -103,7 +111,19 @@ export function registerMediaAccountsIpc(): void {
     const a = find(id)
     if (!a) return 'unknown'
     if (a.auth) return (await cookiesOf(a)).some((c) => a.auth!.test(c.name)) ? 'yes' : a.id === 'gemini' ? 'unknown' : 'no'
+    const m = marks()[a.id]
+    if (m) return m
     return probe(a)
+  })
+  /** state = the real state the user sees; null clears the correction and goes back to the automatic check. */
+  ipcMain.handle('media:account-mark', (_e, id: unknown, state: unknown) => {
+    const a = find(id)
+    if (!a || a.id === 'gemini') return false
+    const mk = marks()
+    if (state === 'yes' || state === 'no') mk[a.id] = state
+    else delete mk[a.id]
+    writeJson(MARKS_FILE, mk)
+    return true
   })
   /** Gemini shows its own window and returns null; the others return the URL for the renderer to open in the side browser. */
   ipcMain.handle('media:account-login', async (_e, id: unknown) => {
@@ -118,6 +138,8 @@ export function registerMediaAccountsIpc(): void {
   ipcMain.handle('media:account-logout', async (_e, id: unknown) => {
     const a = find(id)
     if (!a) return false
+    const mk0 = marks()
+    if (mk0[a.id]) { delete mk0[a.id]; writeJson(MARKS_FILE, mk0) }
     const ses = session.fromPartition(a.partition)
     for (const c of await cookiesOf(a)) {
       const host = (c.domain ?? '').replace(/^\./, '')

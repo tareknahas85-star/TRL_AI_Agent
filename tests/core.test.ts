@@ -740,7 +740,7 @@ test('media registry: عدّاد الاستخدام بيتصفّر مع تغيّ
 })
 
 import { encodeMediaMsg, parseMediaMsg, nextModelId } from '../src/core/media-msg'
-import { guessKind, parseImageResponse, isChatKind } from '../src/core/media-custom'
+import { guessKind, parseImageResponse, isChatKind, parseVideoJob, normKind } from '../src/core/media-custom'
 
 test('media msg: الترميز والفك بيرجّعوا نفس البيانات والنص العادي ما بينقرأ كميديا', () => {
   const ref = { k: 'image' as const, p: 'C:\\a b\\x.png', m: 'Nano Banana', i: 'gemini-web-image', q: 'قطة [[غريبة]] \n سطر', c: '#4285f4' }
@@ -764,6 +764,11 @@ test('custom kind: تخمين نوع الموديل من الاسم', () => {
   assert.equal(guessKind('tts-1-hd'), 'audio')
   assert.equal(guessKind('elevenlabs/eleven_multilingual_v2'), 'audio')
   assert.equal(guessKind('veo-3'), 'video')
+  assert.equal(normKind('video'), 'video')
+  assert.equal(normKind('nope'), 'chat')
+  assert.deepEqual(parseVideoJob({ id: 'v1', status: 'Queued' }), { id: 'v1', status: 'queued', url: undefined, b64: undefined, error: undefined })
+  assert.equal(parseVideoJob({ data: [{ url: 'https://x/y.mp4' }] }).url, 'https://x/y.mp4')
+  assert.equal(parseVideoJob({ id: 'v', status: 'failed', error: { message: 'bad' } }).error, 'bad')
   assert.equal(guessKind('gpt-4o-mini'), 'chat')
   assert.equal(guessKind('qwen/qwen3.8-27b:free'), 'chat')
   assert.equal(isChatKind(undefined), true)

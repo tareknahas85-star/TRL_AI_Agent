@@ -1,10 +1,10 @@
 # TRL_AI_Agent (وكيل TRL الذكي)
 
-**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.6-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.6-windows-setup.exe)**
+**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-windows-setup.exe)**
 
-**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.19.0-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.19.0-android.apk)**
+**[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.20.0-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.20.0-android.apk)**
 
-**Linux / Ubuntu:** [⬇️ .deb](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.6-linux.deb) &nbsp;|&nbsp; [⬇️ AppImage](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.6-linux.AppImage) &nbsp;|&nbsp; **لينكس / أوبونتو:** نزّل الـ `.deb` أو الـ AppImage من الروابط.
+**Linux / Ubuntu:** [⬇️ .deb](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-linux.deb) &nbsp;|&nbsp; [⬇️ AppImage](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-linux.AppImage) &nbsp;|&nbsp; **لينكس / أوبونتو:** نزّل الـ `.deb` أو الـ AppImage من الروابط.
 
 ---
 
@@ -46,6 +46,8 @@ Every release has a `SHA256SUMS.txt` file so you can check your download.
 - Has a council mode where a second model checks and fixes the first answer
 - Has a spending guard with a "free models only" switch
 - Skips a model that prints fake tool calls as text, and moves to the next one
+- Has generate image / video / audio buttons next to the chat: each lists the models you can use with a daily limit, and the result lands in the chat. Your own custom models can be image, audio or video models too. The phone app has the same generation page
+- Has a sign-in panel for the generation sites (Settings, Connectors) that shows the real sign-in state and lets you correct it by hand
 - Runs in the system tray
 
 ### How the maestro delegates
@@ -183,7 +185,7 @@ phone is only a screen.**
 **Set it up (about 3 minutes)**
 
 1. Install the desktop app and make sure it works (steps above).
-2. Download **`TRL_AI_Agent-5.19.0-android.apk`** from the
+2. Download **`TRL_AI_Agent-5.20.0-android.apk`** from the
    [latest release](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    on your phone and install it (Android asks you to allow installing from this
    source once). It is a debug-signed build, not from the Play Store.
@@ -299,6 +301,8 @@ and the licenses of the libraries it uses are in
 - فيه وضع مجلس: نموذج ثانٍ يراجع الجواب الأول ويصحّحه
 - فيه حارس إنفاق مع مفتاح "النماذج المجانية فقط"
 - يتجاوز النموذج الذي يكتب استدعاءات أدوات مزيّفة كنص، وينتقل إلى التالي
+- فيه أزرار توليد صورة وفيديو وصوت جنب الشات، كل زر بيعرض النماذج المتاحة مع حد يومي، والنتيجة بتطلع بالشات. ونماذجك المخصصة ممكن تكون صورة أو صوت أو فيديو. وتطبيق الموبايل فيه نفس صفحة التوليد
+- فيه لوحة تسجيل دخول لمواقع التوليد (الإعدادات ← الموصّلات) بتعرض حالة الدخول الفعلية وبتخليك تصحّحها بإيدك
 - يعمل من أيقونة شريط النظام
 
 ### كيف يوزّع المايسترو العمل
@@ -425,7 +429,7 @@ and the licenses of the libraries it uses are in
 **كيف تجهّزو (حوالي 3 دقايق)**
 
 1. ثبّت برنامج الكمبيوتر وتأكد إنو شغّال (الخطوات فوق).
-2. نزّل **`TRL_AI_Agent-5.19.0-android.apk`** من
+2. نزّل **`TRL_AI_Agent-5.20.0-android.apk`** من
    [آخر إصدار](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest)
    عالتلفون وثبّتو (أندرويد بيطلب منك تسمح بالتثبيت من هالمصدر مرة وحدة). هاد ملف
    تجريبي موقّع debug، مو من متجر Play.

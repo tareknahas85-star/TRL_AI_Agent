@@ -84,8 +84,8 @@ function ApinexPanel() {
 }
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/openai/'
-const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier, kind: 'chat' as 'chat' | 'image' | 'audio', desc: '', limit: '' }
-const KIND_LABEL = { chat: 'محادثة', image: 'توليد صور', audio: 'توليد صوت' } as const
+const empty = { name: '', model: '', baseURL: '', apiKey: '', tier: 'TIER_2_CHEAP' as Tier, kind: 'chat' as 'chat' | 'image' | 'audio' | 'video', desc: '', limit: '' }
+const KIND_LABEL = { chat: 'محادثة', image: 'توليد صور', audio: 'توليد صوت', video: 'توليد فيديو' } as const
 
 // شرح المفاتيح + التنبيه: البرنامج ما بيستعمل حسابات الاشتراك الشخصية، كل واحد يضيف مفاتيحه من حسابه.
 function KeysNotice(): ReactElement {
@@ -481,7 +481,7 @@ export function ModelsPage() {
               value={form.model}
               onChange={(e) => {
                 const g = guessKind(e.target.value, form.name)
-                setForm({ ...form, model: e.target.value, kind: form.kind === 'chat' || kindAuto ? (g === 'video' ? form.kind : g) : form.kind })
+                setForm({ ...form, model: e.target.value, kind: form.kind === 'chat' || kindAuto ? g : form.kind })
                 setKindAuto(true)
               }}
             />
@@ -492,14 +492,11 @@ export function ModelsPage() {
               value={form.kind}
               onChange={(e) => {
                 setKindAuto(false)
-                setForm({ ...form, kind: e.target.value as 'chat' | 'image' | 'audio' })
+                setForm({ ...form, kind: e.target.value as 'chat' | 'image' | 'audio' | 'video' })
               }}
             >
               {(Object.keys(KIND_LABEL) as (keyof typeof KIND_LABEL)[]).map((k) => <option key={k} value={k}>نوع الموديل: {KIND_LABEL[k]}</option>)}
             </select>
-            {guessKind(form.model, form.name) === 'video' && (
-              <p className="text-xs text-warning">الاسم بيوحي إنو موديل فيديو: ما في واجهة موحّدة لتوليد الفيديو، فما بينضاف هون. الفيديو بيشتغل من Gemini Veo ومن المواقع.</p>
-            )}
             {form.kind === 'chat' ? (
               <select className={inputCls} value={form.tier} onChange={(e) => setForm({ ...form, tier: e.target.value as Tier })}>
                 {(Object.keys(TIER_LABEL) as Tier[]).map((t) => <option key={t} value={t}>الطبقة: {TIER_LABEL[t].label}</option>)}
@@ -509,8 +506,8 @@ export function ModelsPage() {
                 <input className={inputCls} placeholder="بيفيد بشو أكتر؟ (بيظهر جنبو بالقايمة)" value={form.desc} onChange={(e) => setForm({ ...form, desc: e.target.value })} />
                 <input className={inputCls} placeholder="الحد اليومي (مثلاً: 50 صورة باليوم)" value={form.limit} onChange={(e) => setForm({ ...form, limit: e.target.value })} />
                 <p className="text-xs text-muted">
-                  {form.kind === 'image' ? 'بيشتغل مع السيرفرات اللي بتدعم /images/generations (OpenAI وأمثالو)، أو مع OpenRouter إذا الموديل بيطلّع صور.' : 'بيشتغل مع السيرفرات اللي بتدعم /audio/speech (OpenAI وأمثالو).'}
-                  {' '}بعد الحفظ بيطلع لحالو تحت زر "{form.kind === 'image' ? 'توليد صورة' : 'توليد صوت'}" بالشات.
+                  {form.kind === 'image' ? 'بيشتغل مع السيرفرات اللي بتدعم /images/generations (OpenAI وأمثالو)، أو مع OpenRouter إذا الموديل بيطلّع صور.' : form.kind === 'video' ? 'بيشتغل مع السيرفرات اللي بتدعم واجهة /videos (إنشاء مهمة ثم متابعتها، متل OpenAI Sora). الفيديو بينحفظ كملف وبيفتح بمشغّل النظام.' : 'بيشتغل مع السيرفرات اللي بتدعم /audio/speech (OpenAI وأمثالو).'}
+                  {' '}بعد الحفظ بيطلع لحالو تحت زر "{form.kind === 'image' ? 'توليد صورة' : form.kind === 'video' ? 'توليد فيديو' : 'توليد صوت'}" بالشات.
                 </p>
               </>
             )}

@@ -15,6 +15,7 @@ import { readJson, writeJson, newId } from '../core/json-store'
 import { listTodo, onTodoChange, splitLines, todoOp } from '../core/todo-store'
 import { listProjects, activeProject, setActiveProject } from '../core/workspace'
 import { listAgents } from '../core/agents'
+import { generateMedia, phoneModels, phonePreview, phoneOpenOnPc } from '../main/media-gen'
 import { listDirShallow } from '../core/project-files'
 import { learnView } from '../core/learning'
 import { phoneGateInfo } from '../core/gate'
@@ -401,6 +402,29 @@ async function handle(dev: Device, m: Json): Promise<void> {
       case 'agents.get':
         send(dev.id, { k: 'agents', list: listAgents().map((a) => ({ id: a.id, name: a.name, runOn: a.runOn, hint: a.prompt.replace(/\s+/g, ' ').slice(0, 140) })), gate: await phoneGateInfo().catch(() => null) })
         return
+      case 'media.models': {
+        const kd = str(m.kind, 10)
+        if (kd !== 'image' && kd !== 'video' && kd !== 'audio') return
+        send(dev.id, { k: 'media.models', kind: kd, list: phoneModels(kd) })
+        return
+      }
+      case 'media.gen': {
+        const id = str(m.id, 60), kd = str(m.kind, 10), model = str(m.model, 80) ?? 'auto'
+        const prompt = typeof m.prompt === 'string' ? m.prompt.trim().slice(0, 4000) : ''
+        if (!id || (kd !== 'image' && kd !== 'video' && kd !== 'audio')) return
+        if (!prompt) return void send(dev.id, { k: 'media.done', id, ok: false, note: 'اكتب وصف أول.' })
+        // generateMedia itself refuses confidential projects and parallel runs
+        const r = await generateMedia(kd, model, prompt)
+        const pv = r.ok && r.path ? await phonePreview(r.path) : { name: '', size: 0, preview: '' }
+        const out: Json = { k: 'media.done', id, kind: kd, ok: r.ok, note: r.note, model: r.model ?? '', name: pv.name, size: pv.size, preview: pv.preview, q: prompt.slice(0, 200) }
+        if (!send(dev.id, out)) stashMissed(dev.id, out)
+        return
+      }
+      case 'media.open': {
+        const nm = str(m.name, 200)
+        if (nm) await phoneOpenOnPc(nm)
+        return
+      }
       case 'sched.get':
         send(dev.id, schedMsg())
         return

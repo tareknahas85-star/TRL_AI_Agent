@@ -13,7 +13,7 @@ export type CustomModel = {
   baseURL: string // empty => OpenRouter
   tier: Tier
   enabled: boolean
-  kind?: 'chat' | 'image' | 'audio' // missing = chat. image/audio models only appear under the generation buttons.
+  kind?: 'chat' | 'image' | 'audio' | 'video' // missing = chat. image/audio models only appear under the generation buttons.
   desc?: string // what it is best at (shown next to it in the generation list)
   limit?: string // daily limit text (shown next to it)
   last?: boolean // true => tried after the OpenRouter models of its tier

@@ -185,6 +185,7 @@ export function moreHtml(c) {
   const opt = (id, v) => '<option value="' + esc(v.value) + '" ' + (id === v.value ? 'selected' : '') + '>' + esc(v.label) + '</option>'
   let h = head('⚙️', 'المزيد', 'الموديلات والمظهر والاتصال')
   const L = S.learn
+  h += '<button class="btn" data-tab="media" style="width:100%;margin-bottom:12px">🎨 توليد صورة / فيديو / صوت</button>'
   h += '<div class="card"><h3>🧠 مستوى التعلّم' + (L ? ' · ' + L.level + '%' : '') + '</h3>' + (!L ? '<div class="mut">عم يجيب من الكمبيوتر…</div>'
     : '<div class="mut" style="margin-bottom:6px">' + (L.enabled ? (L.paused ? 'التعلّم موقوف (وضع خاص).' : 'شغّال') : 'مطفي') + ' · ' + L.turns + ' محادثة</div>' +
       L.rings.map((r) => '<div style="margin:6px 0"><div style="display:flex;justify-content:space-between"><span>' + esc(r.label) + '</span><b>' + r.pct + '%</b></div><div style="height:6px;border-radius:4px;background:var(--line);overflow:hidden"><div style="height:100%;width:' + r.pct + '%;background:var(--pri)"></div></div><div class="mut">' + esc(r.detail) + '</div></div>').join('') +
@@ -202,5 +203,32 @@ export function moreHtml(c) {
     '<div class="card"><h3>🔐 الأمان</h3><div class="mut">كل شي بين التلفون والكمبيوتر مشفّر من الطرفين. مفتاح هالجهاز محفوظ بمخزن أندرويد الآمن (Keystore).</div></div>' +
     '<button class="btn ghost" id="reconBtn" style="margin-bottom:10px">إعادة الاتصال</button><button class="btn danger" id="unpairBtn">إلغاء ربط هالجهاز</button>' +
     '<div class="mut" style="text-align:center;margin-top:14px">TRL Agent ' + esc(version) + ' · Tarek Nahas · AI</div>'
+  return h
+}
+
+// ---------- generation: image / video / audio (runs on the computer, same models as the desktop buttons) ----------
+const MKIND = { image: ['🖼️', 'صورة'], video: ['🎬', 'فيديو'], audio: ['🔊', 'صوت'] }
+const fmtSize = (b) => (b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB')
+export function mediaHtml(c) {
+  const { S, esc } = c
+  const M = S.media
+  const online = S.conn === 'online'
+  let h = head('🎨', 'توليد', 'صورة · فيديو · صوت — بينعمل عالكمبيوتر', '<button class="chip" data-tab="more">رجوع</button>')
+  h += '<div class="seg">' + Object.entries(MKIND).map(([k, v]) => '<button data-mkind="' + k + '" class="' + (M.kind === k ? 'act' : '') + '">' + v[0] + ' ' + v[1] + '</button>').join('') + '</div>'
+  const list = M.models[M.kind] || []
+  h += '<div class="card"><select class="sel" id="selMedia"><option value="auto">تلقائي (أول موديل متاح)</option>' +
+    list.map((m) => '<option value="' + esc(m.id) + '"' + (M.model === m.id ? ' selected' : '') + (m.ok ? '' : ' disabled') + '>' + esc(m.label) + (m.ok ? '' : ' — ' + (m.why || 'مو متاح')) + '</option>').join('') + '</select>' +
+    '<textarea id="mediaQ" rows="3" placeholder="' + (M.kind === 'audio' ? 'النص يلي بدك تحوّلو لصوت…' : 'وصف يلي بدك تولّدو…') + '" style="margin-top:8px">' + esc(M.draft || '') + '</textarea>' +
+    '<div class="acts"><button class="btn" data-mgen="1"' + (M.busy ? ' disabled' : '') + '>' + (M.busy ? 'عم يولّد…' : '✨ ولّد') + '</button></div>' +
+    (!online ? '<div class="mut" style="margin-top:8px">⚠️ الكمبيوتر مو متصل. وصّل أول.</div>' : '') +
+    (M.kind === 'video' ? '<div class="mut" style="margin-top:8px">الفيديو بيضل عالكمبيوتر، وبتفتحو بمشغّل النظام من زر «افتحو عالكمبيوتر».</div>' : '') + '</div>'
+  h += M.items.length ? M.items.map((it) => {
+    const body = it.state === 'run' ? '<span class="spin"></span> عم يولّد…'
+      : it.state === 'fail' ? '<div class="mut">❌ ' + esc(it.note || 'فشل') + '</div>'
+        : (it.preview ? (it.kind === 'image' ? '<img src="' + it.preview + '" style="width:100%;border-radius:10px">' : '<audio controls src="' + it.preview + '" style="width:100%"></audio>') : '') +
+          '<div class="mut" style="margin-top:6px">' + esc(it.model || '') + (it.name ? ' · ' + esc(it.name) + ' · ' + fmtSize(it.size || 0) : '') + '</div>' +
+          (it.name ? '<div class="acts"><button class="chip" data-mopen="' + esc(it.name) + '">افتحو عالكمبيوتر</button></div>' : '')
+    return '<div class="card"><div class="mut" style="margin-bottom:6px">' + MKIND[it.kind][0] + ' ' + esc(it.q || '') + '</div>' + body + '</div>'
+  }).join('') : empty('لسا ما ولّدت شي من هون.')
   return h
 }

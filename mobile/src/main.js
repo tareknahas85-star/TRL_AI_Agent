@@ -8,7 +8,7 @@ import { TextToSpeech } from '@capacitor-community/text-to-speech'
 import { lib, approvalHash, approvalMsg } from '../../src/remote/protocol'
 import { GuestLink } from '../../src/remote/session'
 import { brandOf, brandBadgeHtml } from '../../src/core/brands'
-import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml, projHtml } from './views.js'
+import { agentsHtml, schedHtml, reportHtml, moreHtml, todoHtml, projHtml, mediaHtml } from './views.js'
 
 const VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '5.10'
 
@@ -57,7 +57,7 @@ const S = {
   agentOut: Object.fromEntries(Object.entries(lsGet('trl.agentout', {})).map(([k, v]) => [k, { ...v, running: false }])),
   mode: lsGet('trl.mode', { kind: 'free' }), project: lsGet('trl.project', null),
   convs: lsGet('trl.convs', []), cur: lsGet('trl.cur', null),
-  projView: '', projFiles: {}, pending: new Map(), atts: [], recording: null, approval: null, sheet: null, keepAlive: lsGet('trl.keepalive', true)
+  media: { kind: 'image', model: 'auto', models: {}, items: [], draft: '', busy: '' }, projView: '', projFiles: {}, pending: new Map(), atts: [], recording: null, approval: null, sheet: null, keepAlive: lsGet('trl.keepalive', true)
 }
 const saveConvs = () => { lsSet('trl.convs', S.convs.slice(0, 40).map((c) => ({ ...c, msgs: c.msgs.slice(-120) }))); lsSet('trl.cur', S.cur) }
 const VC = { get S() { return S }, esc, md, fmtDur, version: VERSION }
@@ -162,6 +162,8 @@ function onHost(m) {
       renderLast(); return
     }
     case 'done': return onDone(m)
+    case 'media.models': S.media.models[m.kind] = m.list || []; if (S.tab === 'media') renderPage(); return
+    case 'media.done': return onMediaDone(m)
     case 'approval': return showApproval(m)
     case 'approval.cancel': if (S.approval && S.approval.id === m.id) { S.approval = null; renderApproval(); toast('اتجاوب عالكمبيوتر') } return
     case 'file.ok': case 'file.err': { const w = fileWait.get(m.fid); if (w) { fileWait.delete(m.fid); m.k === 'file.ok' ? w.res(m.att) : w.rej(new Error(m.error || 'فشل')) } return }
@@ -396,10 +398,36 @@ function openTab(id) {
   if (id === 'agents') { sendHost({ k: 'agents.get' }); if (S.gate && S.conn !== 'online') pcStatus() }
   else if (id === 'sched') sendHost({ k: 'sched.get' })
   else if (id === 'report') sendHost({ k: 'report.get' })
+  else if (id === 'media') sendHost({ k: 'media.models', kind: S.media.kind })
+}
+function mediaGen() {
+  const M = S.media
+  const q = ($('#mediaQ') ? $('#mediaQ').value : M.draft || '').trim()
+  if (!q) return toast('اكتب وصف أول')
+  if (M.busy) return toast('في توليد شغّال هلأ')
+  const id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+  if (!sendHost({ k: 'media.gen', id, kind: M.kind, model: M.model || 'auto', prompt: q })) return toast('وصّل بالكمبيوتر أول')
+  M.busy = id; M.draft = ''
+  M.items.unshift({ id, kind: M.kind, q: q.slice(0, 200), state: 'run' })
+  M.items = M.items.slice(0, 8)
+  renderPage()
+}
+function onMediaDone(m) {
+  const M = S.media
+  const it = M.items.find((x) => x.id === m.id)
+  if (it) Object.assign(it, { state: m.ok ? 'done' : 'fail', note: m.note, model: m.model, name: m.name, size: m.size, preview: m.preview || '' })
+  else M.items.unshift({ id: m.id, kind: m.kind || 'image', q: m.q || '', state: m.ok ? 'done' : 'fail', note: m.note, model: m.model, name: m.name, size: m.size, preview: m.preview || '' })
+  if (M.busy === m.id || !it) M.busy = ''
+  if (S.tab === 'media') renderPage()
+  notify(m.ok ? 'خلص التوليد' : 'التوليد ما نجح', m.ok ? (m.model || '') : (m.note || ''))
+  try { navigator.vibrate && navigator.vibrate(60) } catch { /* */ }
 }
 function viewClick(t) {
   const d = t.dataset
   if (d.tab) { openTab(d.tab); return true }
+  if (d.mkind) { S.media.kind = d.mkind; S.media.model = 'auto'; sendHost({ k: 'media.models', kind: d.mkind }); renderPage(); return true }
+  if (d.mgen) { mediaGen(); return true }
+  if (d.mopen) { if (!sendHost({ k: 'media.open', name: d.mopen })) toast('وصّل بالكمبيوتر أول'); else toast('انفتح عالكمبيوتر'); return true }
   if (d.tdadd) {
     const el = $('#todoIn'); const text = el ? el.value.trim() : ''
     if (!text) return true
@@ -761,6 +789,7 @@ const lastPage = { tab: '', html: '' }
 function renderPage() {
   const p = $('#page'); if (!p) return
   const tdi = $('#todoIn'); if (tdi) S.todoDraft = tdi.value
+  const mq0 = $('#mediaQ'); if (mq0) S.media.draft = mq0.value
   const ta0 = $('#agTask'); if (ta0 && S.agentOpen) { const st0 = S.agentOut[S.agentOpen] || (S.agentOut[S.agentOpen] = {}); st0.task = ta0.value }
   const top = document.querySelector('.top'); if (top) top.style.display = S.tab === 'chat' ? 'flex' : 'none'
   if (S.tab === 'chat') {
@@ -771,7 +800,7 @@ function renderPage() {
     renderMsgs(); renderAtts(); renderStatus(); renderSend(); renderRec()
     lastPage.tab = 'chat'; lastPage.html = ''
   } else {
-    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, proj: projHtml, more: moreHtml }[S.tab] || moreHtml
+    const fn = { agents: agentsHtml, sched: schedHtml, report: reportHtml, todo: todoHtml, proj: projHtml, more: moreHtml, media: mediaHtml }[S.tab] || moreHtml
     const html = fn(VC)
     // same tab + same content: leave the DOM alone (no flicker); the fade-in only plays when switching tabs
     if (lastPage.tab === S.tab && lastPage.html === html && p.firstChild) return
@@ -890,6 +919,7 @@ document.addEventListener('change', (e) => {
   if (t.id === 'fileIn' || t.id === 'camIn') { for (const f of t.files) addFile(f); t.value = ''; return }
   if (t.dataset.sw) { sendHost({ k: 'sched.toggle', id: t.dataset.sw, enabled: t.checked }); return }
   if (t.id === 'kaChk') { S.keepAlive = t.checked; lsSet('trl.keepalive', S.keepAlive); applyKeepAlive(); return }
+  if (t.id === 'selMedia') { S.media.model = t.value; return }
   if (t.id === 'selModel') { S.mode = { kind: 'model', id: t.value }; lsSet('trl.mode', S.mode); renderHeader(); return }
   if (t.id === 'selAuthor' || t.id === 'selCritic') { S.mode = { kind: 'council', author: ($('#selAuthor') || {}).value || '', critic: ($('#selCritic') || {}).value || '' }; lsSet('trl.mode', S.mode); return }
   if (t.id === 'selProj') { S.project = t.value || null; lsSet('trl.project', S.project); renderHeader(); return }
