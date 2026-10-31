@@ -1,10 +1,10 @@
 # TRL_AI_Agent (وكيل TRL الذكي)
 
-**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-windows-setup.exe)**
+**[⬇️ Download for Windows](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.18.2-windows-setup.exe)** &nbsp;|&nbsp; **[⬇️ حمّل نسخة ويندوز](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.18.2-windows-setup.exe)**
 
 **[⬇️ Download the Android app (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.20.0-android.apk)** &nbsp;|&nbsp; **[⬇️ حمّل تطبيق الأندرويد (.apk)](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.20.0-android.apk)**
 
-**Linux / Ubuntu:** [⬇️ .deb](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-linux.deb) &nbsp;|&nbsp; [⬇️ AppImage](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/latest/download/TRL_AI_Agent-5.17.7-linux.AppImage) &nbsp;|&nbsp; **لينكس / أوبونتو:** نزّل الـ `.deb` أو الـ AppImage من الروابط.
+**Linux / Ubuntu:** [⬇️ .deb](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/download/v5.17.7/TRL_AI_Agent-5.17.7-linux.deb) &nbsp;|&nbsp; [⬇️ AppImage](https://github.com/tareknahas85-star/TRL_AI_Agent/releases/download/v5.17.7/TRL_AI_Agent-5.17.7-linux.AppImage) &nbsp;|&nbsp; **لينكس / أوبونتو:** نزّل الـ `.deb` أو الـ AppImage من الروابط.
 
 ---
 
