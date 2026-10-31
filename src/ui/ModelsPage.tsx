@@ -7,6 +7,7 @@ import type { CustomModelInfo, Tier } from '../preload/index.d'
 import { KeyField, type KeyName } from './KeyField'
 import { CatalogPanel } from './CatalogPanel'
 import { HfPanel } from './HfPanel'
+import { estimateStrength } from '../core/model-rank'
 import { CapIcons, guessCaps, type Caps } from './Caps'
 import { guessKind } from '../core/media-custom'
 import { nameColor } from './brandColor'
@@ -54,6 +55,10 @@ function ApinexPanel() {
       setBusy(false)
     }
   }
+  useEffect(() => {
+    void refresh()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
   return (
     <div className={`mt-3 ${cardCls}`}>
       <h3 className="mb-2 text-sm font-semibold">أيّ مزوّد يبدأ في المحادثة العادية؟</h3>
@@ -72,9 +77,9 @@ function ApinexPanel() {
         {ids.length > 0 && <span className="text-xs text-muted">{ids.length} موديل مجاني</span>}
       </div>
       {ids.length > 0 && (
-        <ul className="mt-2 list-disc pr-5 text-xs text-muted">
-          {ids.map((id) => (
-            <li key={id}>{id.replace('apinex:', '')}</li>
+        <ul className="mt-2 max-h-72 list-disc overflow-auto pr-5 text-xs text-muted" dir="ltr">
+          {ids.slice().sort((a, b) => estimateStrength(b) - estimateStrength(a)).map((id) => (
+            <li key={id}>{id.replace('apinex:', '')} <span className="text-[10px]">· {Math.round(estimateStrength(id))}</span></li>
           ))}
         </ul>
       )}

@@ -52,7 +52,9 @@ export function ModelPicker({ mode, picker, onModeChange }: { mode: ChatMode; pi
 
   const needle = q.trim().toLowerCase()
   const match = (s: string): boolean => !needle || s.toLowerCase().includes(needle)
-  const autos = (mode.kind === 'council' ? AUTO : []).filter((a) => match(a.label) && (a.id !== 'council-manual' || picker.length > 0))
+  const AUTO_FREE = { id: 'free', label: '⚡ تلقائي — مجاني أولاً', hint: 'بيجرّب المجاني وبينتقل للمدفوع إذا فشل' }
+  const AUTO_BUILD = { id: 'auto', label: '⚡ تلقائي — الأقوى أولاً', hint: 'بيستعمل المنفّذ والمراجع المضبوطين' }
+  const autos = (mode.kind === 'council' ? AUTO : mode.kind === 'auto' ? [AUTO_BUILD] : [AUTO_FREE]).filter((a) => match(a.label) && (a.id !== 'council-manual' || picker.length > 0))
   const groups = useMemo(
     () => TIERS.map((t) => ({ ...t, items: picker.filter((p) => tierOf(p.tier) === t.id && (match(p.label) || match(p.value))) })).filter((g) => g.items.length),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -71,7 +73,7 @@ export function ModelPicker({ mode, picker, onModeChange }: { mode: ChatMode; pi
 
   const cur = currentId(mode)
   const curEntry = picker.find((p) => p.value === cur)
-  const curAuto = AUTO.find((a) => a.id === cur)
+  const curAuto = [...AUTO, { id: 'free', label: '⚡ تلقائي — مجاني أولاً', hint: '' }, { id: 'auto', label: '⚡ تلقائي — الأقوى أولاً', hint: '' }].find((a) => a.id === cur)
   const curTier = curEntry ? TIERS.find((t) => t.id === tierOf(curEntry.tier)) : undefined
   const paid = mode.kind !== 'free'
 

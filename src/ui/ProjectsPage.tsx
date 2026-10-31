@@ -1,6 +1,6 @@
 ﻿import { Fragment, useCallback, useEffect, useState } from 'react'
 import { askConfirm } from './components/confirm'
-import { CheckCircle2, FolderOpen, Lock, Plus, Trash2 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronLeft, FolderOpen, Lock, Plus, Trash2 } from 'lucide-react'
 import type { ConversationSummary, ProjectInfo } from '../preload/index.d'
 import { Chip, Empty, PageShell, cardCls, ghostBtn, inputCls, primaryBtn } from './components/ui'
 
@@ -11,6 +11,7 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
   const [view, setView] = useState<string | null>(null)
   const [files, setFiles] = useState<{ n: string; d: boolean; s?: number }[] | null>(null)
   const [q, setQ] = useState('')
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
   useEffect(() => {
     setFiles(null)
     setQ('')
@@ -129,6 +130,7 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
         <div className="space-y-2">
           {data.projects.map((p) => {
             const active = openIds.includes(p.id)
+            const isOpen = expanded.has(p.id)
             const mine = convs.filter((c) => c.projectId === p.id).sort((x, y) => (y.updatedAt ?? 0) - (x.updatedAt ?? 0))
             return (
               <Fragment key={p.id}><div className={cardCls + ` flex items-center justify-between gap-3 ${active ? 'ring-2 ring-primary' : ''}`}>
@@ -175,16 +177,27 @@ export function ProjectsPage({ onChanged, onOpen, openIds, convs, onOpenConv, on
                 </div>
               </div>
               <div className="mb-2 mr-4 space-y-1 border-r-2 border-outline pr-3">
-                {mine.slice(0, 10).map((c) => (
+                <div className="flex items-center gap-2">
+                  <button
+                    className={ghostBtn + ' flex items-center gap-1'}
+                    aria-expanded={isOpen}
+                    title={isOpen ? 'طوي المحادثات' : 'اعرض المحادثات القديمة'}
+                    onClick={() => setExpanded((s) => { const n = new Set(s); if (n.has(p.id)) n.delete(p.id); else n.add(p.id); return n })}
+                  >
+                    {isOpen ? <ChevronDown size={14} /> : <ChevronLeft size={14} />} المحادثات ({mine.length})
+                  </button>
+                  <button className={ghostBtn} onClick={() => onNewInProject(p)}>
+                    <Plus size={14} /> محادثة جديدة
+                  </button>
+                </div>
+                {isOpen && mine.slice(0, 30).map((c) => (
                   <div key={c.id} className="flex items-center justify-between gap-2 text-sm">
                     <span className="min-w-0 truncate">{c.title || 'محادثة بدون عنوان'}</span>
                     <button className={ghostBtn} onClick={() => onOpenConv(c.id)}>كمّل</button>
                   </div>
                 ))}
-                {mine.length === 0 && <p className="text-xs text-muted">ما في محادثات سابقة بهالمشروع</p>}
-                <button className={ghostBtn} onClick={() => onNewInProject(p)}>
-                  <Plus size={14} /> محادثة جديدة
-                </button>
+                {isOpen && mine.length === 0 && <p className="text-xs text-muted">ما في محادثات سابقة بهالمشروع</p>}
+                {isOpen && mine.length > 30 && <p className="text-xs text-muted">… و{mine.length - 30} محادثة أقدم (من صفحة المشروع)</p>}
               </div>            </Fragment>
             )
           })}

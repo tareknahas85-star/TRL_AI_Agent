@@ -70,7 +70,7 @@ export async function executeWithSkill(userInput: string, analysis: Analysis, ex
   }
   // 5.17.3: الطلب الصغير (تحية/سؤال قصير/تاريخ/طقس) بدون أدوات: المحلي أولاً، وبعدو أول مجاني شغّال.
   // ما بينطبق على مشروع سري ولا على موديل مختار يدوياً ولا على طلبات الملفات/التنفيذ.
-  if (!project?.confidential && !picked1 && !buildReq && (!mode || mode.kind === 'free' || mode.kind === 'auto') && isTrivialChat(userInput)) {
+  if (!project && !picked1 && !buildReq && (!mode || mode.kind === 'free' || mode.kind === 'auto') && isTrivialChat(userInput)) {
     const live = await liveContext(userInput)
     // بدون أدوات: نشيل تعليمات "استدعِ أداة" (FRESH/LOCATION) لأنها بتضلّل الموديل، والمعلومة الحيّة جاية من البرنامج.
     const sys = systemPrompt.replace(FRESH_HINT, '').replace(LOCATION_HINT, '') + live

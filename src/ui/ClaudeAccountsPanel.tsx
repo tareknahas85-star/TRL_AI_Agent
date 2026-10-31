@@ -57,12 +57,12 @@ export function ClaudeAccountsPanel() {
       </label>
       <div className="mt-4 rounded border border-outline p-3">
         <h4 className="mb-1 text-xs font-semibold">تسجيل الدخول للحسابات (محرّكات التنفيذ)</h4>
-        <p className="mb-2 text-xs text-muted">الترتيب: غووغل ثم Claude ثم ChatGPT. بيفتح نافذة تسجيل بالمتصفح وبتسجّل دخول بإيدك، والبرنامج ما بيشوف ولا بيخزّن أي رمز.</p>
-        {([['gemini', 'غووغل (Antigravity)', ac?.gemini], ['claude', 'Claude', ac?.claude], ['codex', 'ChatGPT (Codex)', ac?.codex]] as const).map(([k, name, st]) => (
+        <p className="mb-2 text-xs text-muted">تسجيل دخول فقط (Claude وChatGPT). مفاتيح API لغووغل وClaude وGPT بتحطها بقسم كل مزوّد. بيفتح نافذة تسجيل بالمتصفح وبتسجّل دخول بإيدك، والبرنامج ما بيشوف ولا بيخزّن أي رمز.</p>
+        {([['claude', 'Claude', ac?.claude], ['codex', 'ChatGPT (Codex)', ac?.codex]] as const).map(([k, name, st]) => (
           <div key={k} className="mb-1 flex items-center gap-3 text-xs">
             <span className="w-32">{name}</span>
-            <span className="w-28 text-muted">{!st?.installed ? 'الأداة مو مثبّتة' : 'loggedIn' in st ? (k === 'gemini' ? (st.loggedIn ? 'مفتاح جاهز' : 'ما في مفتاح') : st.loggedIn ? 'مسجّل' : 'مو مسجّل') : 'مثبّتة'}</span>
-            <button type="button" className={ghostBtn + ' border border-outline'} disabled={!st?.installed} onClick={() => void window.api.engineAccounts.login(k).then(() => { let n = 0; const t = setInterval(() => { void loadAc(); if (++n > 40) clearInterval(t) }, 3000) })}>{k === 'gemini' ? 'احصل على مفتاح Gemini' : 'سجّل دخول / بدّل الحساب'}</button>
+            <span className="w-28 text-muted">{!st?.installed ? 'الأداة مو مثبّتة' : 'loggedIn' in st ? (st.loggedIn ? 'مسجّل' : 'مو مسجّل') : 'مثبّتة'}</span>
+            <button type="button" className={ghostBtn + ' border border-outline'} disabled={!st?.installed} onClick={() => void window.api.engineAccounts.login(k).then(() => { let n = 0; const t = setInterval(() => { void loadAc(); if (++n > 40) clearInterval(t) }, 3000) })}>سجّل دخول / بدّل الحساب</button>
           </div>
         ))}
       </div>

@@ -8,6 +8,8 @@ export function workDir(projectDir: string): string {
   const b = path.join(projectDir, 'build')
   return fs.existsSync(b) && fs.statSync(b).isDirectory() ? b : projectDir
 }
+// 5.17.14: ملف 0 بايت جديد باسم قصير جداً (x.pass, a.txt): نفايات أوامر الشيل، بيتحجر كمان.
+const TINY_STEM = /^[^.]{1,2}\.[A-Za-z0-9]{1,8}$/
 const ALLOWED_EMPTY = new Set(['.gitkeep', '.keep', '__init__.py', '.nojekyll', '.gitignore', '.npmrc'])
 const FRAGMENT = /[()[\]{},;"'<>=|]|^[^.]+$/
 
@@ -30,7 +32,7 @@ export function quarantineEmptyFragments(projectDir: string, since: number): str
       if (!e.isFile() || ALLOWED_EMPTY.has(e.name)) continue
       try {
         const st = fs.statSync(p)
-        if (st.size === 0 && st.mtimeMs >= since - 1000 && FRAGMENT.test(e.name)) {
+        if (st.size === 0 && st.mtimeMs >= since - 1000 && (FRAGMENT.test(e.name) || TINY_STEM.test(e.name))) {
           const qd = path.join(workDir(projectDir), '_zero-byte-quarantine')
           fs.mkdirSync(qd, { recursive: true })
           let dest = path.join(qd, e.name.replace(/[<>:"/\\|?*\x00-\x1f]/g, '_') || 'empty')

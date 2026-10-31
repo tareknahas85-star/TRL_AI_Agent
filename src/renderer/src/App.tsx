@@ -1,8 +1,8 @@
-﻿import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import { askConfirm } from '../../ui/components/confirm'
 import {
-  Bot, Clock, Cpu, ListChecks, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon,
+  Bot, Clock, Cpu, ListChecks, FolderKanban, FolderOpen, MessageSquare, Moon, Pin, PinOff, Plug, Plus, Settings as SettingsIcon, Layers,
   Sun, Trash2, Download, Search, X, Bell, BellOff, Pencil, FolderPlus, Globe
 } from 'lucide-react'
 import appIcon from './assets/icon.png'
@@ -12,6 +12,7 @@ import { SideBrowserPanel } from '../../ui/SideBrowserPanel'
 import { DONE_KEY, Onboarding, readName } from '../../ui/Onboarding'
 import { MCPPage } from '../../ui/MCPPage'
 import { ModelsPage } from '../../ui/ModelsPage'
+import { PlatformsPage } from '../../ui/PlatformsPage'
 import { ProjectsPage } from '../../ui/ProjectsPage'
 import { SchedulePage } from '../../ui/SchedulePage'
 import { AgentsPage } from '../../ui/AgentsPage'
@@ -126,7 +127,7 @@ function AboutBadge({ onSetup }: { onSetup: () => void }): ReactElement {
   )
 }
 
-type Nav = 'chat' | 'projects' | 'tasks' | 'agents' | 'todo' | 'models' | 'extensions' | 'settings'
+type Nav = 'chat' | 'projects' | 'tasks' | 'agents' | 'todo' | 'models' | 'platforms' | 'extensions' | 'settings'
 
 const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'chat', label: 'المحادثات', icon: MessageSquare },
@@ -135,6 +136,7 @@ const NAV_ITEMS: { id: Nav; label: string; icon: typeof Bot }[] = [
   { id: 'agents', label: 'وكلاء', icon: Bot },
   { id: 'todo', label: 'ملاحظات', icon: ListChecks },
   { id: 'models', label: 'الموديلات', icon: Cpu },
+  { id: 'platforms', label: 'المنصات', icon: Layers },
   { id: 'extensions', label: 'الإضافات', icon: Plug },
   { id: 'settings', label: 'الإعدادات', icon: SettingsIcon }
 ]
@@ -601,7 +603,8 @@ function Shell(): ReactElement {
               >
                 <button onClick={() => focusTab(t.id)} className="flex min-w-0 items-center gap-1.5">
                   {t.projectId ? <FolderOpen size={13} className="shrink-0 text-primary" /> : <MessageSquare size={13} className="shrink-0" />}
-                  <span className="truncate">{t.title}</span>
+                  {t.projectId && (() => { const pn = projects.find((p) => p.id === t.projectId)?.name; return pn ? <span className="max-w-[90px] shrink-0 truncate rounded bg-primary/15 px-1 text-[10px] font-semibold text-primary" title={'المشروع: ' + pn}>{pn}</span> : null })()}
+                  <span className="truncate" title={t.title}>{t.title}</span>
                   {busy[t.id] && <span className="h-2 w-2 shrink-0 animate-pulse rounded-full bg-primary" title="عم يشتغل" />}
                   {done[t.id] && !busy[t.id] && <span className="h-2 w-2 shrink-0 rounded-full bg-success" title="خلصت المهمة" />}
                 </button>
@@ -651,6 +654,7 @@ function Shell(): ReactElement {
         {activeNav === 'agents' && <AgentsPage />}
         {activeNav === 'todo' && <TodoPage />}
         {activeNav === 'models' && <ModelsPage />}
+        {activeNav === 'platforms' && <PlatformsPage />}
         {activeNav === 'extensions' && (
             <Hub
               title="الإضافات"

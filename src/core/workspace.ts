@@ -1,3 +1,4 @@
+import { findProjectByText } from './build-guards'
 import fs from 'fs'
 import path from 'path'
 import { readJson, writeJson, newId } from './json-store'
@@ -86,6 +87,15 @@ export function setProjectConfidential(id: string, on: boolean): boolean {
 export function activeProject(): Project | null {
   const d = readProjects()
   return d.projects.find((p) => p.id === d.activeId) ?? null
+}
+
+// 5.17.9: مشروع التشغيل لوضع البناء: إذا ما في مشروع فعّال، بياخد المشروع اللي اسمه مذكور برسالة المستخدم.
+let runProject: Project | null = null
+export function setRunProject(userText: string): void {
+  runProject = activeProject() ? null : findProjectByText(userText, readProjects().projects)
+}
+export function buildProject(): Project | null {
+  return activeProject() ?? runProject
 }
 
 // ---------- Conversations ----------

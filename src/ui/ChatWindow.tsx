@@ -38,6 +38,22 @@ const CHAT_MODES: { id: 'chat' | 'project' | 'council'; label: string; hint: str
 const activeChatMode = (mode: ChatMode): string => (mode.kind === 'free' ? 'chat' : mode.kind === 'auto' ? 'project' : mode.kind === 'council' ? 'council' : '')
 // القائمة تتبع الوضع: المحادثة العادية تعرض المجاني والمدفوع (المدفوع بيصير اختيار موديل محدد وبيصرف).
 // المجلس بدون كاتب/ناقد: مدفوع بس.
+// قائمة المنفّذ/المراجع: موديلات مخصصة بمفتاح + حسابات مسجّلة (Claude وChatGPT). المجاني والمحلي مستثنيين.
+const roleOk = (p: { value: string; tier: string; keyed?: boolean }): boolean =>
+  p.keyed === true || p.tier === 'SUBSCRIPTION'
+
+// خيارات المنفّذ/المراجع: كل خيار مكتوب جنبه «مفتاح» (API) أو «حساب مسجل» (تسجيل دخول). Gemini (Antigravity) بيشتغل بمفتاح دايماً.
+const roleOptions = (list: { value: string; label: string; tier?: string }[]): ReactElement => {
+  const isAcct = (p: { label: string; tier?: string }): boolean => p.tier === 'SUBSCRIPTION' && !/gemini|غووغل/i.test(p.label)
+  const acct = list.filter(isAcct)
+  const keyed = list.filter((p) => !isAcct(p))
+  return (
+    <>
+      {keyed.length > 0 && <optgroup label="🔑 بمفتاح API">{keyed.map((p) => <option key={p.value} value={p.value}>{p.label + ' — مفتاح' + (/(?:^|[-_/.:\s])(?:flash|lite|mini|nano|free)(?:$|[-_/.:\s])/i.test(p.label) ? ' ⚠️ ضعيف' : '')}</option>)}</optgroup>}
+      {acct.length > 0 && <optgroup label="👤 حساب مسجل">{acct.map((p) => <option key={p.value} value={p.value}>{p.label + ' — حساب مسجل'}</option>)}</optgroup>}
+    </>
+  )
+}
 function pickerForMode<T extends { tier: string }>(mode: ChatMode, picker: T[]): T[] {
   if (mode.kind === 'council' && !mode.author && !mode.critic) return picker.filter((p) => p.tier !== 'TIER_1_FREE' && p.tier !== 'LOCAL' && p.tier !== 'SUBSCRIPTION')
   return picker
@@ -436,6 +452,20 @@ export function ChatWindow({
 }): ReactElement {
   // F17: the unsent draft is saved per tab as you type, so a crash or quit never loses it.
   const draftKey = 'air.draft.v1.' + tabId
+  // 5.18.0: «شغّل المايسترو» لكل تبويب ولكل وضع. الافتراضي: بناء مشروع = مطفي (المعقّد، الأقوى أولاً)، المحادثة العادية والمجلس = شغّال.
+  const masterKey = (k: string): string => 'air.master.v1.' + tabId + '.' + k
+  const [masterTick, setMasterTick] = useState(0)
+  const masterFor = (k: string): boolean => {
+    try {
+      const v = localStorage.getItem(masterKey(k))
+      if (v === '1') return true
+      if (v === '0') return false
+    } catch {
+      /* ignore */
+    }
+    return k !== 'auto'
+  }
+  void masterTick
   const [input, setInput] = useState(() => {
     try {
       return localStorage.getItem(draftKey) ?? ''
@@ -556,6 +586,7 @@ export function ChatWindow({
     onBusy(loading)
   }, [loading]) // eslint-disable-line react-hooks/exhaustive-deps
   const [picker, setPicker] = useState<{ value: string; label: string; tier: string; keyed?: boolean }[]>([])
+  const roleList = picker.filter(roleOk)
   const [needsChoice, setNeedsChoice] = useState(false)
   const [policyRefused, setPolicyRefused] = useState(false)
   const [skillCard, setSkillCard] = useState<{ tools: string[]; request: string; answer: string; name: string; msg: string } | null>(null)
@@ -635,7 +666,7 @@ export function ChatWindow({
     setLoading(true)
     let next: ChatMessage[] = base
     try {
-      const opts = { tabId, projectId: project?.id ?? null, mode: retryMode ?? mode, ...(allowWeaker ? { allowWeaker: true } : {}) }
+      const opts = { tabId, projectId: project?.id ?? null, mode: retryMode ?? mode, master: masterFor((retryMode ?? mode).kind), ...(allowWeaker ? { allowWeaker: true } : {}) }
       const r = retry
         ? await window.api.retryChat(opts)
         : await window.api.chat(lastUserRef.current, base.slice(0, -1).map((m) => ({ role: m.role, content: m.content })), opts)
@@ -926,17 +957,42 @@ export function ChatWindow({
           </div>
           <span>الموديل:</span>
           <ModelPicker mode={mode} picker={pickerForMode(mode, picker)} onModeChange={onModeChange} />
+          {(() => {
+            const isAutoModel = mode.kind === 'free' || mode.kind === 'auto' || (mode.kind === 'council' && !mode.author && !mode.critic)
+            const on = isAutoModel && masterFor(mode.kind)
+            return (
+              <label
+                className={`flex items-center gap-1 rounded-full border border-outline px-2 py-0.5 ${isAutoModel ? 'cursor-pointer text-fg' : 'cursor-not-allowed opacity-50'}`}
+                title={isAutoModel ? (mode.kind === 'auto' ? 'مطفي = دايماً قائمة المعقّد (الأقوى أولاً). شغّال = المايسترو بيحلل الطلب وبيختار.' : 'المايسترو بيحلل الطلب وبيختار الموديل الأنسب.') : 'المايسترو متاح بس مع الاختيار «تلقائي»'}
+              >
+                <input
+                  type="checkbox"
+                  disabled={!isAutoModel}
+                  checked={on}
+                  onChange={(e) => {
+                    try {
+                      localStorage.setItem(masterKey(mode.kind), e.target.checked ? '1' : '0')
+                    } catch {
+                      /* ignore */
+                    }
+                    setMasterTick((n) => n + 1)
+                  }}
+                />
+                شغّل المايسترو
+              </label>
+            )
+          })()}
           {mode.kind === 'auto' && (
             <>
               <span>المنفّذ:</span>
               <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.executor} title="المنفّذ: موديل من مزوّد عنده مفتاح، أو تلقائي" onChange={(e) => { setRolesUi({ ...roles, executor: e.target.value }); window.api.roles.set({ executor: e.target.value }).catch(() => undefined) }}>
                 <option value="auto">تلقائي</option>
-                {picker.filter((p) => p.keyed).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                {roleOptions(roleList)}
               </select>
               <span>المراجع:</span>
               <select className="rounded-full border border-outline bg-surface px-2 py-0.5" value={roles.reviewer} title="المراجع: لازم يكون من عيلة مختلفة عن المنفّذ" onChange={(e) => { setRolesUi({ ...roles, reviewer: e.target.value }); window.api.roles.set({ reviewer: e.target.value }).catch(() => undefined) }}>
                 <option value="auto">تلقائي</option>
-                {picker.filter((p) => p.keyed).map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+                {roleOptions(roleList)}
               </select>
             </>
           )}

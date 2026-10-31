@@ -47,6 +47,7 @@ import {
   toggleMCPServer
 } from '../mcp/client'
 import { AVAILABLE_TOOLS } from '../tools/file-tools'
+import { devToolsInfo } from '../computer/devtools'
 import { readState, toggleIn } from '../core/state'
 import {
   addCustomModel,
@@ -144,18 +145,19 @@ export function registerManagementHandlers(): void {
     const disabled = readState().disabledTools
     return [
       ...AVAILABLE_TOOLS.map((t) => ({ ...t, custom: false, enabled: !disabled.includes(t.name) })),
+      ...devToolsInfo().map((t) => ({ ...t, custom: false, enabled: !disabled.includes(t.name) })),
       ...listCustomTools().map((t) => ({ ...t, custom: true, enabled: !disabled.includes(t.name) }))
     ]
   })
   ipcMain.handle('tools:toggle', (_e, name: unknown) =>
     typeof name === 'string' &&
-    (AVAILABLE_TOOLS.some((t) => t.name === name) || listCustomTools().some((t) => t.name === name))
+    (AVAILABLE_TOOLS.some((t) => t.name === name) || devToolsInfo().some((t) => t.name === name) || listCustomTools().some((t) => t.name === name))
       ? toggleIn('disabledTools', name)
       : null
   )
   ipcMain.handle('tools:add', (_e, tool: unknown) => {
     try {
-      return { ok: true, tool: addCustomTool(tool as never, AVAILABLE_TOOLS.map((t) => t.name)) }
+      return { ok: true, tool: addCustomTool(tool as never, [...AVAILABLE_TOOLS.map((t) => t.name), ...devToolsInfo().map((t) => t.name)]) }
     } catch (e) {
       return { ok: false, error: msg(e) }
     }

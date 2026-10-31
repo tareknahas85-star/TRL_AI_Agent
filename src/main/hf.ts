@@ -30,6 +30,39 @@ export async function hfVisionModels(): Promise<{ ok: boolean; error?: string; t
   }
 }
 
+// 5.18.0: كل موديلات HF المجانية (مو بس يلي بتقبل صور) مع الأداة/الصورة. «مجاني» = مزوّد واحد على الأقل سعره صفر للإدخال والإخراج.
+export type HfFree = { id: string; image: boolean; tools: boolean; providers: string[] }
+let hfFreeCache: { at: number; ok: boolean; pricingKnown: boolean; total: number; models: HfFree[] } | null = null
+export const hfFreeCached = (): HfFree[] => hfFreeCache?.models ?? []
+
+export async function hfFreeModels(force = false): Promise<{ ok: boolean; error?: string; pricingKnown: boolean; total: number; models: HfFree[] }> {
+  if (!force && hfFreeCache && Date.now() - hfFreeCache.at < 6 * 3600_000) return { ...hfFreeCache, ok: true }
+  const key = getApiKey('HUGGINGFACE_API_KEY')
+  if (!key) return { ok: false, error: 'ما في مفتاح Hugging Face', pricingKnown: false, total: 0, models: [] }
+  try {
+    const r = await fetch(`${hostOf('huggingface')}/models`, { headers: { authorization: 'Bearer ' + key }, signal: AbortSignal.timeout(20000) })
+    if (!r.ok) return { ok: false, error: r.status === 401 ? 'المفتاح مرفوض (401)' : 'خطأ ' + r.status, pricingKnown: false, total: 0, models: [] }
+    type P = { provider: string; supports_tools?: boolean; pricing?: { input?: number | string; output?: number | string } }
+    const j = (await r.json()) as { data?: { id: string; architecture?: { input_modalities?: string[] }; providers?: P[] }[] }
+    const all = j.data ?? []
+    const priced = all.some((m) => (m.providers ?? []).some((p) => p.pricing && (p.pricing.input != null || p.pricing.output != null)))
+    const zero = (p: P): boolean => !!p.pricing && Number(p.pricing.input ?? 0) === 0 && Number(p.pricing.output ?? 0) === 0 && (p.pricing.input != null || p.pricing.output != null)
+    const models: HfFree[] = all
+      .filter((m) => /^[^/]+\/[^\s]+$/.test(m.id) && !/embed|rerank|whisper|tts|flux|diffusion|guard|moderation/i.test(m.id))
+      .filter((m) => (priced ? (m.providers ?? []).some(zero) : true))
+      .map((m) => ({
+        id: m.id,
+        image: !!m.architecture?.input_modalities?.includes('image'),
+        tools: (m.providers ?? []).some((p) => p.supports_tools),
+        providers: (m.providers ?? []).map((p) => p.provider)
+      }))
+    hfFreeCache = { at: Date.now(), ok: true, pricingKnown: priced, total: all.length, models }
+    return { ok: true, pricingKnown: priced, total: all.length, models }
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : String(e), pricingKnown: false, total: 0, models: [] }
+  }
+}
+
 async function hfTestModel(model: string): Promise<{ ok: boolean; message: string }> {
   const key = getApiKey('HUGGINGFACE_API_KEY')
   if (!key) return { ok: false, message: 'ما في مفتاح' }
@@ -57,6 +90,7 @@ async function hfTestModel(model: string): Promise<{ ok: boolean; message: strin
 
 export function registerHfHandlers(): void {
   ipcMain.handle('hf:models', () => hfVisionModels())
+  ipcMain.handle('hf:free', (_e, force: unknown) => hfFreeModels(force === true))
   ipcMain.handle('hf:getModel', () => hfChosen())
   ipcMain.handle('hf:setModel', (_e, id: unknown) => {
     writeJson(FILE, { hfModel: typeof id === 'string' ? id : '' })

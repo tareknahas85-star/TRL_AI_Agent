@@ -9,11 +9,15 @@ import { writeJson } from '../src/core/json-store'
 import { listCustomModels } from '../src/core/custom-models'
 import { workDir, quarantineEmptyFragments } from '../src/core/run-report'
 import { recordEngineRun, getEngineSeries } from '../src/core/usage-log'
+import { splitArgs, KITS } from '../src/computer/devtools'
+import { estimateStrength, canonicalName } from '../src/core/model-rank'
 import { createStreamBatcher } from '../src/core/stream-batch'
 import { isOpenNow } from '../src/core/osm-hours'
+import { looksLooping, ENDS_WITH_STALL, REFUSES_TOOLS, badReplyReason, BUILD_TEST_CLAIM, hasBuildProof, WEAK_MODEL, claimedPorts } from '../src/core/reply-quality'
 import { rotateLogFile, LOG_MAX_BYTES } from '../src/core/log-rotate'
 import { checkSideUrl, clampSideWidth, windowWidthFor } from '../src/core/side-url'
 import { interpretRelease, interpretFailure, describeUpdate, isNewer, shouldPrompt, POSTPONE_MS } from '../src/core/update-state'
+import { isBuildDeleteCommand, reviewVerdict, findProjectByText } from '../src/core/build-guards'
 
 const tmp = (): string => fs.mkdtempSync(path.join(os.tmpdir(), 'trl-t-'))
 
@@ -98,6 +102,18 @@ test('الملفات الصفرية بأسماء شظايا تنحجر بمجل�
   assert.ok(fs.existsSync(path.join(d, 'build', '_zero-byte-quarantine', 'drop.focus()')))
   assert.ok(fs.existsSync(path.join(d, 'build', 'index.html')))
   assert.ok(fs.existsSync(path.join(d, 'build', 'real.txt')))
+})
+test('5.17.14: ملف 0 بايت باسم قصير بجذر المشروع (x.pass) بينحجر، والملف الفاضي بنفس اسم .gitkeep لا', () => {
+  const d = tmp()
+  const since = Date.now() - 5000
+  fs.writeFileSync(path.join(d, 'x.pass'), '')
+  fs.writeFileSync(path.join(d, '.gitkeep'), '')
+  fs.writeFileSync(path.join(d, 'notes.txt'), '')
+  const moved = quarantineEmptyFragments(d, since)
+  assert.equal(moved.length, 1)
+  assert.ok(!fs.existsSync(path.join(d, 'x.pass')))
+  assert.ok(fs.existsSync(path.join(d, '.gitkeep')))
+  assert.ok(fs.existsSync(path.join(d, 'notes.txt')))
 })
 test('سجل الاستخدام لكل محرّك: يسجّل ويجمع، وكل محرّك بخط لحاله', () => {
   process.env.TRL_TEST_DATA = tmp()
@@ -787,4 +803,100 @@ test('agents: tool type accepts text, image and video only', () => {
   assert.equal(cleanTool('image'), 'image')
   assert.equal(cleanTool('x'), 'text')
   assert.equal(cleanTool(undefined), 'text')
+})
+
+test('reply-quality: loop, stall, refusal and build-claim checks', () => {
+  const bad = ['**ما عندي مشكله، بس ما عندي أي أدوات لتحديث الموقع على InfinityFree** أو أي استضافة.', '---', '**ما عندي مشكله، بس ما عندي أي أدوات لتحديث الموقع على InfinityFree** أو غيرها.', '**أبدأ الآن في فتح المتصفح على الرابط المحلي:** 🚀', '**ما عندي مشكله، بس ما عندي أي أدوات لتحديث الموقع** أو أي استضافة أخرى.', '**ما عندي مشكله، بس ما عندي أي أدوات لتحديث الموقع على InfinityFree**', 'هل عندك أي مشكله في الشاشة؟ 😊'].join('\n')
+  const good = ['خلصت التعديل على الملف الأول.', 'شغّلت الاختبارات وكلها نجحت.', 'بنيت المشروع بدون أخطاء.', 'رفعت التغييرات على الفرع الرئيسي.', 'تأكدت من الموقع بالمتصفح وهو شغّال.', 'النتيجة النهائية جاهزة للمراجعة.'].join('\n')
+  assert.equal(looksLooping(bad), true)
+  assert.equal(looksLooping(good), false)
+  assert.equal(ENDS_WITH_STALL.test('هل عندك أي مشكله في الشاشة؟ 😊'), true)
+  assert.equal(ENDS_WITH_STALL.test('هل تريد أن أبدأ الآن؟'), true)
+  assert.equal(ENDS_WITH_STALL.test('خلصت المهمة وكل الاختبارات نجحت.'), false)
+  assert.equal(REFUSES_TOOLS.test('ما عندي أي أدوات لتحديث الموقع'), true)
+  assert.equal(REFUSES_TOOLS.test('ما معي أدوات تنفيذ (No tools available)'), true)
+  assert.equal(REFUSES_TOOLS.test('شغّلت الأمر وطلع الناتج'), false)
+  assert.ok(badReplyReason(bad))
+  assert.ok(badReplyReason('⚠️ تنبيه من البرنامج (مو من الموديل): ما استعمل ولا أداة'))
+  assert.equal(badReplyReason(good), null)
+  assert.equal(BUILD_TEST_CLAIM.test('✅ بناء الكود (`npm run build`)'), true)
+  assert.equal(BUILD_TEST_CLAIM.test('عدّلت الملف وحفظتو'), false)
+  assert.equal(hasBuildProof([]), false)
+  assert.equal(hasBuildProof([{ key: 'pc_run{"command":"npm run build"}', out: 'built in 2s' }]), true)
+  assert.equal(hasBuildProof([{ key: 'pc_run{"command":"npx tsc -b"}', out: "src/a.tsx(1,1): error TS1005: '}' expected" }]), false)
+})
+
+test('reply-quality: weak models and claimed ports', () => {
+  assert.equal(WEAK_MODEL.test('gemini-flash-lite-latest'), true)
+  assert.equal(WEAK_MODEL.test('gemini-2.5-pro'), false)
+  assert.equal(WEAK_MODEL.test('claude-sonnet-5-5'), false)
+  assert.equal(WEAK_MODEL.test('gpt-4o-mini'), true)
+  assert.equal(WEAK_MODEL.test('google/gemma-3:free'), true)
+  assert.equal(WEAK_MODEL.test('gemini-3.8-pro'), false)
+  assert.deepEqual(claimedPorts('الرابط http://localhost:5174/ و http://127.0.0.1:5173 وكمان localhost:5174'), [5174, 5173])
+  assert.deepEqual(claimedPorts('ما في روابط'), [])
+  assert.deepEqual(claimedPorts('localhost:80'), [])
+})
+
+test('5.17.9 حارس الحذف بوضع البناء: أوامر الحذف مقفولة والنقل مسموح', () => {
+  assert.equal(isBuildDeleteCommand('Remove-Item .\\a.txt'), true)
+  assert.equal(isBuildDeleteCommand('rm -f tools/x.html'), true)
+  assert.equal(isBuildDeleteCommand('del a.txt'), true)
+  assert.equal(isBuildDeleteCommand('rmdir /s old'), true)
+  assert.equal(isBuildDeleteCommand('Move-Item a.txt archive\\'), false)
+  assert.equal(isBuildDeleteCommand('npm run typecheck'), false)
+})
+
+test('5.17.9 حكم المراجعة: PASS ما بينقبل مع ملاحظة متوسطة أو خطيرة', () => {
+  assert.equal(reviewVerdict('FINDING [medium]: x | evidence: y\nVERDICT: PASS').verdict, 'FAIL')
+  assert.equal(reviewVerdict('FINDING [high]: x\nVERDICT: PASS').verdict, 'FAIL')
+  assert.equal(reviewVerdict('FINDING [low]: x\nVERDICT: PASS').verdict, 'PASS')
+  assert.equal(reviewVerdict('VERDICT: PASS').verdict, 'PASS')
+  assert.equal(reviewVerdict('VERDICT: FAIL').verdict, 'FAIL')
+  assert.equal(reviewVerdict('no verdict here').verdict, 'UNKNOWN')
+  assert.equal(reviewVerdict('FINDING [medium]: a\nFINDING [low]: b\nVERDICT: PASS').medium, 1)
+})
+
+test('5.17.9 يلاقي المشروع من اسمه بالرسالة (كلمة كاملة، وحدة بس)', () => {
+  const ps = [{ id: '1', name: 'StudyBuddy', path: 'C:\\s' }, { id: '2', name: 'OS', path: 'C:\\o' }]
+  assert.equal(findProjectByText('افتح StudyBuddy وشغّل الفحص', ps)?.id, '1')
+  assert.equal(findProjectByText('شغّل الفحص على os', ps)?.id, '2')
+  assert.equal(findProjectByText('Nasaq and TEST', ps), null)
+  assert.equal(findProjectByText('Study', ps), null)
+  assert.equal(findProjectByText('cosmos project', ps), null)
+  assert.equal(findProjectByText('StudyBuddy و OS', ps), null)
+})
+
+test('5.18.0: splitArgs يحترم الاقتباس', () => {
+  assert.deepEqual(splitArgs('commit -m "a b c" --amend'), ['commit', '-m', 'a b c', '--amend'])
+  assert.deepEqual(splitArgs("get pods -n 'my ns'"), ['get', 'pods', '-n', 'my ns'])
+})
+
+test('5.18.0: أوامر القراءة مقابل الهدّامة', () => {
+  assert.equal(KITS.git.readOnly(['status']), true)
+  assert.equal(KITS.git.readOnly(['log', '--oneline', '-5']), true)
+  assert.equal(KITS.git.readOnly(['commit', '-m', 'x']), false)
+  assert.equal(KITS.git.readOnly(['branch', '-D', 'x']), false)
+  assert.equal(KITS.git.destructive(['reset', '--hard']), true)
+  assert.equal(KITS.git.destructive(['push', '--force']), true)
+  assert.equal(KITS.git.destructive(['clean', '-fd']), true)
+  assert.equal(KITS.git.destructive(['commit', '-m', 'x']), false)
+  assert.equal(KITS.kubectl.readOnly(['get', 'pods']), true)
+  assert.equal(KITS.kubectl.readOnly(['apply', '-f', 'x.yaml']), false)
+  assert.equal(KITS.kubectl.destructive(['delete', 'pod', 'x']), true)
+  assert.equal(KITS.terraform.readOnly(['plan']), true)
+  assert.equal(KITS.terraform.readOnly(['plan', '-out', 'p']), false)
+  assert.equal(KITS.terraform.destructive(['destroy']), true)
+  assert.equal(KITS.terraform.destructive(['apply', '-auto-approve']), true)
+  assert.equal(KITS.gcloud.readOnly(['compute', 'instances', 'list']), true)
+  assert.equal(KITS.gcloud.destructive(['compute', 'instances', 'delete', 'x']), true)
+  assert.equal(KITS.gh.readOnly(['pr', 'list']), true)
+  assert.equal(KITS.gh.readOnly(['pr', 'merge', '1']), false)
+})
+
+test('5.18.0: ترتيب القوة منطقي والمكرر بيتوحّد', () => {
+  assert.ok(estimateStrength('apinex:free/claude-opus-4.6') > estimateStrength('apinex:free/gemini-3.8-flash'))
+  assert.ok(estimateStrength('meta-llama/llama-3.3-70b-instruct:free') > estimateStrength('meta-llama/llama-3.2-3b-instruct:free'))
+  assert.ok(estimateStrength('free/glm-5.3') > estimateStrength('free/glm-5.3-flash'))
+  assert.equal(canonicalName('apinex:free/glm-5.3'), canonicalName('z-ai/glm-5.3:free'))
 })

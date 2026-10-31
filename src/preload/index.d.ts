@@ -44,7 +44,7 @@ export type CustomModelInfo = {
   autoPrice?: { in: number; out: number } | null
 }
 export type ChatMode = { kind: 'free' } | { kind: 'auto' } | { kind: 'council'; author?: string; critic?: string } | { kind: 'model'; id: string }
-export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode; allowWeaker?: boolean }
+export type ChatOpts = { tabId: string; projectId: string | null; mode: ChatMode; allowWeaker?: boolean; master?: boolean }
 export type ChatResult = { content: string; meta?: string; cancelled?: boolean; failed?: boolean; needsChoice?: boolean; policyRefused?: boolean; skillHint?: { tools: string[] } }
 export type ProjectMemoryInfo = { id: string; name: string; path: string; summary: string; tech: string[]; ports: number[]; decisions: string[]; updatedAt: number }
 export type MasterMemoryView = { projects: ProjectMemoryInfo[]; general: { text: string; at: number }[]; conflicts: { kind: string; detail: string }[] }
@@ -142,6 +142,7 @@ declare global {
       retryChat: (opts: ChatOpts) => Promise<ChatResult>
       cancelChat: (tabId: string) => Promise<boolean>
       modelPicker: () => Promise<{ value: string; label: string; tier: string; keyed?: boolean }[]>
+  roleCandidates: () => Promise<{ value: string; label: string; tier: string }[]>
       media: {
         models: (kind: 'image' | 'video' | 'audio') => Promise<import('../core/media-registry').ModelStatus[]>
         generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string) => Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }>
@@ -247,7 +248,13 @@ declare global {
       providers: {
         check: (p: 'openai' | 'anthropic' | 'gemini' | 'openrouter') => Promise<{ ok: boolean; message: string; models: string[] }>
       }
+      platforms: {
+        overview: (freeOnly?: boolean) => Promise<{ platforms: { id: string; name: string; hasKey: boolean; note?: string; models: { id: string; label: string; platform: string; score: number; free: boolean; tools?: boolean; image?: boolean; enabled?: boolean }[] }[]; ranking: { id: string; label: string; platform: string; platformName: string; score: number; free: boolean; tools?: boolean; image?: boolean; dup: number }[] }>
+        pull: (id: string) => Promise<{ ok: boolean; message: string; count?: number }>
+        add: (name: string, baseURL: string, apiKey: string) => Promise<{ ok: boolean; message: string; count?: number }>
+      }
       hf: {
+        free: (force?: boolean) => Promise<{ ok: boolean; error?: string; pricingKnown: boolean; total: number; models: { id: string; image: boolean; tools: boolean; providers: string[] }[] }>
         models: () => Promise<{ ok: boolean; error?: string; total: number; models: { id: string; providers: string[]; recommended: boolean }[] }>
         getModel: () => Promise<string>
         setModel: (id: string) => Promise<boolean>

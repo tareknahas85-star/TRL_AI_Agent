@@ -14,6 +14,7 @@ const api = {
   retryChat: (opts: ChatOpts): Promise<ChatResult> => ipcRenderer.invoke('chat:retry', opts),
   cancelChat: (tabId: string): Promise<boolean> => ipcRenderer.invoke('chat:cancel', tabId),
   modelPicker: (): Promise<{ value: string; label: string; tier: string }[]> => ipcRenderer.invoke('models:picker'),
+  roleCandidates: (): Promise<{ value: string; label: string; tier: string }[]> => ipcRenderer.invoke('roles:candidates'),
   media: {
     models: (kind: 'image' | 'video' | 'audio'): Promise<unknown[]> => ipcRenderer.invoke('media:models', kind),
     generate: (kind: 'image' | 'video' | 'audio', modelId: string, prompt: string): Promise<{ ok: boolean; path?: string; model?: string; modelId?: string; color?: string; note: string }> => ipcRenderer.invoke('media:generate', kind, modelId, prompt),
@@ -139,7 +140,13 @@ const api = {
   providers: {
     check: (p: 'openai' | 'anthropic' | 'gemini' | 'openrouter'): Promise<{ ok: boolean; message: string; models: string[] }> => ipcRenderer.invoke('provider:check', p)
   },
+  platforms: {
+    overview: (freeOnly?: boolean) => ipcRenderer.invoke('platforms:overview', freeOnly),
+    pull: (id: string) => ipcRenderer.invoke('platforms:pull', id),
+    add: (name: string, baseURL: string, apiKey: string) => ipcRenderer.invoke('platforms:add', name, baseURL, apiKey)
+  },
   hf: {
+    free: (force?: boolean) => ipcRenderer.invoke('hf:free', force === true),
     models: (): Promise<{ ok: boolean; error?: string; total: number; models: { id: string; providers: string[]; recommended: boolean }[] }> => ipcRenderer.invoke('hf:models'),
     getModel: (): Promise<string> => ipcRenderer.invoke('hf:getModel'),
     setModel: (id: string): Promise<boolean> => ipcRenderer.invoke('hf:setModel', id),

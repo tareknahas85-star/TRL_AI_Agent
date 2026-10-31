@@ -1,4 +1,4 @@
-﻿import { BrowserWindow, ipcMain, type WebContents } from 'electron'
+import { BrowserWindow, ipcMain, type WebContents } from 'electron'
 import { analyzeRequest, warmLocalMaster, type Analysis } from '../core/master'
 import { ensureOllama } from '../core/ollama'
 import { calculateSavedCost } from '../core/fallback'
@@ -22,7 +22,8 @@ import { registerAttachHandlers } from './attach'
 import { registerExtrasHandlers } from './extras'
 import { registerTransferHandlers } from './transfer'
 import { registerUpdateHandlers } from './updates'
-import { registerHfHandlers } from './hf'
+import { registerHfHandlers, hfFreeCached } from './hf'
+import { registerPlatformHandlers } from './platforms'
 import { registerProviderCheck } from './provider-check'
 import { registerRemoteHandlers } from './remote-ipc'
 import { setRemoteBridge } from '../remote/host'
@@ -38,6 +39,8 @@ import { memoryPrompt } from '../core/memory'
 import { runInContext, cancelRun, isUnattended, type RunMode } from '../core/progress'
 import { createStreamBatcher } from '../core/stream-batch'
 import { listCatalog } from '../core/catalog'
+import { apinexFreeIds, hasApinexKey } from '../core/apinex'
+import { badReplyReason } from '../core/reply-quality'
 import { CUSTOM_PREFIX, getCustomModel, listCustomModelViews } from '../core/custom-models'
 import { getApiKey, setApiKey } from '../store/secure-store'
 
@@ -90,6 +93,7 @@ export function registerIpcHandlers(): void {
   registerTransferHandlers()
   registerUpdateHandlers()
   registerHfHandlers()
+  registerPlatformHandlers()
   registerProviderCheck()
   registerHealthCheck()
   registerLearnHandlers()
@@ -134,8 +138,12 @@ export function registerIpcHandlers(): void {
     ...listCatalog()
       .models.filter((m) => m.enabled)
       .map((m) => ({ value: m.id, label: m.name || m.id, tier: m.tier })),
+    // 5.18.0: موديلات apinex المجانية بقائمة المحادثة (مجرد ما يكون مفتاحو موجود).
+    ...(hasApinexKey() ? apinexFreeIds().map((id) => ({ value: id, label: id.replace(/^apinex:/, '') + ' (apinex)', tier: 'TIER_1_FREE' })) : []),
+    // 5.18.0: موديلات Hugging Face المجانية يلي بتدعم الأدوات (بعد سحب القائمة من الإعدادات).
+    ...hfFreeCached().filter((m) => m.tools).map((m) => ({ value: 'hf:' + m.id, label: m.id + ' (HF)', tier: 'TIER_1_FREE' })),
     // Subscription accounts through their official CLI: hidden unless TRL_DEV_SUBSCRIPTION_ENGINES=1 (انظر feature-flags.ts).
-    ...(subscriptionEnginesEnabled() && geminiCliPath() ? [{ value: GEMINI_CLI, label: 'Gemini (حساب غووغل)', tier: 'SUBSCRIPTION' }] : []),
+    ...(subscriptionEnginesEnabled() && geminiCliPath() ? [{ value: GEMINI_CLI, label: 'Gemini (Antigravity)', tier: 'SUBSCRIPTION' }] : []),
     ...(subscriptionEnginesEnabled() && codexCliPath() ? [{ value: CODEX_CLI, label: 'ChatGPT Codex (حسابك، الافتراضي)', tier: 'SUBSCRIPTION' }] : []),
     ...(subscriptionEnginesEnabled() && codexCliPath() ? codexModelsList().map((slug) => ({ value: CODEX_MODEL_PREFIX + slug, label: 'ChatGPT Codex: ' + slug, tier: 'SUBSCRIPTION' })) : []),
     ...(subscriptionEnginesEnabled() && claudeCliPath() ? [CLAUDE_CLI, ...CLAUDE_CLI_MODELS.map((x) => x.id)].map((id) => ({ value: id, label: cliModelName(id), tier: 'SUBSCRIPTION' })) : [])
@@ -171,7 +179,7 @@ export function registerIpcHandlers(): void {
     else running--
   }
 
-  type Opts = { tabId: string; projectId: string | null; mode: RunMode; allowWeaker?: boolean }
+  type Opts = { tabId: string; projectId: string | null; mode: RunMode; allowWeaker?: boolean; master?: boolean }
 
   const runChat = async (sender: WebContents, input: string, retry: boolean, rawHistory: unknown, o: Opts) => {
     // OpenRouter اختياري (انظر Onboarding): نكتفي بوجود أي مسار قابل للتشغيل، مش بمفتاح OpenRouter لحاله.
@@ -224,7 +232,20 @@ export function registerIpcHandlers(): void {
             masterMs = prev.masterMs
           } else {
             const confP = o.projectId ? listProjects().projects.find((p) => p.id === o.projectId) : null
-            analysis = await analyzeRequest(userMsg, !!confP?.confidential)
+            // وضع المشاريع والمجلس: بدون مايسترو (المنفّذ والمراجع هنن يلي بتحددهم). المايسترو بس بالمحادثة العادية.
+            // 5.18.0: مربع «شغّل المايسترو» لكل تبويب (o.master). الافتراضي: بناء مشروع = مطفي (قائمة المعقّد، الأقوى أولاً)، باقي الأوضاع = شغّال.
+            const useMaster = o.master ?? o.mode.kind !== 'auto'
+            const analyzed = async (): Promise<Analysis> => analyzeRequest(userMsg, !!confP?.confidential)
+            if (o.mode.kind === 'model') analysis = await analyzed()
+            else if (o.mode.kind === 'auto') {
+              if (useMaster) {
+                const a = await analyzed()
+                // بناء مشروع بأدوات: ما ننزل تحت «متوسط» ولا نلغي الأدوات.
+                analysis = { ...a, complexity: a.complexity === 'simple' ? 'medium' : a.complexity, need_tools: true }
+              } else analysis = { complexity: 'complex', type: 'code', need_skill: 'none', need_tools: true, reason: 'بناء مشروع: المايسترو مطفي ← قائمة المعقّد (الأقوى أولاً)', source: 'none' }
+            } else if (useMaster) analysis = await analyzed()
+            else if (o.mode.kind === 'council') analysis = { complexity: 'medium', type: 'chat', need_skill: 'none', need_tools: false, reason: 'المجلس: المايسترو مطفي', source: 'none' }
+            else analysis = { complexity: 'medium', type: 'chat', need_skill: 'none', need_tools: false, reason: 'محادثة عادية: المايسترو مطفي', source: 'none' }
             masterMs = Date.now() - started
           }
           if (signal.aborted) return { content: '', cancelled: true }
@@ -290,7 +311,7 @@ export function registerIpcHandlers(): void {
           // needsChoice: nothing answered (free chain exhausted or the picked model failed) -> the UI asks the user what to do.
           const warn = result.modelUsed === 'none' ? '' : claimsWarning(missingFileClaims(result.content, project?.path))
           const tl = result.toolsUsed ?? []
-          const skillHint = result.modelUsed !== 'none' && !project?.confidential && o.tabId !== TG_TAB && !o.tabId.startsWith('sched-') && tl.length >= 4 ? { tools: tl } : undefined
+          const skillHint = result.modelUsed !== 'none' && !project?.confidential && o.tabId !== TG_TAB && !o.tabId.startsWith('sched-') && tl.length >= 4 && !(result.failures ?? []).length && !badReplyReason(result.content) ? { tools: tl } : undefined
           return { content: result.content + warn, meta: result.modelUsed === 'none' ? undefined : meta, needsChoice: result.modelUsed === 'none', policyRefused: !!result.policyRefused, skillHint, ...(process.env.AIR_BENCH === '1' ? { bench: getLastCouncilTrace() } : {}) }
         } catch (e) {
           if (signal.aborted) return { content: '', cancelled: true }
@@ -305,8 +326,9 @@ export function registerIpcHandlers(): void {
   }
 
   const tabOf = (o: unknown): Opts => {
-    const r = (o ?? {}) as { tabId?: unknown; projectId?: unknown; mode?: unknown; allowWeaker?: unknown }
+    const r = (o ?? {}) as { tabId?: unknown; projectId?: unknown; mode?: unknown; allowWeaker?: unknown; master?: unknown }
     return {
+      master: typeof r.master === 'boolean' ? r.master : undefined,
       tabId: typeof r.tabId === 'string' && r.tabId ? r.tabId : 'default',
       projectId: typeof r.projectId === 'string' ? r.projectId : null,
       mode: parseMode(r.mode),
@@ -359,6 +381,15 @@ export function registerIpcHandlers(): void {
     return true
   })
   ipcMain.handle('models:picker', () => pickerModels())
+  // مرشّحو المنفّذ/المراجع: موديلات Claude/GPT/Grok/DeepSeek المدفوعة من كتالوج OpenRouter (حتى لو مو مفعّلة بالراوتر) — بتشتغل بمفتاح OpenRouter.
+  ipcMain.handle('roles:candidates', () => [
+    // apinex: موديلاتو (المجانية حسب كتالوجو الحي) تظهر أولاً إذا مفتاحو موجود.
+    ...(apinexFreeIds().map((id) => ({ value: id, label: id.replace(/^apinex:/, '') + ' (apinex)', tier: 'TIER_1_FREE' }))),
+    ...listCatalog()
+      .models.filter((m) => /^(anthropic|openai|x-ai|deepseek)\//i.test(m.id) && m.tier !== 'TIER_1_FREE' && !/:free$/i.test(m.id))
+      .map((m) => ({ value: m.id, label: (m.name || m.id) + ' (OpenRouter)', tier: m.tier }))
+      .sort((a, b) => a.value.localeCompare(b.value))
+  ])
   ipcMain.handle('keys:get', (_event, key: unknown) => (isKeyName(key) ? getApiKey(key) : ''))
 
   ipcMain.handle('keys:set', (_event, key: unknown, value: unknown) => {

@@ -1,4 +1,4 @@
-﻿import { spawn } from 'child_process'
+import { spawn } from 'child_process'
 import { app, shell } from 'electron'
 import fs from 'fs'
 import os from 'os'
@@ -11,6 +11,7 @@ import { recordClaudeRun } from './claude-usage'
 import { quarantineEmptyFragments } from './run-report'
 import { recordEngineRun } from './usage-log'
 import { subscriptionEnginesEnabled } from './feature-flags'
+import { currentMode } from './progress'
 
 // Agent engines: the official command-line tools (Claude Code / Codex) run the WHOLE job themselves
 // with their own tools, signed in with the user's account. The app only streams progress and returns the final answer.
@@ -149,8 +150,9 @@ async function runClaudeAgentOnce(prompt: string, o: Opts): Promise<AgentResult>
   const cfg = getClaudeAcctCfg()
   const sysFile = path.join(os.tmpdir(), 'trl-agent-sys-' + Date.now() + '.txt')
   fs.writeFileSync(sysFile, (o.system || '') + '\n' + AUTONOMY_RULES, 'utf8')
-  const perm = getFullAutonomy() ? ['--dangerously-skip-permissions'] : ['--permission-mode', 'acceptEdits', '--allowedTools', 'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebFetch', 'WebSearch']
-  const args = ['-p', '--model', claudeModelId(o.model), ...(o.effort && o.effort !== 'auto' ? ['--effort', o.effort] : []), '--append-system-prompt-file', sysFile, ...perm, '--no-session-persistence', '--output-format', 'stream-json', '--verbose', '--disable-slash-commands']
+  const noDelete = currentMode()?.kind === 'auto' ? ['--disallowedTools', 'Bash(rm:*)', 'Bash(rmdir:*)', 'Bash(rd:*)', 'Bash(del:*)', 'Bash(erase:*)', 'Bash(Remove-Item:*)'] : []
+const perm = [...(getFullAutonomy() ? ['--dangerously-skip-permissions'] : ['--permission-mode', 'acceptEdits', '--allowedTools', 'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebFetch', 'WebSearch']), ...noDelete]
+  const args = ['-p', '--model', claudeModelId(o.model), ...(o.cwd ? ['--add-dir', o.cwd] : []), ...(o.effort && o.effort !== 'auto' ? ['--effort', o.effort] : []), '--append-system-prompt-file', sysFile, ...perm, '--no-session-persistence', '--output-format', 'stream-json', '--verbose', '--disable-slash-commands']
   let final = ''
   let isErr = false
   let model: string | undefined
@@ -319,7 +321,7 @@ async function runGeminiAgentOnce(prompt: string, o: Opts): Promise<AgentResult>
   const taskFile = path.join(os.tmpdir(), 'trl-agy-task-' + Date.now() + '.txt')
   fs.writeFileSync(taskFile, (o.system ? o.system + '\n' : '') + AUTONOMY_RULES + '\n\nالمهمة:\n' + prompt, 'utf8')
   const perm = getFullAutonomy() ? ['--dangerously-skip-permissions'] : ['--mode', 'accept-edits', '--sandbox']
-  const args = ['--model', o.model || AGY_DEFAULT_MODEL, ...perm, '--output-format', 'stream-json', '--disable-slash-commands', '-p=Read the full task from the file ' + taskFile.replace(/\\/g, '/') + ' and carry it out completely, following every rule in it. Reply with the final answer in Levantine Arabic.']
+  const args = ['--model', o.model || AGY_DEFAULT_MODEL, ...(o.cwd ? ['--add-dir', o.cwd] : []), ...perm, '--output-format', 'stream-json', '--disable-slash-commands', '-p=Read the full task from the file ' + taskFile.replace(/\\/g, '/') + ' and carry it out completely, following every rule in it. Reply with the final answer in Levantine Arabic.']
   const tools: string[] = []
   let text = ''
   let errMsg = ''

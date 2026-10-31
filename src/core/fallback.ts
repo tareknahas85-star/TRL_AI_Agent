@@ -1,4 +1,5 @@
-﻿import { hostOf } from './hosts'
+import { hostOf } from './hosts'
+import { getApiKey } from '../store/secure-store'
 import OpenAI from 'openai'
 import { apinexClient, apinexModelId, isApinexModel } from './apinex'
 import fs from 'fs'
@@ -11,7 +12,7 @@ import type { Analysis } from './master'
 import type { Toolset } from '../mcp/runtime'
 import { emitProgress, emitStream, emitAgent, currentSignal, currentMode } from './progress'
 import { rotateLogFile } from './log-rotate'
-import { activeProject } from './workspace'
+import { buildProject, setRunProject } from './workspace'
 import { quarantineEmptyFragments, appendRunLog } from './run-report'
 import { CUSTOM_PREFIX, clientForCustomModel, getCustomModel } from './custom-models'
 import { textProtocol, textToolLoop } from './text-tools'
@@ -103,6 +104,8 @@ export type FallbackResult = {
 import { independentReview, repairFromReview } from './review'
 import { isAgentEngine, runClaudeAgent, runCodexAgent, runGeminiAgent, geminiLoggedIn, codexModelOf, CODEX_CLI, GEMINI_CLI, ENGINE_ORDER } from './cli-agent'
 import { getRoles } from './roles'
+import { looksLooping, ENDS_WITH_STALL, REFUSES_TOOLS, BUILD_TEST_CLAIM, hasBuildProof, WEAK_MODEL } from './reply-quality'
+import { deadClaimedPorts } from './claim-check'
 import { recordEngineRun } from './usage-log'
 
 /** 5.16: حد دورات الإصلاح بعد المراجعة (مراجعة ← إصلاح ← مراجعة)، بعدها بيوقف ويكتب الحالة. */
@@ -132,7 +135,7 @@ function fastGeminiRoute(models: string[], userInput: string): string[] {
 // الباقي يبقى كاحتياطي بالترتيب العادي.
 function customExecutorFirst(models: string[], toolset?: Toolset | null): string[] {
   const ex = getRoles().executor
-  if (!ex.startsWith(CUSTOM_PREFIX) || !toolset?.defs.length || currentMode()?.kind !== 'auto') return models
+  if (ex === 'auto' || !toolset?.defs.length || currentMode()?.kind !== 'auto') return models
   return [ex, ...models.filter((m) => m !== ex)]
 }
 
@@ -145,7 +148,35 @@ export async function executeWithFallback(
   history: { role: 'user' | 'assistant'; content: string }[] = [],
   opts: { requireTools?: boolean; escalate?: boolean } = {}
 ): Promise<FallbackResult> {
-  const r = await executeWithFallbackInner(customExecutorFirst(fastGeminiRoute(models, userInput), toolset), userInput, analysis, systemPrompt, toolset, history, opts)
+  // 5.17.8: بناء مشروع مع أدوات تحكم بالجهاز: موديلات apinex المجانية ما بتنفّذ بثقة، ما بننزّل مهمة تنفيذ عليها. إذا ما بقي غيرها نوقف برسالة واضحة.
+  let list = customExecutorFirst(fastGeminiRoute(models, userInput), toolset)
+  const autoPc = currentMode()?.kind === 'auto' && !!toolset?.defs.some((d) => (d as { function?: { name?: string } }).function?.name?.startsWith('pc_'))
+  if (autoPc) {
+    // قائمة سماح: الموديلات القوية المدفوعة + محركات CLI + الموديل المختار يدوياً كمنفّذ + المخصصة غير الخفيفة (flash/lite/mini/free).
+    const roleEx = getRoles().executor
+    const strongSet = new Set(strongPaidModels())
+    // المنفّذ المختار يدوياً بيتخطّى لو موديل خفيف (flash/lite/mini...): ما بينفّذ بثقة.
+    const weakId = (m: string): boolean => WEAK_MODEL.test(m.startsWith(CUSTOM_PREFIX) ? (getCustomModel(m.slice(CUSTOM_PREFIX.length))?.model ?? '') : m)
+    if (roleEx !== 'auto' && weakId(roleEx)) emitProgress('المنفّذ المختار موديل خفيف وما بينفّذ بثقة، تخطّيتو. اختار Claude/GPT أو Gemini Pro من قائمة المنفّذ.')
+    const strongOnly = list.filter((m) => (m === roleEx && !weakId(m)) || isCliModel(m) || isAgentEngine(m) || strongSet.has(m) || (m.startsWith(CUSTOM_PREFIX) && !WEAK_MODEL.test(getCustomModel(m.slice(CUSTOM_PREFIX.length))?.model ?? 'flash')))
+    if (!strongOnly.length) {
+      return { content: '❌ ما في موديل مناسب لتنفيذ مهمة بناء بأدوات الجهاز (الباقي بس موديلات مجانية أو خفيفة متل Flash وapinex، وهدول ما بينفّذوا بثقة). اختار من قائمة المنفّذ موديل Claude/GPT أو Gemini Pro وأعد الطلب.', modelUsed: 'none', success: false, triedModels: [] as string[] } as unknown as FallbackResult
+    }
+    list = strongOnly
+  }
+  const r = await executeWithFallbackInner(list, userInput, analysis, systemPrompt, toolset, history, opts)
+  // تحقق فعلي من ادعاءات السيرفر (بدون موديل): لو الرد بيذكر localhost:PORT وما في سيرفر شغّال، بنقلب الحكم.
+  if (autoPc && r.success) {
+    try {
+      const dead = await deadClaimedPorts(r.content)
+      if (dead.length) {
+        r.content = '❌ تحقق البرنامج (مو من الموديل): الرد بيذكر ' + dead.map((p) => 'localhost:' + p).join('، ') + ' بس ما في أي سيرفر شغّال عليه فعلياً. اعتبر الرد غير مؤكد.\n\n' + r.content
+        r.failures = [...(r.failures || []), ...dead.map((p) => ({ model: r.modelUsed, reason: 'ادّعى سيرفر شغّال على البورت ' + p + ' وهو مسكّر' }))]
+      }
+    } catch {
+      /* best-effort */
+    }
+  }
   // 5.16: عدّاد الاستخدام لكل موديل (النماذج عبر API). CLI محسوبة من cli-agent، فنتجاهلها هون لتفادي العد مرتين.
   if (r.success && r.startedAt && r.modelUsed && !(r.engine ?? '').startsWith('cli:')) recordEngineRun(r.modelUsed, (Date.now() - r.startedAt) / 60000)
   try {
@@ -154,27 +185,39 @@ export async function executeWithFallback(
     // المنفّذ = المحرّك اللي أنجز الشغل (CLI أو موديل API مخصص). المراجعة المستقلة تشتغل على أي منهم.
     const who = r.engine || r.modelUsed
     const longRun = !!who && !!r.startedAt && Date.now() - r.startedAt > 8 * 60 * 1000
-    if (action && r.success && longRun && who) {
-      const ctx = { signal: currentSignal(), emit: emitProgress, effort: getEffort() }
+    if (action && r.success && (longRun || autoPc) && who) {
+      const ctx = { signal: currentSignal(), emit: emitProgress, effort: getEffort(), cwd: buildProject()?.path }
       let rv = await independentReview(who, userInput, r.content, ctx)
-      let extra = ''
-      for (let round = 1; rv && (rv.verdict === 'FAIL' || rv.high > 0) && round <= MAX_REPAIR_ROUNDS; round++) {
+      // التصليح التلقائي بس لمنفّذ عنده أدوات (CLI/وكيل). الموديل النصي ما بيقدر يعدّل ملفات، فما منضيّع جولات عالفاضي.
+      const canRepair = who.startsWith('cli:') || isCliModel(who) || isAgentEngine(who)
+      let rounds = 0
+      for (let round = 1; canRepair && rv && (rv.verdict === 'FAIL' || rv.high > 0) && round <= MAX_REPAIR_ROUNDS; round++) {
         const fx = await repairFromReview(who, userInput, rv, ctx)
         if (!fx) break
-        extra += '\n\nبعد المراجعة (دورة ' + round + ' من ' + MAX_REPAIR_ROUNDS + '): المحرّك أصلح وهذا ملخصو (مو معتمد بدون فحص):\n' + fx.text
-        rv = (await independentReview(who, userInput, r.content + extra, ctx)) ?? rv
+        rounds = round
+        rv = (await independentReview(who, userInput, r.content + '\n\n[تصليح بعد المراجعة]\n' + fx.text, ctx)) ?? rv
       }
       if (rv) {
+        // ملخص قصير: الحكم + أهم 3 ملاحظات خطيرة. النص الكامل ما بينضاف للرد.
+        const top = rv.text
+          .split('\n')
+          .filter((l) => /^\s*FINDING\s*\[high\]/i.test(l))
+          .slice(0, 3)
+          .map((l) => '• ' + l.replace(/^\s*FINDING\s*\[high\]:?\s*/i, '').split('| evidence')[0].trim().slice(0, 170))
         r.content +=
-          '\n\n---\nمراجعة مستقلة (آلية):\nالمراجع: ' + rv.reviewer + (rv.independent ? ' (عائلة موديل مختلفة عن المنفّذ)' : ' (تنبيه: مو مستقل، نفس عائلة المنفّذ لأنو ما في بديل متاح)') +
-          '\nالملاحظات: ' + rv.findings + ' (خطيرة: ' + rv.high + ') — الحكم: ' + rv.verdict +
-          (rv.findings === 0 ? '\nتنبيه: صفر ملاحظات حتى بعد إعادة التدقيق، لا تعتبرها موافقة نهائية.' : '') +
-          '\n' + rv.text.slice(0, 3500) + extra
+          '\n\n---\nمراجعة مستقلة (' + rv.reviewer + (rv.independent ? '' : '، مو مستقل') + '): ' + (rv.verdict === 'FAIL' ? '❌ فشل' : rv.verdict === 'PASS' ? '✅ نجح' : '❓ غير محسوم') +
+          ' — ' + rv.findings + ' ملاحظة (' + rv.high + ' خطيرة)' + (rounds ? ' — بعد ' + rounds + ' دورة تصليح' : !canRepair && rv.verdict === 'FAIL' ? ' — بدون تصليح تلقائي (المنفّذ ما عنده أدوات)' : '') +
+          (top.length ? '\n' + top.join('\n') : '')
+        if (rv.verdict === 'FAIL' || rv.high > 0) {
+          r.failures = [...(r.failures || []), { model: rv.reviewer, reason: 'المراجعة المستقلة: ' + rv.verdict + ' (' + rv.high + ' خطيرة)' }]
+          r.content = '⚠️ تنبيه من البرنامج: المراجعة المستقلة فشّلت هالرد. أي "تم" أو "جاهز 100%" بالرد غير مؤكد، والتفاصيل بآخر الرد.\n\n' + r.content
+        }
       }
     }
-    const proj = action && r.success && longRun ? activeProject() : null
+    const proj = action && r.success ? buildProject() : null
     if (proj && r.startedAt && fs.existsSync(proj.path)) {
       const moved = quarantineEmptyFragments(proj.path, r.startedAt)
+      if (!longRun) { if (moved.length) r.content += '\n\n(نُقل ' + moved.length + ' ملف فاضي بأسماء شظايا للحجر: ' + moved.join(', ') + ')'; return r }
       const mins = Math.round((Date.now() - r.startedAt) / 60000)
       const log =
         '## سجل التشغيل الآلي (من البرنامج مو من الموديل)\n' +
@@ -220,6 +263,10 @@ async function executeWithFallbackInner(
     if (isApinexModel(model)) {
       // APInex: OpenAI-compatible gateway with its own key. The id sent is the bare "free/..." name.
       return { client: apinexClient(), modelId: apinexModelId(model) }
+    }
+    if (model.startsWith('hf:')) {
+      // 5.18.0: Hugging Face Inference Providers (OpenAI-compatible) — بس لما المستخدم يختار الموديل بإيده.
+      return { client: new OpenAI({ baseURL: hostOf('huggingface'), apiKey: getApiKey('HUGGINGFACE_API_KEY') || 'missing', timeout: 90000, maxRetries: 0 }), modelId: model.slice(3) }
     }
     if (model.startsWith(CUSTOM_PREFIX)) {
       const m = getCustomModel(model.slice(CUSTOM_PREFIX.length))
@@ -331,9 +378,10 @@ async function executeWithFallbackInner(
           let engHandoff = ''
           const runEngine = (m: string): Promise<{ text: string; model?: string; tools: string[] }> => {
             const p = buildCliPrompt(undefined, history, userInput)
-            const proj = activeProject()
+            if (currentMode()?.kind === 'auto') setRunProject(userInput)
+            const proj = buildProject()
             const projDir = proj && fs.existsSync(proj.path) ? proj.path : undefined
-            const base = { signal, cwd: projDir, system: (systemPrompt || '') + handoff + engHandoff, onProgress: (t: string): void => { engProg.push(t); if (engProg.length > 30) engProg.shift(); emitAgent(m, 'منفّذ', t) } }
+            const base = { signal, cwd: projDir, system: (systemPrompt || '') + handoff + engHandoff + (projDir ? '\n\nPROJECT FOLDER (the only folder for this task: every file you read or write must be inside it; never use any other folder, and never create a new folder with the project name elsewhere): ' + projDir : ''), onProgress: (t: string): void => { engProg.push(t); if (engProg.length > 30) engProg.shift(); emitAgent(m, 'منفّذ', t) } }
             return m === CODEX_CLI || codexModelOf(m) ? runCodexAgent(p, { ...base, model: codexModelOf(m) }) : m === GEMINI_CLI ? runGeminiAgent(p, base) : runClaudeAgent(p, { ...base, model: m === model ? alias : undefined, effort: getEffort() })
           }
           // The chosen engine first, then the others in the preferred order (Google, Claude, ChatGPT) if it fails.
@@ -492,7 +540,12 @@ async function executeWithFallbackInner(
       let capHit = true
       const calls_: { name: string; key: string; out: string }[] = []
       const pcMode = !!toolset?.defs.some((d) => (d as { function?: { name?: string } }).function?.name?.startsWith('pc_'))
+      const attemptStart = Date.now()
       for (let round = 0; round < (pcMode ? 40 : 8); round++) {
+        if (pcMode && Date.now() - attemptStart > 15 * 60 * 1000) {
+          emitProgress('وصلنا للحد الزمني (15 دقيقة) لهالمحاولة، بوقّف وبعطيك التقرير')
+          break
+        }
         if (!useTools && toolset?.defs.length) {
           // No native function calling: the APP runs the tools through the text protocol.
           textMode = true
@@ -636,12 +689,39 @@ async function executeWithFallbackInner(
         continue
       }
       if (content) {
+        // 5.17.8: انهيار بالتكرار (نفس الجملة عشرات المرات): مو رد، فشل. نكمّل بموديل تاني وما نعرض الخرابيط.
+        if (looksLooping(content)) {
+          failures.push({ model, reason: 'الموديل علق بحلقة تكرار (نفس الجملة مرات كتير)' })
+          emitProgress(model + ' علق بتكرار — ينتقل للتالي')
+          continue
+        }
+        // 5.17.8: عنده أدوات تحكم بالجهاز بس الموديل رد "ما عندي أدوات/صلاحية" وما نفّذ ولا أداة: ردّو غلط، نكمّل بموديل أقوى بدل ما نعرضو.
+        if (pcMode && calls_.length === 0 && queue.length && opts.escalate !== false && REFUSES_TOOLS.test(content)) {
+          failures.push({ model, reason: 'ادّعى إنو ما عنده أدوات مع إنو أدوات الجهاز متاحة (ما جرّب ولا أداة)' })
+          queue.sort((a, b) => Number(/claude/i.test(b)) - Number(/claude/i.test(a)))
+          handoff = '\n\nHANDOFF: a previous model (' + model + ') wrongly replied that it has no tools. You DO have PC-control tools (shell/PowerShell, files). Use them now to do the task; if something is missing (e.g. credentials), ask for exactly that item instead of telling the user to do it by hand.'
+          emitProgress(model + ' قال ما عندي أدوات وهي متاحة — ينتقل لموديل أقوى')
+          continue
+        }
+        // 5.17.8: مهمة تنفيذ + أدوات جهاز + الرد انتهى بسؤال "هل تريد أن أبدأ؟/هل عندك مشكلة؟" بدل ما ينفّذ: مو إنجاز، نصعّد لموديل تاني.
+        if (pcMode && queue.length && opts.escalate !== false && ACTION_REQ.test(userInput) && ENDS_WITH_STALL.test(content.trim().slice(-220))) {
+          failures.push({ model, reason: 'وقف عند سؤال (هل تريد أن أبدأ؟) بدل ما ينفّذ المهمة' })
+          queue.sort((a, b) => Number(/claude/i.test(b)) - Number(/claude/i.test(a)))
+          handoff = '\n\nHANDOFF: a previous model (' + model + ') stopped and asked the user whether to start instead of doing the task. Do NOT ask for permission: execute the task now with your tools and report what you actually did, with evidence.'
+          emitProgress(model + ' وقف عند سؤال بدل التنفيذ — ينتقل لموديل تاني')
+          continue
+        }
         console.log(`[Fallback] Success with: ${model}`)
         notePinOutcome(model, triedModels)
         noteModelOk(model)
         // Safety net that does not depend on the model being honest: it claimed an action but used no tool.
         const warn = unverifiedClaimWarning(model, userInput, content, toolsUsed, toolset, toolsRejected && !textMode, false, history)
         if (warn) content = warn + '\n\n' + content
+        // 5.17.8: ادّعى نجاح بناء/اختبار بدون ما ينشغّل أي أمر build/test/tsc بنفس الجولة (أو ناتجو فيه أخطاء): تحذير واضح من البرنامج، مو من الموديل.
+        if (pcMode && BUILD_TEST_CLAIM.test(content) && !hasBuildProof(calls_)) {
+          content = '⚠️ تنبيه من البرنامج (مو من الموديل): الرد بيقول إنو البناء/الاختبار نجح، بس ما شفت أي أمر build أو test أو tsc انشغّل بهالجولة ناتجو نظيف. ما تعتمد على "✅" قبل ما تتأكد بنفسك (شغّل البناء وشوف الناتج).\n\n' + content
+          failures.push({ model, reason: 'ادّعى نجاح البناء/الاختبار بدون دليل' })
+        }
         // Never hide a downgrade: say which model(s) failed and why before the answer of the one that finally replied.
         // التحويلات والفشل بتنعرض تحت الرد كتفاصيل قابلة للطي (من meta)، مش داخل نص الرد.
         return {
@@ -767,7 +847,7 @@ function attemptFailure(calls: { key: string; out: string }[], capHit: boolean, 
   return ''
 }
 const AGENT_HINT =
-  '\n\nAGENT MODE (always on): you are an autonomous engineer on the user\'s own computer, like Claude Desktop. The user wants results, not questions. Rules: (1) Do the work with your tools; never ask for permission or details you can find yourself (list files, read them, check tools/env first). (2) Use the project folder as cwd for commands. (3) For builds/installs/tests pass timeout_seconds (e.g. 1500). "gradlew assembleDebug" works even without a wrapper; JAVA_HOME and ANDROID_HOME are set automatically. (4) If a command fails, read the error, fix the cause (edit the source with pc_write_file or a PowerShell edit), and retry until it works or you hit a real blocker. (5) Before saying it is done, VERIFY with a tool (Test-Path / file size / test output) and report the real path. (6) If a skill from use_skill matches the task, load it first. (7) If something truly cannot be done, say exactly what and why in one short message.'
+  '\n\nAGENT MODE (always on): you are an autonomous engineer on the user\'s own computer, like Claude Desktop. The user wants results, not questions. Rules: (1) Do the work with your tools; never ask for permission or details you can find yourself (list files, read them, check tools/env first). (2) Use the project folder as cwd for commands. (3) For builds/installs/tests pass timeout_seconds (e.g. 1500). "gradlew assembleDebug" works even without a wrapper; JAVA_HOME and ANDROID_HOME are set automatically. (4) If a command fails, read the error, fix the cause (edit the source with pc_write_file or a PowerShell edit), and retry until it works or you hit a real blocker. (5) Before saying it is done, VERIFY with a tool (Test-Path / file size / test output) and report the real path. (6) If a skill from use_skill matches the task, load it first. (7) If something truly cannot be done, say exactly what and why in one short message. (8) For an isolated copy of the project (temp folder), copy the WHOLE folder with no exclusions by name: never robocopy /XD or exclude dist or node_modules by bare name, because that also drops nested folders with the same name. After copying, confirm node_modules and the other needed folders exist in the copy before running any command there.'
 // ---- Honesty about tools -------------------------------------------------------------------------------------------
 // A model can only change anything outside the chat (create/save files, run commands, build) by calling a tool.
 // Models that get no tools (or whose provider rejects them) used to answer as if they had done the work.

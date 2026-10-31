@@ -8,7 +8,11 @@ import type OpenAI from 'openai'
 import { BUILD_ENV_PS } from './build-env'
 import { addOfficeTools } from './office'
 import { addExtraTools } from './extras'
-import { isUnattended } from '../core/progress'
+import { addDevTools } from './devtools'
+import { readState } from '../core/state'
+import { isUnattended, currentMode } from '../core/progress'
+import { buildProject } from '../core/workspace'
+import { isBuildDeleteCommand } from '../core/build-guards'
 
 // ---------- config (master switch, default OFF) ----------
 const cfgFile = (): string => path.join(app.getPath('userData'), 'computer.json')
@@ -344,6 +348,7 @@ export function addComputerTools(
     async (a) => {
       let cmd = s(a.command).trim()
       if (!cmd) return 'Error: empty command'
+      if (currentMode()?.kind === 'auto' && isBuildDeleteCommand(cmd)) return 'Error: في وضع بناء المشروع الحذف ممنوع. انقل الملف لمجلد archive بأمر Move-Item واسم فيه التاريخ بدل الحذف.'
       const dg = await diskGuard(cmd)
       if (dg) return dg
       if (fullAccessOn()) {
@@ -454,6 +459,12 @@ export function addComputerTools(
     ['path', 'content'],
     async (a) => {
       const p = rp(s(a.path))
+      // 5.17.8: وضع بناء مشروع: ممنوع الكتابة برّا مجلد المشروع الفعّال (حارس من البرنامج مو من الموديل).
+      const bproj = currentMode()?.kind === 'auto' ? buildProject() : null
+      if (bproj?.path) {
+        const rel = path.relative(path.resolve(bproj.path), path.resolve(p))
+        if (rel.startsWith('..') || path.isAbsolute(rel)) return 'Error: build mode — files must be created INSIDE the project folder ' + bproj.path + ' (refused: ' + p + '). Use a path under it.'
+      }
       const exists = fs.existsSync(p)
       if (exists && a.overwrite !== true) return 'Error: file already exists. Pass overwrite:true to replace it (a backup copy is made) or choose a new name.'
       // 5.14.0: حارس الوثائق — ممنوع تقليص ملف موجود بشكل كبير (غالباً موديل ضعيف عم يكتب فوق شغل غيره)
@@ -517,6 +528,8 @@ export function addComputerTools(
     return null
   }
   addExtraTools({ def, runPs, gate, handlers })
+  const devOff = readState().disabledTools
+  addDevTools(((nm: string, ...r: unknown[]) => { if (!devOff.includes(nm)) (def as (...a: unknown[]) => void)(nm, ...r) }) as unknown as typeof def, handlers, getSignal)
   def('pc_windows', 'List the open windows (title + process).', {}, [], async () =>
     runPs(
       'Get-Process | Where-Object {$_.MainWindowTitle} | Select-Object -First 40 ProcessName,Id,MainWindowTitle | Format-Table -AutoSize | Out-String -Width 200',
